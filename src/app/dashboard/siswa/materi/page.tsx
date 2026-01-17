@@ -30,6 +30,7 @@ export default function SiswaMateriPage() {
     const [selectedSubject, setSelectedSubject] = useState<SubjectGroup | null>(null)
     const [viewingMaterial, setViewingMaterial] = useState<Material | null>(null)
     const [searchQuery, setSearchQuery] = useState('')
+    const [previewingPDF, setPreviewingPDF] = useState<string | null>(null)
 
     useEffect(() => {
         const fetchData = async () => {
@@ -154,18 +155,23 @@ export default function SiswaMateriPage() {
     // View 2: Material List for Selected Subject
     return (
         <div className="space-y-6">
-            <PageHeader
-                title={selectedSubject.subjectName}
-                subtitle="Daftar Materi"
-                action={
+            {/* Header with back button on left */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
                     <button
                         onClick={() => setSelectedSubject(null)}
-                        className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors"
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
                     >
-                        ← Kembali
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
                     </button>
-                }
-            />
+                    <div>
+                        <h1 className="text-2xl font-bold text-white">{selectedSubject.subjectName}</h1>
+                        <p className="text-slate-400">Daftar Materi</p>
+                    </div>
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {selectedSubject.materials.map((material) => (
@@ -184,14 +190,22 @@ export default function SiswaMateriPage() {
                                         Baca Materi →
                                     </button>
                                 ) : material.type === 'PDF' && material.content_url ? (
-                                    <a
-                                        href={material.content_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 text-sm text-red-400 hover:text-red-300 transition-colors font-medium"
-                                    >
-                                        Buka PDF →
-                                    </a>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setPreviewingPDF(material.content_url)}
+                                            className="inline-flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors font-medium"
+                                        >
+                                            👁️ Preview PDF
+                                        </button>
+                                        <a
+                                            href={material.content_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 text-sm text-red-400 hover:text-red-300 transition-colors font-medium"
+                                        >
+                                            📥 Download PDF
+                                        </a>
+                                    </div>
                                 ) : material.content_url ? (
                                     <a
                                         href={material.content_url}
@@ -222,6 +236,42 @@ export default function SiswaMateriPage() {
                     </div>
                 )}
             </Modal>
+
+            {/* PDF Preview Modal */}
+            {previewingPDF && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setPreviewingPDF(null)}>
+                    <div className="bg-slate-900 rounded-xl w-full max-w-6xl h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+                            <h3 className="text-lg font-semibold text-white">📄 Preview PDF</h3>
+                            <div className="flex gap-2">
+                                <a
+                                    href={previewingPDF}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors text-sm font-medium"
+                                >
+                                    📥 Download
+                                </a>
+                                <button
+                                    onClick={() => setPreviewingPDF(null)}
+                                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                                >
+                                    ✕ Tutup
+                                </button>
+                            </div>
+                        </div>
+                        {/* PDF Viewer */}
+                        <div className="flex-1 overflow-hidden">
+                            <iframe
+                                src={previewingPDF}
+                                className="w-full h-full"
+                                title="PDF Preview"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

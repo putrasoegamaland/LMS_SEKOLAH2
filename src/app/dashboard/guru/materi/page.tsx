@@ -47,6 +47,7 @@ export default function MateriPage() {
     })
     const [saving, setSaving] = useState(false)
     const [file, setFile] = useState<File | null>(null)
+    const [previewingPDF, setPreviewingPDF] = useState<string | null>(null)
 
     const fetchData = async () => {
         try {
@@ -361,6 +362,42 @@ export default function MateriPage() {
                         </div>
                     </form>
                 </Modal>
+
+                {/* PDF Preview Modal */}
+                {previewingPDF && (
+                    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setPreviewingPDF(null)}>
+                        <div className="bg-slate-900 rounded-xl w-full max-w-6xl h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+                                <h3 className="text-lg font-semibold text-white">📄 Preview PDF</h3>
+                                <div className="flex gap-2">
+                                    <a
+                                        href={previewingPDF}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm font-medium"
+                                    >
+                                        📥 Download
+                                    </a>
+                                    <button
+                                        onClick={() => setPreviewingPDF(null)}
+                                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                                    >
+                                        ✕ Tutup
+                                    </button>
+                                </div>
+                            </div>
+                            {/* PDF Viewer */}
+                            <div className="flex-1 overflow-hidden">
+                                <iframe
+                                    src={previewingPDF}
+                                    className="w-full h-full"
+                                    title="PDF Preview"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         )
     }
@@ -368,30 +405,30 @@ export default function MateriPage() {
     // View 2: Materials List for Selected Subject
     return (
         <div className="space-y-6">
-            <PageHeader
-                title={selectedSubject.subjectName}
-                subtitle={`${selectedSubject.materials.length} Materi`}
-                action={
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setSelectedSubject(null)}
-                            className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors flex items-center gap-2"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                            </svg>
-                            Kembali
-                        </button>
-                        <Button onClick={handleAddMaterial} icon={
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                        }>
-                            Tambah Materi
-                        </Button>
+            {/* Header with back button on left */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => setSelectedSubject(null)}
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                    <div>
+                        <h1 className="text-2xl font-bold text-white">{selectedSubject.subjectName}</h1>
+                        <p className="text-slate-400">{selectedSubject.materials.length} Materi</p>
                     </div>
-                }
-            />
+                </div>
+                <Button onClick={handleAddMaterial} icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                }>
+                    Tambah Materi
+                </Button>
+            </div>
 
             {selectedSubject.materials.length === 0 ? (
                 <EmptyState
@@ -414,15 +451,47 @@ export default function MateriPage() {
                                             {material.teaching_assignment?.class?.name}
                                         </span>
                                     </div>
-                                    <button
-                                        onClick={() => handleDelete(material.id)}
-                                        className="text-sm text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                        Hapus
-                                    </button>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-wrap gap-2">
+                                        {material.type === 'PDF' && material.content_url && (
+                                            <>
+                                                <button
+                                                    onClick={() => setPreviewingPDF(material.content_url)}
+                                                    className="text-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1"
+                                                >
+                                                    👁️ Preview
+                                                </button>
+                                                <a
+                                                    href={material.content_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm text-green-400 hover:text-green-300 transition-colors flex items-center gap-1"
+                                                >
+                                                    📥 Download
+                                                </a>
+                                            </>
+                                        )}
+                                        {material.content_url && material.type !== 'PDF' && material.type !== 'TEXT' && (
+                                            <a
+                                                href={material.content_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
+                                            >
+                                                🔗 Buka Link
+                                            </a>
+                                        )}
+                                        <button
+                                            onClick={() => handleDelete(material.id)}
+                                            className="text-sm text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                            Hapus
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
