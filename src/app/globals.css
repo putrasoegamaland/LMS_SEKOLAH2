@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* 
+  OVERRIDE DARK MODE STRATEGY (Tailwind v4)
+  By default v4 uses system preference (media).
+  We redefine it to use class strategy. Since we never add the 'dark' class, 
+  this effectively DISABLES dark mode always.
+*/
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #6B8E6B;
   --color-primary-dark: #4A634A;
