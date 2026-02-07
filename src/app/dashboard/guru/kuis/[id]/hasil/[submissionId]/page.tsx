@@ -59,16 +59,23 @@ export default function GradingPage() {
         try {
             const res = await fetch(`/api/quiz-submissions/${submissionId}`)
             const data = await res.json()
-            setSubmission(data)
+            // Normalize answers to always be an array
+            const normalizedData = {
+                ...data,
+                answers: Array.isArray(data.answers) ? data.answers : []
+            }
+            setSubmission(normalizedData)
 
             // Initialize grades state
             const initialGrades: Record<string, { score: number, feedback: string }> = {}
-            data.answers.forEach((ans: Answer) => {
-                initialGrades[ans.question_id] = {
-                    score: ans.score || 0,
-                    feedback: ans.feedback || ''
-                }
-            })
+            if (data.answers && Array.isArray(data.answers)) {
+                data.answers.forEach((ans: Answer) => {
+                    initialGrades[ans.question_id] = {
+                        score: ans.score || 0,
+                        feedback: ans.feedback || ''
+                    }
+                })
+            }
             setGrades(initialGrades)
 
         } catch (error) {
@@ -221,7 +228,7 @@ export default function GradingPage() {
                                     <div className="flex items-center gap-2">
                                         <input
                                             type="number"
-                                            value={grade.score}
+                                            value={grade.score ?? 0}
                                             onChange={(e) => {
                                                 const val = Math.min(q.points, Math.max(0, parseInt(e.target.value) || 0))
                                                 handleGradeChange(q.id, 'score', val)
@@ -238,7 +245,7 @@ export default function GradingPage() {
                                     <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Feedback</label>
                                     <input
                                         type="text"
-                                        value={grade.feedback}
+                                        value={grade.feedback ?? ''}
                                         onChange={(e) => handleGradeChange(q.id, 'feedback', e.target.value)}
                                         className="w-full px-3 py-2 bg-secondary/5 dark:bg-white/5 border border-secondary/30 dark:border-white/20 rounded-lg text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary placeholder-text-secondary/50"
                                         placeholder="Berikan catatan..."

@@ -93,7 +93,7 @@ export default function QuizSubmissionsPage() {
             <PageHeader
                 title={`Hasil Kuis: ${quiz?.title || ''}`}
                 subtitle={`${quiz?.teaching_assignment?.class?.name} • ${quiz?.teaching_assignment?.subject?.name} • ${submissions.length} Pengumpulan`}
-                backHref="/dashboard/guru/kuis"
+                backHref="/dashboard/guru/nilai"
             />
 
             {/* Summary Cards */}

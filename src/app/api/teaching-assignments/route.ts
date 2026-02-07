@@ -15,7 +15,9 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { data, error } = await supabase
+        const academicYearId = request.nextUrl.searchParams.get('academic_year_id')
+
+        let query = supabase
             .from('teaching_assignments')
             .select(`
         *,
@@ -29,6 +31,12 @@ export async function GET(request: NextRequest) {
         academic_year:academic_years(*)
       `)
             .order('created_at', { ascending: false })
+
+        if (academicYearId) {
+            query = query.eq('academic_year_id', academicYearId)
+        }
+
+        const { data, error } = await query
 
         if (error) throw error
 

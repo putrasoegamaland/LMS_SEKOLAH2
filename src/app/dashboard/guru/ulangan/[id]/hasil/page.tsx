@@ -115,7 +115,7 @@ export default function GuruExamHasilPage() {
             <PageHeader
                 title={`📊 Hasil: ${exam.title}`}
                 subtitle={`${exam.teaching_assignment?.class?.name} • ${exam.teaching_assignment?.subject?.name}`}
-                backHref={`/dashboard/guru/ulangan/${examId}`}
+                backHref="/dashboard/guru/nilai"
             />
 
             {/* Stats Cards */}

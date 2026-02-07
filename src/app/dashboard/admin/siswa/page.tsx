@@ -1,35 +1,72 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
 import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
-import { Users, UserPlus, Pencil, Trash2, Loader2, Search, Eye, EyeOff, AlertCircle } from 'lucide-react'
-import { Class } from '@/lib/types'
+import { Users, UserPlus, Pencil, Trash2, Loader2, Eye, EyeOff, AlertCircle, Filter, GraduationCap } from 'lucide-react'
+import { Class, SchoolLevel } from '@/lib/types'
 
 interface Student {
     id: string
     nis: string | null
     class_id: string | null
     gender: 'L' | 'P' | null
+    angkatan: string | null
+    entry_year: number | null
+    school_level: SchoolLevel | null
+    status: string
     user: {
         id: string
         username: string
         full_name: string | null
     }
-    class: { id: string; name: string } | null
+    class: { id: string; name: string; grade_level?: number; school_level?: SchoolLevel } | null
 }
+
+interface FormData {
+    username: string
+    password: string
+    full_name: string
+    nis: string
+    class_id: string
+    gender: string
+    angkatan: string
+    entry_year: string
+    school_level: string
+}
+
+const defaultFormData: FormData = {
+    username: '',
+    password: '',
+    full_name: '',
+    nis: '',
+    class_id: '',
+    gender: '',
+    angkatan: '',
+    entry_year: '',
+    school_level: ''
+}
+
+// Generate angkatan options (last 10 years)
+const currentYear = new Date().getFullYear()
+const angkatanOptions = Array.from({ length: 10 }, (_, i) => (currentYear - i).toString())
 
 export default function SiswaPage() {
     const [students, setStudents] = useState<Student[]>([])
+    const [filteredStudents, setFilteredStudents] = useState<Student[]>([])
     const [classes, setClasses] = useState<Class[]>([])
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editingStudent, setEditingStudent] = useState<Student | null>(null)
-    const [formData, setFormData] = useState({ username: '', password: '', full_name: '', nis: '', class_id: '', gender: '' })
+    const [formData, setFormData] = useState<FormData>(defaultFormData)
     const [showPassword, setShowPassword] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
+
+    // Filter states
+    const [filterAngkatan, setFilterAngkatan] = useState('')
+    const [filterSchoolLevel, setFilterSchoolLevel] = useState('')
+    const [showFilters, setShowFilters] = useState(false)
 
     const fetchData = async () => {
         try {
@@ -41,8 +78,10 @@ export default function SiswaPage() {
                 studentsRes.json(),
                 classesRes.json()
             ])
-            setStudents(studentsData)
-            setClasses(classesData)
+            const studentList = Array.isArray(studentsData) ? studentsData : []
+            setStudents(studentList)
+            setFilteredStudents(studentList)
+            setClasses(Array.isArray(classesData) ? classesData : [])
         } catch (error) {
             console.error('Error:', error)
         } finally {
@@ -51,6 +90,18 @@ export default function SiswaPage() {
     }
 
     useEffect(() => { fetchData() }, [])
+
+    // Apply filters
+    useEffect(() => {
+        let filtered = students
+        if (filterAngkatan) {
+            filtered = filtered.filter(s => s.angkatan === filterAngkatan)
+        }
+        if (filterSchoolLevel) {
+            filtered = filtered.filter(s => s.school_level === filterSchoolLevel)
+        }
+        setFilteredStudents(filtered)
+    }, [students, filterAngkatan, filterSchoolLevel])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -65,7 +116,10 @@ export default function SiswaPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
-                    class_id: formData.class_id || null
+                    class_id: formData.class_id || null,
+                    entry_year: formData.entry_year ? parseInt(formData.entry_year) : null,
+                    school_level: formData.school_level || null,
+                    angkatan: formData.angkatan || null
                 })
             })
 
@@ -78,7 +132,7 @@ export default function SiswaPage() {
 
             setShowModal(false)
             setEditingStudent(null)
-            setFormData({ username: '', password: '', full_name: '', nis: '', class_id: '', gender: '' })
+            setFormData(defaultFormData)
             fetchData()
         } finally {
             setSaving(false)
@@ -99,7 +153,10 @@ export default function SiswaPage() {
             full_name: student.user.full_name || '',
             nis: student.nis || '',
             class_id: student.class_id || '',
-            gender: student.gender || ''
+            gender: student.gender || '',
+            angkatan: student.angkatan || '',
+            entry_year: student.entry_year?.toString() || '',
+            school_level: student.school_level || ''
         })
         setError('')
         setShowModal(true)
@@ -107,10 +164,18 @@ export default function SiswaPage() {
 
     const openAdd = () => {
         setEditingStudent(null)
-        setFormData({ username: '', password: '', full_name: '', nis: '', class_id: '', gender: '' })
+        setFormData(defaultFormData)
         setError('')
         setShowModal(true)
     }
+
+    const clearFilters = () => {
+        setFilterAngkatan('')
+        setFilterSchoolLevel('')
+    }
+
+    // Get unique angkatan values from students
+    const uniqueAngkatan = [...new Set(students.map(s => s.angkatan).filter(Boolean))].sort().reverse()
 
     return (
         <div className="space-y-6">
@@ -120,24 +185,73 @@ export default function SiswaPage() {
                 backHref="/dashboard/admin"
                 icon={<Users className="w-6 h-6 text-violet-500" />}
                 action={
-                    <Button onClick={openAdd} icon={<UserPlus className="w-5 h-5" />}>
-                        Tambah Siswa
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="secondary" onClick={() => setShowFilters(!showFilters)} icon={<Filter className="w-5 h-5" />}>
+                            Filter
+                        </Button>
+                        <Button onClick={openAdd} icon={<UserPlus className="w-5 h-5" />}>
+                            Tambah Siswa
+                        </Button>
+                    </div>
                 }
             />
+
+            {/* Filters */}
+            {showFilters && (
+                <Card className="p-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-text-main dark:text-white">Angkatan:</label>
+                            <select
+                                value={filterAngkatan}
+                                onChange={(e) => setFilterAngkatan(e.target.value)}
+                                className="px-3 py-2 bg-secondary/5 border border-secondary/20 rounded-lg text-text-main dark:text-white text-sm"
+                            >
+                                <option value="">Semua</option>
+                                {uniqueAngkatan.map(a => (
+                                    <option key={a} value={a!}>{a}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-text-main dark:text-white">Level:</label>
+                            <select
+                                value={filterSchoolLevel}
+                                onChange={(e) => setFilterSchoolLevel(e.target.value)}
+                                className="px-3 py-2 bg-secondary/5 border border-secondary/20 rounded-lg text-text-main dark:text-white text-sm"
+                            >
+                                <option value="">Semua</option>
+                                <option value="SMP">SMP</option>
+                                <option value="SMA">SMA</option>
+                            </select>
+                        </div>
+                        {(filterAngkatan || filterSchoolLevel) && (
+                            <button
+                                onClick={clearFilters}
+                                className="text-sm text-primary hover:underline"
+                            >
+                                Reset Filter
+                            </button>
+                        )}
+                        <div className="text-sm text-text-secondary ml-auto">
+                            Menampilkan {filteredStudents.length} dari {students.length} siswa
+                        </div>
+                    </div>
+                </Card>
+            )}
 
             <Card className="overflow-hidden p-0">
                 {loading ? (
                     <div className="p-12 flex justify-center">
                         <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     </div>
-                ) : students.length === 0 ? (
+                ) : filteredStudents.length === 0 ? (
                     <div className="p-6">
                         <EmptyState
                             icon={<Users className="w-12 h-12 text-violet-200" />}
                             title="Belum Ada Siswa"
-                            description="Tambahkan akun siswa untuk memulai"
-                            action={<Button onClick={openAdd}>Tambah Siswa</Button>}
+                            description={students.length > 0 ? "Tidak ada siswa yang sesuai filter" : "Tambahkan akun siswa untuk memulai"}
+                            action={<Button onClick={students.length > 0 ? clearFilters : openAdd}>{students.length > 0 ? 'Reset Filter' : 'Tambah Siswa'}</Button>}
                         />
                     </div>
                 ) : (
@@ -148,13 +262,14 @@ export default function SiswaPage() {
                                     <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Nama</th>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">L/P</th>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">NIS</th>
+                                    <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Angkatan</th>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Kelas</th>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Username</th>
                                     <th className="px-6 py-4 text-right text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-secondary/20 dark:divide-white/5">
-                                {students.map((student) => (
+                                {filteredStudents.map((student) => (
                                     <tr key={student.id} className="hover:bg-secondary/5 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
@@ -177,6 +292,16 @@ export default function SiswaPage() {
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-text-secondary dark:text-zinc-300 font-mono text-sm">{student.nis || '-'}</td>
+                                        <td className="px-6 py-4">
+                                            {student.angkatan ? (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 rounded-full text-xs font-bold">
+                                                    <GraduationCap className="w-3 h-3" />
+                                                    {student.angkatan}
+                                                </span>
+                                            ) : (
+                                                <span className="text-text-secondary dark:text-zinc-500">-</span>
+                                            )}
+                                        </td>
                                         <td className="px-6 py-4">
                                             {student.class ? (
                                                 <span className="px-3 py-1 bg-primary/10 text-primary-dark dark:text-primary rounded-full text-xs font-bold border border-primary/20">
@@ -228,6 +353,7 @@ export default function SiswaPage() {
                             required
                         />
                     </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-bold text-text-main dark:text-white mb-2">NIS</label>
@@ -240,37 +366,82 @@ export default function SiswaPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Kelas</label>
+                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Jenis Kelamin</label>
                             <div className="relative">
                                 <select
-                                    value={formData.class_id}
-                                    onChange={(e) => setFormData({ ...formData, class_id: e.target.value })}
+                                    value={formData.gender}
+                                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                                     className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
                                 >
-                                    <option value="">Pilih Kelas</option>
-                                    {classes.map((c) => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
+                                    <option value="">Pilih</option>
+                                    <option value="L">Laki-laki</option>
+                                    <option value="P">Perempuan</option>
                                 </select>
                                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">▼</div>
                             </div>
                         </div>
                     </div>
+
+                    {/* Angkatan Section */}
+                    <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <GraduationCap className="w-5 h-5 text-amber-600" />
+                            <span className="text-sm font-bold text-amber-800 dark:text-amber-200">Informasi Angkatan</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-text-main dark:text-white mb-2">Angkatan</label>
+                                <div className="relative">
+                                    <select
+                                        value={formData.angkatan}
+                                        onChange={(e) => setFormData({ ...formData, angkatan: e.target.value, entry_year: e.target.value })}
+                                        className="w-full px-4 py-3 bg-white dark:bg-secondary/10 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                                    >
+                                        <option value="">Pilih Angkatan</option>
+                                        {angkatanOptions.map(year => (
+                                            <option key={year} value={year}>{year}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">▼</div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-text-main dark:text-white mb-2">Level Sekolah</label>
+                                <div className="relative">
+                                    <select
+                                        value={formData.school_level}
+                                        onChange={(e) => setFormData({ ...formData, school_level: e.target.value })}
+                                        className="w-full px-4 py-3 bg-white dark:bg-secondary/10 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                                    >
+                                        <option value="">Pilih Level</option>
+                                        <option value="SMP">SMP</option>
+                                        <option value="SMA">SMA</option>
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">▼</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div>
-                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Jenis Kelamin</label>
+                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Kelas</label>
                         <div className="relative">
                             <select
-                                value={formData.gender}
-                                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                                value={formData.class_id}
+                                onChange={(e) => setFormData({ ...formData, class_id: e.target.value })}
                                 className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
                             >
-                                <option value="">Pilih Jenis Kelamin</option>
-                                <option value="L">Laki-laki</option>
-                                <option value="P">Perempuan</option>
+                                <option value="">Pilih Kelas</option>
+                                {classes
+                                    .filter(c => !formData.school_level || c.school_level === formData.school_level)
+                                    .map((c) => (
+                                        <option key={c.id} value={c.id}>{c.name} {c.school_level ? `(${c.school_level})` : ''}</option>
+                                    ))}
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">▼</div>
                         </div>
                     </div>
+
                     <div>
                         <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Username</label>
                         <input

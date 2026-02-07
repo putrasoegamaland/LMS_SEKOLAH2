@@ -17,18 +17,31 @@ export async function GET(request: NextRequest) {
 
         const { searchParams } = new URL(request.url)
         const class_id = searchParams.get('class_id')
+        const angkatan = searchParams.get('angkatan')
+        const school_level = searchParams.get('school_level')
+        const status = searchParams.get('status')
 
         let query = supabase
             .from('students')
             .select(`
         *,
         user:users(id, username, full_name, role),
-        class:classes(id, name)
+        class:classes(id, name, grade_level, school_level)
       `)
             .order('created_at', { ascending: false })
 
+        // Apply filters
         if (class_id) {
             query = query.eq('class_id', class_id)
+        }
+        if (angkatan) {
+            query = query.eq('angkatan', angkatan)
+        }
+        if (school_level) {
+            query = query.eq('school_level', school_level)
+        }
+        if (status) {
+            query = query.eq('status', status)
         }
 
         const { data, error } = await query
@@ -55,7 +68,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { username, password, full_name, nis, class_id, gender } = await request.json()
+        const { username, password, full_name, nis, class_id, gender, angkatan, entry_year, school_level } = await request.json()
 
         if (!username || !password) {
             return NextResponse.json({ error: 'Username dan password harus diisi' }, { status: 400 })
@@ -95,8 +108,12 @@ export async function POST(request: NextRequest) {
             .insert({
                 user_id: newUser.id,
                 nis,
-                class_id,
-                gender
+                class_id: class_id || null,
+                gender,
+                angkatan: angkatan || null,
+                entry_year: entry_year || null,
+                school_level: school_level || null,
+                status: 'ACTIVE'
             })
             .select(`
         *,

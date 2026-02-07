@@ -1,0 +1,164 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import { validateSession } from '@/lib/auth'
+
+/**
+ * PUT /api/students/:id/promote
+ * Promote a student to the next class/grade
+ */
+export async function PUT(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params
+
+        // Verify authentication
+        const token = request.cookies.get('session_token')?.value
+        if (!token) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const session = await validateSession(token)
+        if (!session) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // Only admins can promote students
+        if (session.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
+        }
+
+        const { to_class_id, to_academic_year_id, notes } = await request.json()
+
+        // Validation
+        if (!to_class_id || !to_academic_year_id) {
+            return NextResponse.json({
+                error: 'to_class_id and to_academic_year_id are required'
+            }, { status: 400 })
+        }
+
+        // Get current student data with active enrollment
+        const { data: student, error: studentError } = await supabase
+            .from('students')
+            .select(`
+                *,
+                enrollments:student_enrollments!student_enrollments_student_id_fkey(
+                    id,
+                    class_id,
+                    academic_year_id,
+                    status
+                )
+            `)
+            .eq('id', id)
+            .single()
+
+        if (studentError || !student) {
+            return NextResponse.json({ error: 'Student not found' }, { status: 404 })
+        }
+
+        // Find active enrollment
+        const activeEnrollment = (student.enrollments as any[])?.find((e: any) => e.status === 'ACTIVE')
+
+        if (!activeEnrollment) {
+            return NextResponse.json({
+                error: 'No active enrollment found for this student'
+            }, { status: 400 })
+        }
+
+        // Verify target class exists
+        const { data: targetClass, error: classError } = await supabase
+            .from('classes')
+            .select('id, name, academic_year_id')
+            .eq('id', to_class_id)
+            .single()
+
+        if (classError || !targetClass) {
+            return NextResponse.json({ error: 'Target class not found' }, { status: 404 })
+        }
+
+        // Verify academic year exists
+        const { data: targetYear, error: yearError } = await supabase
+            .from('academic_years')
+            .select('id, name')
+            .eq('id', to_academic_year_id)
+            .single()
+
+        if (yearError || !targetYear) {
+            return NextResponse.json({ error: 'Target academic year not found' }, { status: 404 })
+        }
+
+        // Transaction: End current enrollment and create new one
+        const now = new Date().toISOString()
+
+        // 1. End current enrollment
+        const { error: endEnrollmentError } = await supabase
+            .from('student_enrollments')
+            .update({
+                status: 'PROMOTED',
+                ended_at: now,
+                updated_at: now,
+                notes: notes || 'Promoted to next grade'
+            })
+            .eq('id', activeEnrollment.id)
+
+        if (endEnrollmentError) {
+            return NextResponse.json({
+                error: 'Failed to end current enrollment',
+                details: endEnrollmentError.message
+            }, { status: 500 })
+        }
+
+        // 2. Create new enrollment
+        const { data: newEnrollment, error: createEnrollmentError } = await supabase
+            .from('student_enrollments')
+            .insert({
+                student_id: id,
+                class_id: to_class_id,
+                academic_year_id: to_academic_year_id,
+                status: 'ACTIVE',
+                notes: notes || 'Promoted from previous grade'
+            })
+            .select()
+            .single()
+
+        if (createEnrollmentError) {
+            // Rollback: Reactivate old enrollment
+            await supabase
+                .from('student_enrollments')
+                .update({ status: 'ACTIVE', ended_at: null })
+                .eq('id', activeEnrollment.id)
+
+            return NextResponse.json({
+                error: 'Failed to create new enrollment',
+                details: createEnrollmentError.message
+            }, { status: 500 })
+        }
+
+        // 3. Update student's current class
+        const { error: updateStudentError } = await supabase
+            .from('students')
+            .update({ class_id: to_class_id })
+            .eq('id', id)
+
+        if (updateStudentError) {
+            return NextResponse.json({
+                error: 'Failed to update student class',
+                details: updateStudentError.message
+            }, { status: 500 })
+        }
+
+        return NextResponse.json({
+            success: true,
+            message: `Student promoted to ${targetClass.name} (${targetYear.name})`,
+            enrollment: newEnrollment
+        })
+
+    } catch (error: any) {
+        console.error('Error promoting student:', error)
+        return NextResponse.json({
+            error: 'Internal server error',
+            details: error.message
+        }, { status: 500 })
+    }
+}

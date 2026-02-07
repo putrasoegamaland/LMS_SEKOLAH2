@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { School, Plus } from 'lucide-react'
-import { Class, AcademicYear } from '@/lib/types'
+import { Class, AcademicYear, SchoolLevel } from '@/lib/types'
 
 interface Student {
     id: string
@@ -22,7 +22,7 @@ export default function KelasPage() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editingClass, setEditingClass] = useState<Class | null>(null)
-    const [formData, setFormData] = useState({ name: '', academic_year_id: '', grade_level: null as number | null })
+    const [formData, setFormData] = useState({ name: '', academic_year_id: '', grade_level: null as number | null, school_level: null as SchoolLevel | null })
     const [saving, setSaving] = useState(false)
 
     // Filter state
@@ -82,7 +82,7 @@ export default function KelasPage() {
             if (res.ok) {
                 setShowModal(false)
                 setEditingClass(null)
-                setFormData({ name: '', academic_year_id: '', grade_level: null })
+                setFormData({ name: '', academic_year_id: '', grade_level: null, school_level: null })
                 fetchData()
             }
         } finally {
@@ -98,14 +98,14 @@ export default function KelasPage() {
 
     const openEdit = (cls: Class) => {
         setEditingClass(cls)
-        setFormData({ name: cls.name, academic_year_id: cls.academic_year_id, grade_level: cls.grade_level })
+        setFormData({ name: cls.name, academic_year_id: cls.academic_year_id, grade_level: cls.grade_level, school_level: cls.school_level })
         setShowModal(true)
     }
 
     const openAdd = () => {
         setEditingClass(null)
         const activeYear = academicYears.find(y => y.is_active)
-        setFormData({ name: '', academic_year_id: activeYear?.id || '', grade_level: null })
+        setFormData({ name: '', academic_year_id: activeYear?.id || '', grade_level: null, school_level: null })
         setShowModal(true)
     }
 
@@ -196,6 +196,7 @@ export default function KelasPage() {
                             <thead className="bg-secondary/10 dark:bg-white/5 border-b border-secondary/20">
                                 <tr>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Nama Kelas</th>
+                                    <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Jenjang</th>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Tingkat</th>
                                     <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Tahun Ajaran</th>
                                     <th className="px-6 py-4 text-right text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Aksi</th>
@@ -206,12 +207,27 @@ export default function KelasPage() {
                                     <tr key={cls.id} className="hover:bg-secondary/5 transition-colors">
                                         <td className="px-6 py-4 text-text-main dark:text-white font-medium">{cls.name}</td>
                                         <td className="px-6 py-4">
-                                            {cls.grade_level ? (
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${cls.grade_level === 1 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                                                    cls.grade_level === 2 ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                                            {cls.school_level ? (
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${cls.school_level === 'SMP' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
                                                         'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                                     }`}>
-                                                    Kelas {cls.grade_level}
+                                                    {cls.school_level}
+                                                </span>
+                                            ) : (
+                                                <span className="text-text-secondary dark:text-zinc-500 text-sm">-</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {cls.grade_level ? (
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${cls.school_level === 'SMP' && cls.grade_level === 1 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                        cls.school_level === 'SMP' && cls.grade_level === 2 ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' :
+                                                            cls.school_level === 'SMP' && cls.grade_level === 3 ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' :
+                                                                cls.school_level === 'SMA' && cls.grade_level === 1 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                                    cls.school_level === 'SMA' && cls.grade_level === 2 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                                        cls.school_level === 'SMA' && cls.grade_level === 3 ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' :
+                                                                            'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                                    }`}>
+                                                    {cls.school_level === 'SMP' ? `MP${cls.grade_level}` : cls.school_level === 'SMA' ? `MA${cls.grade_level}` : `Tingkat ${cls.grade_level}`}
                                                 </span>
                                             ) : (
                                                 <span className="text-text-secondary dark:text-zinc-500 text-sm">-</span>
@@ -275,6 +291,26 @@ export default function KelasPage() {
                             required
                         />
                     </div>
+                    {/* School Level Dropdown */}
+                    <div>
+                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Jenjang Sekolah</label>
+                        <div className="relative">
+                            <select
+                                value={formData.school_level || ''}
+                                onChange={(e) => setFormData({ ...formData, school_level: e.target.value as SchoolLevel || null })}
+                                className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                            >
+                                <option value="">Pilih Jenjang (optional)</option>
+                                <option value="SMP">SMP (Sekolah Menengah Pertama - Kelas 7-9)</option>
+                                <option value="SMA">SMA (Sekolah Menengah Atas - Kelas 10-12)</option>
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">
+                                ▼
+                            </div>
+                        </div>
+                        <p className="text-xs text-text-secondary dark:text-zinc-400 mt-2">Pilih jenjang terlebih dahulu untuk label tingkat yang sesuai</p>
+                    </div>
+
                     {/* Grade Level Dropdown */}
                     <div>
                         <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Tingkat Kelas</label>
@@ -285,15 +321,23 @@ export default function KelasPage() {
                                 className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
                             >
                                 <option value="">Pilih Tingkat (optional)</option>
-                                <option value="1">Kelas 1</option>
-                                <option value="2">Kelas 2</option>
-                                <option value="3">Kelas 3</option>
+                                <option value="1">
+                                    {formData.school_level === 'SMP' ? 'MP1 (Kelas 7)' : formData.school_level === 'SMA' ? 'MA1 (Kelas 10)' : 'Tingkat 1'}
+                                </option>
+                                <option value="2">
+                                    {formData.school_level === 'SMP' ? 'MP2 (Kelas 8)' : formData.school_level === 'SMA' ? 'MA2 (Kelas 11)' : 'Tingkat 2'}
+                                </option>
+                                <option value="3">
+                                    {formData.school_level === 'SMP' ? 'MP3 (Kelas 9)' : formData.school_level === 'SMA' ? 'MA3 (Kelas 12)' : 'Tingkat 3'}
+                                </option>
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">
                                 ▼
                             </div>
                         </div>
-                        <p className="text-xs text-text-secondary dark:text-zinc-400 mt-2">Contoh: Kelas 1 untuk tingkat 7/10, Kelas 2 untuk 8/11, Kelas 3 untuk 9/12</p>
+                        <p className="text-xs text-text-secondary dark:text-zinc-400 mt-2">
+                            {formData.school_level === 'SMP' ? 'MP = Menengah Pertama (Kelas 7, 8, 9)' : formData.school_level === 'SMA' ? 'MA = Menengah Atas (Kelas 10, 11, 12)' : 'Pilih jenjang untuk melihat label yang sesuai'}
+                        </p>
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Tahun Ajaran</label>

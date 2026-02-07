@@ -19,7 +19,7 @@ export async function PUT(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { name, academic_year_id, grade_level } = await request.json()
+        const { name, academic_year_id, grade_level, school_level } = await request.json()
 
         // Validate grade_level if provided
         if (grade_level !== null && grade_level !== undefined) {
@@ -28,9 +28,16 @@ export async function PUT(
             }
         }
 
+        // Validate school_level if provided
+        if (school_level !== null && school_level !== undefined) {
+            if (!['SMP', 'SMA'].includes(school_level)) {
+                return NextResponse.json({ error: 'Jenjang sekolah harus SMP atau SMA' }, { status: 400 })
+            }
+        }
+
         const { data, error } = await supabase
             .from('classes')
-            .update({ name, academic_year_id, grade_level })
+            .update({ name, academic_year_id, grade_level, school_level })
             .eq('id', id)
             .select()
             .single()

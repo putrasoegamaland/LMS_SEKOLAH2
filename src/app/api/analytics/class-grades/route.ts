@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         // Get all classes for this academic year
         const { data: classes, error: classesError } = await supabaseAdmin
             .from('classes')
-            .select('id, name')
+            .select('id, name, school_level, grade_level')
             .eq('academic_year_id', academicYearId)
             .order('name')
 
@@ -248,6 +248,8 @@ export async function GET(request: NextRequest) {
             return {
                 class_id: cls.id,
                 class_name: cls.name,
+                school_level: (cls as any).school_level,
+                grade_level: (cls as any).grade_level,
                 total_students: classStudents.length,
                 subjects: subjectAverages
             }

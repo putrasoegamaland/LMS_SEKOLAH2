@@ -42,23 +42,35 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { name, is_active } = await request.json()
+        const { name, start_date, end_date, status, is_active } = await request.json()
 
         if (!name) {
             return NextResponse.json({ error: 'Nama tahun ajaran harus diisi' }, { status: 400 })
         }
 
+        // Determine status and is_active values
+        // If status is ACTIVE, set is_active = true
+        // If is_active is true, set status = ACTIVE
+        const finalStatus = status || (is_active ? 'ACTIVE' : 'PLANNED')
+        const finalIsActive = is_active || status === 'ACTIVE'
+
         // If setting as active, deactivate others first
-        if (is_active) {
+        if (finalIsActive) {
             await supabase
                 .from('academic_years')
-                .update({ is_active: false })
-                .neq('id', '00000000-0000-0000-0000-000000000000')
+                .update({ is_active: false, status: 'COMPLETED' })
+                .eq('is_active', true)
         }
 
         const { data, error } = await supabase
             .from('academic_years')
-            .insert({ name, is_active: is_active || false })
+            .insert({
+                name,
+                start_date: start_date || null,
+                end_date: end_date || null,
+                status: finalStatus,
+                is_active: finalIsActive
+            })
             .select()
             .single()
 

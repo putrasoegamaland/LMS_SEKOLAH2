@@ -5,11 +5,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader, Modal, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { TrendingUp, Calendar, BarChart3, School, BookOpen } from 'lucide-react'
+import { TrendingUp, Calendar, BarChart3, School, BookOpen, GraduationCap } from 'lucide-react'
 
 interface AcademicYear {
     id: string
     name: string
+    start_date: string | null
+    end_date: string | null
+    status: 'PLANNED' | 'ACTIVE' | 'COMPLETED'
     is_active: boolean
 }
 
@@ -34,6 +37,8 @@ interface SubjectAnalytics {
 interface ClassAnalytics {
     class_id: string
     class_name: string
+    school_level: 'SMP' | 'SMA' | null
+    grade_level: number | null
     total_students: number
     subjects: SubjectAnalytics[]
 }
@@ -45,8 +50,9 @@ export default function AnalitikPage() {
     const [loadingData, setLoadingData] = useState(false)
     const [classData, setClassData] = useState<ClassAnalytics[]>([])
 
-    // Grade filter state
-    const [gradeFilter, setGradeFilter] = useState<number | null>(null)
+    // School level filter and class search
+    const [schoolLevelFilter, setSchoolLevelFilter] = useState<'SMP' | 'SMA' | null>(null)
+    const [classSearch, setClassSearch] = useState('')
 
     // Modal state for student grades
     const [showModal, setShowModal] = useState(false)
@@ -64,8 +70,8 @@ export default function AnalitikPage() {
             const years = Array.isArray(data) ? data : []
             setAcademicYears(years)
 
-            // Auto select active year
-            const activeYear = years.find((y: AcademicYear) => y.is_active)
+            // Auto select active year (check both is_active and status)
+            const activeYear = years.find((y: AcademicYear) => y.is_active || y.status === 'ACTIVE')
             if (activeYear) {
                 setSelectedYear(activeYear.id)
             }
@@ -148,37 +154,70 @@ export default function AnalitikPage() {
         })()
     }
 
-    // Calculate grade-level statistics
-    const gradeStats = [1, 2, 3].map(grade => {
-        const gradeClasses = classData.filter(cls => (cls as any).grade_level === grade)
-        const allGradeAverages = gradeClasses.flatMap(cls =>
+
+    // Calculate SMP statistics (MP1, MP2, MP3)
+    const smpStats = [1, 2, 3].map(grade => {
+        const smpClasses = classData.filter(cls => cls.school_level === 'SMP' && cls.grade_level === grade)
+        const allAverages = smpClasses.flatMap(cls =>
             cls.subjects.filter(s => s.average !== null).map(s => s.average as number)
         )
         return {
             grade,
-            classCount: gradeClasses.length,
-            average: allGradeAverages.length > 0
-                ? allGradeAverages.reduce((a, b) => a + b, 0) / allGradeAverages.length
+            label: `MP${grade}`,
+            fullLabel: `MP${grade} (Kelas ${6 + grade})`,
+            classCount: smpClasses.length,
+            average: allAverages.length > 0
+                ? allAverages.reduce((a, b) => a + b, 0) / allAverages.length
                 : null
         }
     })
 
-    // Grade comparison chart data
-    const gradeChartData = gradeStats
-        .filter(g => g.average !== null && g.classCount > 0)
-        .map(g => ({
-            name: `Kelas ${g.grade}`,
-            average: Math.round((g.average || 0) * 10) / 10,
-            classCount: g.classCount
+    // Calculate SMA statistics (MA1, MA2, MA3)
+    const smaStats = [1, 2, 3].map(grade => {
+        const smaClasses = classData.filter(cls => cls.school_level === 'SMA' && cls.grade_level === grade)
+        const allAverages = smaClasses.flatMap(cls =>
+            cls.subjects.filter(s => s.average !== null).map(s => s.average as number)
+        )
+        return {
+            grade,
+            label: `MA${grade}`,
+            fullLabel: `MA${grade} (Kelas ${9 + grade})`,
+            classCount: smaClasses.length,
+            average: allAverages.length > 0
+                ? allAverages.reduce((a, b) => a + b, 0) / allAverages.length
+                : null
+        }
+    })
+
+    // SMP chart data
+    const smpChartData = smpStats
+        .filter(s => s.average !== null && s.classCount > 0)
+        .map(s => ({
+            name: s.label,
+            fullName: s.fullLabel,
+            average: Math.round((s.average || 0) * 10) / 10,
+            classCount: s.classCount
         }))
 
-    // Filter classData by grade if filter is active
-    const filteredClassData = gradeFilter
-        ? classData.filter(cls => (cls as any).grade_level === gradeFilter)
-        : classData
+    // SMA chart data
+    const smaChartData = smaStats
+        .filter(s => s.average !== null && s.classCount > 0)
+        .map(s => ({
+            name: s.label,
+            fullName: s.fullLabel,
+            average: Math.round((s.average || 0) * 10) / 10,
+            classCount: s.classCount
+        }))
 
-    // Prepare chart data - Class comparison
-    const classChartData = classData.map(cls => {
+    // Filter classData by school level and search
+    const filteredClassData = classData.filter(cls => {
+        const matchesSchool = !schoolLevelFilter || cls.school_level === schoolLevelFilter
+        const matchesSearch = !classSearch || cls.class_name.toLowerCase().includes(classSearch.toLowerCase())
+        return matchesSchool && matchesSearch
+    })
+
+    // Prepare chart data - Class comparison (filtered by school level)
+    const classChartData = filteredClassData.map(cls => {
         const subjectsWithGrades = cls.subjects.filter(s => s.average !== null)
         const classAvg = subjectsWithGrades.length > 0
             ? subjectsWithGrades.reduce((sum, s) => sum + (s.average || 0), 0) / subjectsWithGrades.length
@@ -192,7 +231,7 @@ export default function AnalitikPage() {
     // Prepare chart data - Subject averages
     const subjectChartData = (() => {
         const subjectMap: Record<string, { name: string; scores: number[] }> = {}
-        classData.forEach(cls => {
+        filteredClassData.forEach(cls => {
             cls.subjects.forEach(sub => {
                 if (sub.average !== null) {
                     if (!subjectMap[sub.subject_id]) {
@@ -238,34 +277,70 @@ export default function AnalitikPage() {
                 </div>
             </div>
 
-            {/* Filter Tingkat Kelas */}
+            {/* Filter Jenjang dan Pencarian Kelas */}
             {selectedYear && classData.length > 0 && (
                 <div className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-4 shadow-sm">
-                    <div className="flex items-center gap-4">
-                        <label className="text-sm font-bold text-text-main dark:text-white whitespace-nowrap">
-                            Filter Tingkat:
-                        </label>
-                        <div className="relative flex-1 max-w-xs">
-                            <select
-                                value={gradeFilter || ''}
-                                onChange={(e) => setGradeFilter(e.target.value ? parseInt(e.target.value) : null)}
-                                className="w-full px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-                            >
-                                <option value="">Semua Tingkat</option>
-                                <option value="1">Kelas 1</option>
-                                <option value="2">Kelas 2</option>
-                                <option value="3">Kelas 3</option>
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">
-                                ▼
+                    <div className="flex flex-wrap items-center gap-4">
+                        {/* Filter Jenjang */}
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-bold text-text-main dark:text-white whitespace-nowrap">
+                                Jenjang:
+                            </label>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setSchoolLevelFilter(null)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${!schoolLevelFilter
+                                        ? 'bg-primary text-white'
+                                        : 'bg-secondary/10 text-text-secondary hover:bg-secondary/20'
+                                        }`}
+                                >
+                                    Semua
+                                </button>
+                                <button
+                                    onClick={() => setSchoolLevelFilter('SMP')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${schoolLevelFilter === 'SMP'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
+                                        }`}
+                                >
+                                    SMP
+                                </button>
+                                <button
+                                    onClick={() => setSchoolLevelFilter('SMA')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${schoolLevelFilter === 'SMA'
+                                        ? 'bg-green-600 text-white'
+                                        : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
+                                        }`}
+                                >
+                                    SMA
+                                </button>
                             </div>
                         </div>
-                        {gradeFilter && (
+
+                        {/* Pencarian Kelas */}
+                        <div className="flex items-center gap-2 flex-1 max-w-xs">
+                            <label className="text-sm font-bold text-text-main dark:text-white whitespace-nowrap">
+                                Cari Kelas:
+                            </label>
+                            <input
+                                type="text"
+                                value={classSearch}
+                                onChange={(e) => setClassSearch(e.target.value)}
+                                placeholder="VII-A, X-B..."
+                                className="flex-1 px-4 py-2 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                        </div>
+
+                        {/* Reset */}
+                        {(schoolLevelFilter || classSearch) && (
                             <button
-                                onClick={() => setGradeFilter(null)}
-                                className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-main dark:hover:text-white transition-colors"
+                                onClick={() => {
+                                    setSchoolLevelFilter(null)
+                                    setClassSearch('')
+                                }}
+                                className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-main dark:hover:text-white transition-colors"
                             >
-                                Reset
+                                Reset Filter
                             </button>
                         )}
                     </div>
@@ -334,43 +409,41 @@ export default function AnalitikPage() {
                         </div>
                     </div>
 
-                    {/* Grade Level Stats - Only show if there's grade data */}
-                    {gradeChartData.length > 0 && !gradeFilter && (
-                        <div>
-                            <h3 className="text-lg font-bold text-text-main dark:text-white mb-4">Rata-rata per Tingkat Kelas</h3>
+                    {/* SMP Section - Only show if there's SMP data */}
+                    {smpStats.some(s => s.classCount > 0) && (!schoolLevelFilter || schoolLevelFilter === 'SMP') && (
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full">
+                                    <School className="w-4 h-4" />
+                                    <span className="text-sm font-bold">SMP</span>
+                                </div>
+                                <h3 className="text-lg font-bold text-text-main dark:text-white">Analitik SMP (Sekolah Menengah Pertama)</h3>
+                            </div>
+
+                            {/* SMP Stats Cards */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {gradeStats.map((stat) => (
+                                {smpStats.map((stat) => (
                                     <div
-                                        key={stat.grade}
-                                        className={`bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-5 shadow-sm ${stat.classCount === 0 ? 'opacity-50' : ''
-                                            }`}
+                                        key={stat.label}
+                                        className={`bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-5 shadow-sm ${stat.classCount === 0 ? 'opacity-50' : ''}`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div
-                                                className={`w-10 h-10 rounded-lg flex items-center justify-center ${stat.grade === 1
-                                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                                                    : stat.grade === 2
-                                                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
-                                                        : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                                                    }`}
-                                            >
+                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stat.grade === 1 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' :
+                                                stat.grade === 2 ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400' :
+                                                    'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                                                }`}>
                                                 <BarChart3 className="w-5 h-5" />
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
                                                     <p className="text-xs font-bold text-text-secondary dark:text-zinc-400">
-                                                        Kelas {stat.grade}
+                                                        {stat.fullLabel}
                                                     </p>
                                                     <span className="text-[10px] text-text-secondary dark:text-zinc-500">
                                                         ({stat.classCount} kelas)
                                                     </span>
                                                 </div>
-                                                <p
-                                                    className={`text-2xl font-bold ${stat.average !== null
-                                                        ? getScoreColor(stat.average)
-                                                        : 'text-text-secondary dark:text-zinc-500'
-                                                        }`}
-                                                >
+                                                <p className={`text-2xl font-bold ${stat.average !== null ? getScoreColor(stat.average) : 'text-text-secondary dark:text-zinc-500'}`}>
                                                     {formatScore(stat.average)}
                                                 </p>
                                             </div>
@@ -378,50 +451,134 @@ export default function AnalitikPage() {
                                     </div>
                                 ))}
                             </div>
+
+                            {/* SMP Bar Chart */}
+                            {smpChartData.length > 0 && (
+                                <div className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-5 shadow-sm">
+                                    <h4 className="text-md font-bold text-text-main dark:text-white mb-4 flex items-center gap-2">
+                                        <BarChart3 className="w-5 h-5" />
+                                        Perbandingan SMP
+                                    </h4>
+                                    <div className="h-48" style={{ minWidth: 0, minHeight: 150, position: 'relative' }}>
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={150}>
+                                            <BarChart data={smpChartData} layout="vertical" margin={{ left: 20, right: 30 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                                <XAxis type="number" domain={[0, 100]} stroke="#64748b" fontSize={12} />
+                                                <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={12} width={80} />
+                                                <Tooltip
+                                                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                                                    labelStyle={{ color: '#1e293b', fontWeight: 'bold' }}
+                                                    formatter={(value, name, props: any) => {
+                                                        const count = props?.payload?.classCount || 0
+                                                        return [`${value} (${count} kelas)`, 'Rata-rata']
+                                                    }}
+                                                />
+                                                <Bar dataKey="average" radius={[0, 4, 4, 0]}>
+                                                    {smpChartData.map((entry, index) => (
+                                                        <Cell
+                                                            key={`cell-smp-${index}`}
+                                                            fill={
+                                                                entry.name === 'MP1' ? '#3b82f6' :
+                                                                    entry.name === 'MP2' ? '#06b6d4' :
+                                                                        '#6366f1'
+                                                            }
+                                                        />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {/* Charts Section */}
-                    <div className="grid grid-cols-1 gap-6">
-                        {/* Bar Chart - Grade Comparison */}
-                        {gradeChartData.length > 0 && !gradeFilter && (
-                            <div className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-5 shadow-sm">
-                                <h3 className="text-lg font-bold text-text-main dark:text-white mb-4 flex items-center gap-2">
-                                    <BarChart3 className="w-5 h-5" />
-                                    Perbandingan Rata-rata per Tingkat Kelas
-                                </h3>
-                                <div className="h-48" style={{ minWidth: 0, minHeight: 150, position: 'relative' }}>
-                                    <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={150}>
-                                        <BarChart data={gradeChartData} layout="vertical" margin={{ left: 20, right: 30 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                            <XAxis type="number" domain={[0, 100]} stroke="#64748b" fontSize={12} />
-                                            <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={12} width={80} />
-                                            <Tooltip
-                                                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                                                labelStyle={{ color: '#1e293b', fontWeight: 'bold' }}
-                                                formatter={(value, name, props: any) => {
-                                                    const count = props?.payload?.classCount || 0
-                                                    return [`${value} (${count} kelas)`, 'Rata-rata']
-                                                }}
-                                            />
-                                            <Bar dataKey="average" radius={[0, 4, 4, 0]}>
-                                                {gradeChartData.map((entry, index) => (
-                                                    <Cell
-                                                        key={`cell-${index}`}
-                                                        fill={
-                                                            entry.name.includes('1') ? '#3b82f6' :
-                                                                entry.name.includes('2') ? '#a855f7' :
-                                                                    '#22c55e'
-                                                        }
-                                                    />
-                                                ))}
-                                            </Bar>
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                    {/* SMA Section - Only show if there's SMA data */}
+                    {smaStats.some(s => s.classCount > 0) && (!schoolLevelFilter || schoolLevelFilter === 'SMA') && (
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full">
+                                    <GraduationCap className="w-4 h-4" />
+                                    <span className="text-sm font-bold">SMA</span>
                                 </div>
+                                <h3 className="text-lg font-bold text-text-main dark:text-white">Analitik SMA (Sekolah Menengah Atas)</h3>
                             </div>
-                        )}
 
+                            {/* SMA Stats Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {smaStats.map((stat) => (
+                                    <div
+                                        key={stat.label}
+                                        className={`bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-5 shadow-sm ${stat.classCount === 0 ? 'opacity-50' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stat.grade === 1 ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
+                                                stat.grade === 2 ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
+                                                    'bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400'
+                                                }`}>
+                                                <BarChart3 className="w-5 h-5" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-xs font-bold text-text-secondary dark:text-zinc-400">
+                                                        {stat.fullLabel}
+                                                    </p>
+                                                    <span className="text-[10px] text-text-secondary dark:text-zinc-500">
+                                                        ({stat.classCount} kelas)
+                                                    </span>
+                                                </div>
+                                                <p className={`text-2xl font-bold ${stat.average !== null ? getScoreColor(stat.average) : 'text-text-secondary dark:text-zinc-500'}`}>
+                                                    {formatScore(stat.average)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* SMA Bar Chart */}
+                            {smaChartData.length > 0 && (
+                                <div className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-5 shadow-sm">
+                                    <h4 className="text-md font-bold text-text-main dark:text-white mb-4 flex items-center gap-2">
+                                        <BarChart3 className="w-5 h-5" />
+                                        Perbandingan SMA
+                                    </h4>
+                                    <div className="h-48" style={{ minWidth: 0, minHeight: 150, position: 'relative' }}>
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={150}>
+                                            <BarChart data={smaChartData} layout="vertical" margin={{ left: 20, right: 30 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                                <XAxis type="number" domain={[0, 100]} stroke="#64748b" fontSize={12} />
+                                                <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={12} width={80} />
+                                                <Tooltip
+                                                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                                                    labelStyle={{ color: '#1e293b', fontWeight: 'bold' }}
+                                                    formatter={(value, name, props: any) => {
+                                                        const count = props?.payload?.classCount || 0
+                                                        return [`${value} (${count} kelas)`, 'Rata-rata']
+                                                    }}
+                                                />
+                                                <Bar dataKey="average" radius={[0, 4, 4, 0]}>
+                                                    {smaChartData.map((entry, index) => (
+                                                        <Cell
+                                                            key={`cell-sma-${index}`}
+                                                            fill={
+                                                                entry.name === 'MA1' ? '#22c55e' :
+                                                                    entry.name === 'MA2' ? '#10b981' :
+                                                                        '#14b8a6'
+                                                            }
+                                                        />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Charts Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Bar Chart - Class Comparison */}
                         {classChartData.length > 0 && (
                             <div className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-5 shadow-sm">
@@ -483,7 +640,7 @@ export default function AnalitikPage() {
 
                     {/* Class Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {classData.map(cls => (
+                        {filteredClassData.map(cls => (
                             <div key={cls.class_id} className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                                 {/* Class Header */}
                                 <div className="p-4 border-b border-secondary/10 bg-gradient-to-r from-primary/5 to-secondary/5">
@@ -540,7 +697,8 @@ export default function AnalitikPage() {
                         </p>
                     </div>
                 </>
-            )}
+            )
+            }
 
             {/* Student Grades Modal */}
             <Modal
@@ -607,6 +765,6 @@ export default function AnalitikPage() {
                     </div>
                 )}
             </Modal>
-        </div>
+        </div >
     )
 }

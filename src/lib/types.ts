@@ -1,6 +1,27 @@
 // User roles
 export type UserRole = 'ADMIN' | 'GURU' | 'SISWA' | 'WALI'
 
+// School levels
+export type SchoolLevel = 'SMP' | 'SMA'
+
+// Academic year status
+export type AcademicYearStatus = 'PLANNED' | 'ACTIVE' | 'COMPLETED'
+
+// Enrollment status for student lifecycle tracking
+export type EnrollmentStatus =
+    | 'ACTIVE'           // Currently enrolled
+    | 'PROMOTED'         // Moved to next grade
+    | 'GRADUATED'        // Completed education level
+    | 'RETAINED'         // Repeated same grade
+    | 'TRANSFERRED_OUT'  // Left school
+
+// Student overall status
+export type StudentStatus =
+    | 'ACTIVE'           // Currently enrolled
+    | 'GRADUATED'        // Completed education
+    | 'TRANSFERRED_OUT'  // Left school
+    | 'INACTIVE'         // Suspended or other
+
 // Database types
 export interface User {
     id: string
@@ -32,24 +53,50 @@ export interface Student {
     user_id: string
     nis: string | null
     class_id: string | null
+    angkatan: string | null          // Cohort year, e.g., "2020", "2021"
+    entry_year: number | null        // Year when student entered school
+    school_level: SchoolLevel | null // Current school level (SMP/SMA)
+    status: StudentStatus            // Overall student status
     created_at: string
     user?: User
     class?: Class
+    enrollments?: StudentEnrollment[]  // Enrollment history
 }
 
 export interface AcademicYear {
     id: string
     name: string
-    is_active: boolean
+    start_date: string | null        // Start date of academic year
+    end_date: string | null          // End date (set when completed)
+    status: AcademicYearStatus       // PLANNED, ACTIVE, or COMPLETED
+    is_active: boolean               // Legacy field for backward compatibility
     created_at: string
 }
 
 export interface Class {
     id: string
     name: string
-    grade_level: number | null  // NEW: 1, 2, or 3 for class level grouping
+    grade_level: number | null  // 1, 2, or 3 for class level grouping
+    school_level: SchoolLevel | null  // SMP or SMA
     academic_year_id: string
     created_at: string
+    academic_year?: AcademicYear
+}
+
+export interface StudentEnrollment {
+    id: string
+    student_id: string
+    class_id: string
+    academic_year_id: string
+    status: EnrollmentStatus
+    enrolled_at: string
+    ended_at: string | null
+    notes: string | null
+    created_at: string
+    updated_at: string
+    // Relations
+    student?: Student
+    class?: Class
     academic_year?: AcademicYear
 }
 
@@ -197,3 +244,33 @@ export interface QuestionBank {
     created_at: string
     subject?: Subject
 }
+
+// Batch Operation Types for Student Lifecycle Management
+
+export interface BatchPromotionRequest {
+    academic_year_from: string
+    academic_year_to: string
+    class_mappings: {
+        from_class_id: string
+        to_class_id: string
+    }[]
+    student_ids?: string[]  // Optional: specific students only, if empty process all
+}
+
+export interface BatchPromotionResult {
+    success: boolean
+    promoted_count: number
+    failed_count: number
+    errors: {
+        student_id: string
+        student_name: string
+        error: string
+    }[]
+}
+
+export interface BatchGraduateRequest {
+    student_ids: string[]
+    academic_year_id: string
+    notes?: string
+}
+

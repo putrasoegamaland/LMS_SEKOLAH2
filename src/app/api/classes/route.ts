@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { name, academic_year_id, grade_level } = await request.json()
+        const { name, academic_year_id, grade_level, school_level } = await request.json()
 
         if (!name || !academic_year_id) {
             return NextResponse.json({ error: 'Nama kelas dan tahun ajaran harus diisi' }, { status: 400 })
@@ -71,9 +71,16 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Validate school_level if provided
+        if (school_level !== null && school_level !== undefined) {
+            if (!['SMP', 'SMA'].includes(school_level)) {
+                return NextResponse.json({ error: 'Jenjang sekolah harus SMP atau SMA' }, { status: 400 })
+            }
+        }
+
         const { data, error } = await supabase
             .from('classes')
-            .insert({ name, academic_year_id, grade_level })
+            .insert({ name, academic_year_id, grade_level, school_level })
             .select()
             .single()
 

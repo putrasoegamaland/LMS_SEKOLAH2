@@ -3,7 +3,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { Home, BookOpen, PenTool, Brain, BarChart3, Clock, Users, UserCheck, School, Megaphone, LucideIcon } from 'lucide-react'
+import {
+    Home, BookOpen, PenTool, Brain, BarChart3, Clock, Users, UserCheck,
+    School, Megaphone, LucideIcon, TrendingUp, BookMarked, Calendar,
+    ClipboardList, GraduationCap
+} from 'lucide-react'
 
 interface NavItem {
     icon: LucideIcon
@@ -32,7 +36,12 @@ const adminNav: NavItem[] = [
     { icon: Users, label: 'Siswa', path: '/dashboard/admin/siswa' },
     { icon: UserCheck, label: 'Guru', path: '/dashboard/admin/guru' },
     { icon: School, label: 'Kelas', path: '/dashboard/admin/kelas' },
-    { icon: Megaphone, label: 'Pengumuman', path: '/dashboard/admin/pengumuman' },
+    { icon: GraduationCap, label: 'Kenaikan', path: '/dashboard/admin/kenaikan-kelas' },
+    { icon: BookMarked, label: 'Mapel', path: '/dashboard/admin/mapel' },
+    { icon: Calendar, label: 'Tahun', path: '/dashboard/admin/tahun-ajaran' },
+    { icon: BarChart3, label: 'Analitik', path: '/dashboard/admin/analitik' },
+    { icon: ClipboardList, label: 'Penugasan', path: '/dashboard/admin/penugasan' },
+    { icon: Megaphone, label: 'Info', path: '/dashboard/admin/pengumuman' },
 ]
 
 export default function BottomNavigation() {

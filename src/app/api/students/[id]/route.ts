@@ -19,7 +19,7 @@ export async function PUT(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { username, password, full_name, nis, class_id, gender } = await request.json()
+        const { username, password, full_name, nis, class_id, gender, angkatan, entry_year, school_level, status } = await request.json()
 
         // Get student to find user_id
         const { data: student } = await supabase
@@ -48,10 +48,14 @@ export async function PUT(
         }
 
         // Update student
-        const studentUpdate: Record<string, string | null> = {}
+        const studentUpdate: Record<string, string | number | null> = {}
         if (nis !== undefined) studentUpdate.nis = nis
         if (class_id !== undefined) studentUpdate.class_id = class_id
         if (gender !== undefined) studentUpdate.gender = gender
+        if (angkatan !== undefined) studentUpdate.angkatan = angkatan
+        if (entry_year !== undefined) studentUpdate.entry_year = entry_year
+        if (school_level !== undefined) studentUpdate.school_level = school_level
+        if (status !== undefined) studentUpdate.status = status
 
         if (Object.keys(studentUpdate).length > 0) {
             const { error: studentError } = await supabase
