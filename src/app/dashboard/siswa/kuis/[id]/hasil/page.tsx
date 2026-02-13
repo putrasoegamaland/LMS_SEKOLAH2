@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader } from '@/components/ui'
 import Card from '@/components/ui/Card'
+import SmartText from '@/components/SmartText'
 
 interface QuizResult {
     total_score: number
@@ -130,7 +131,7 @@ export default function HasilKuisPage() {
                                         {idx + 1}
                                     </div>
                                     <div className="flex-1">
-                                        <p className="text-text-main dark:text-white mb-3">{q.question_text}</p>
+                                        <SmartText text={q.question_text} className="text-text-main dark:text-white mb-3" />
 
                                         <div className="bg-secondary/10 rounded-lg p-4 text-sm space-y-2">
                                             <div>

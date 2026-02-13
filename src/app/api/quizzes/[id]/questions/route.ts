@@ -61,9 +61,11 @@ export async function POST(
                 question_type: q.question_type,
                 options: q.options || null,
                 correct_answer: q.correct_answer || null,
+                difficulty: q.difficulty || 'MEDIUM',
                 points: q.points || 10,
                 order_index: q.order_index ?? idx,
-                image_url: q.image_url || null
+                image_url: q.image_url || null,
+                passage_text: q.passage_text || null
             }))
 
             const { data, error } = await supabase
@@ -77,7 +79,7 @@ export async function POST(
         }
 
         // Single insert
-        const { question_text, question_type, options, correct_answer, points, order_index, image_url } = body
+        const { question_text, question_type, options, correct_answer, difficulty, points, order_index, image_url, passage_text } = body
 
         const { data, error } = await supabase
             .from('quiz_questions')
@@ -87,9 +89,11 @@ export async function POST(
                 question_type,
                 options: options || null,
                 correct_answer: correct_answer || null,
+                difficulty: difficulty || 'MEDIUM',
                 points: points || 10,
                 order_index: order_index || 0,
-                image_url: image_url || null
+                image_url: image_url || null,
+                passage_text: passage_text || null
             })
             .select()
             .single()
@@ -121,7 +125,7 @@ export async function PUT(
         }
 
         const body = await request.json()
-        const { question_id, question_text, options, correct_answer, points, image_url } = body
+        const { question_id, question_text, options, correct_answer, difficulty, points, image_url } = body
 
         if (!question_id) {
             return NextResponse.json({ error: 'question_id required' }, { status: 400 })
@@ -131,6 +135,7 @@ export async function PUT(
         if (question_text !== undefined) updateData.question_text = question_text
         if (options !== undefined) updateData.options = options
         if (correct_answer !== undefined) updateData.correct_answer = correct_answer
+        if (difficulty !== undefined) updateData.difficulty = difficulty
         if (points !== undefined) updateData.points = points
         if (image_url !== undefined) updateData.image_url = image_url
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateSession } from '@/lib/auth'
+import { parseGeminiJson } from '@/lib/parse-gemini-json'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
                                     text: `Analisis gambar soal ujian/kuis ini dan ekstrak semua soal yang ada.
 
 Untuk setiap soal, tentukan:
-1. Teks soal lengkap
+1. Teks soal lengkap (TANPA nomor soal di depan)
 2. Tipe soal: "MULTIPLE_CHOICE" jika ada pilihan A/B/C/D, atau "ESSAY" jika tidak
 3. Jika pilihan ganda, sertakan opsi-opsinya sebagai array
 4. Jika ada kunci jawaban yang terlihat, sertakan juga
@@ -60,11 +61,17 @@ Format JSON:
     {
       "question_text": "Teks soal lengkap",
       "question_type": "MULTIPLE_CHOICE atau ESSAY",
-      "options": ["Opsi A", "Opsi B", "Opsi C", "Opsi D"] atau null,
+      "options": ["isi opsi 1", "isi opsi 2", "isi opsi 3", "isi opsi 4"] atau null,
       "correct_answer": "A/B/C/D" atau null
     }
   ]
-}`
+}
+
+PENTING untuk options:
+- JANGAN sertakan huruf A/B/C/D di awal opsi
+- Contoh SALAH: ["A. Jakarta", "B. Bandung"]
+- Contoh BENAR: ["Jakarta", "Bandung"]`
+
                                 },
                                 {
                                     inline_data: {
@@ -78,6 +85,7 @@ Format JSON:
                     generationConfig: {
                         temperature: 0.1,
                         maxOutputTokens: 8192,
+                        responseMimeType: 'application/json',
                     }
                 })
             }
@@ -96,19 +104,11 @@ Format JSON:
             return NextResponse.json({ error: 'No response from Gemini' }, { status: 500 })
         }
 
-        // Parse JSON from response (handle markdown code blocks)
-        let jsonStr = textContent
-        if (jsonStr.includes('```json')) {
-            jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-        } else if (jsonStr.includes('```')) {
-            jsonStr = jsonStr.replace(/```\n?/g, '')
-        }
-
         try {
-            const parsed = JSON.parse(jsonStr.trim())
+            const parsed = parseGeminiJson(textContent)
             return NextResponse.json(parsed)
-        } catch (parseError) {
-            console.error('JSON parse error:', parseError, 'Raw:', textContent)
+        } catch (parseError: any) {
+            console.error('JSON parse error:', parseError?.message, 'Raw:', textContent.substring(0, 300))
             return NextResponse.json({
                 error: 'Failed to parse response',
                 raw: textContent

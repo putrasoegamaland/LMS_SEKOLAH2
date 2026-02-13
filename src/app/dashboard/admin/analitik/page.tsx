@@ -585,9 +585,12 @@ export default function AnalitikPage() {
                                 <h3 className="text-lg font-bold text-text-main dark:text-white mb-4 flex items-center gap-2">
                                     <BarChart3 className="w-5 h-5" />
                                     Perbandingan Rata-rata Kelas
+                                    {schoolLevelFilter && (
+                                        <span className="text-sm font-normal text-primary ml-2">({schoolLevelFilter})</span>
+                                    )}
                                 </h3>
-                                <div className="h-64" style={{ minWidth: 0, minHeight: 200, position: 'relative' }}>
-                                    <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
+                                <div style={{ height: Math.max(250, classChartData.length * 35), minWidth: 0, position: 'relative' }}>
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={200}>
                                         <BarChart data={classChartData} layout="vertical" margin={{ left: 20, right: 30 }}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                             <XAxis type="number" domain={[0, 100]} stroke="#64748b" fontSize={12} />
@@ -614,9 +617,12 @@ export default function AnalitikPage() {
                                 <h3 className="text-lg font-bold text-text-main dark:text-white mb-4 flex items-center gap-2">
                                     <BookOpen className="w-5 h-5" />
                                     Rata-rata per Mata Pelajaran
+                                    {schoolLevelFilter && (
+                                        <span className="text-sm font-normal text-primary ml-2">({schoolLevelFilter})</span>
+                                    )}
                                 </h3>
-                                <div className="h-64" style={{ minWidth: 0, minHeight: 200, position: 'relative' }}>
-                                    <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
+                                <div style={{ height: Math.max(250, subjectChartData.length * 35), minWidth: 0, position: 'relative' }}>
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={200}>
                                         <BarChart data={subjectChartData} layout="vertical" margin={{ left: 20, right: 30 }}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                             <XAxis type="number" domain={[0, 100]} stroke="#64748b" fontSize={12} />

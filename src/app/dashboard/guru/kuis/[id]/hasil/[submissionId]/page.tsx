@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
+import SmartText from '@/components/SmartText'
 import { PageHeader, Card, Button } from '@/components/ui'
 
 interface Answer {
@@ -21,6 +22,7 @@ interface Question {
     correct_answer: string | null
     points: number
     order_index: number
+    passage_text?: string | null
 }
 
 interface SubmissionDetail {
@@ -195,7 +197,16 @@ export default function GradingPage() {
                                         </span>
                                         <span className="text-xs text-text-secondary">Max: {q.points} Poin</span>
                                     </div>
-                                    <p className="text-text-main dark:text-white text-lg mb-4">{q.question_text}</p>
+
+                                    {/* Passage text if exists */}
+                                    {q.passage_text && (
+                                        <div className="mb-4 p-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg">
+                                            <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1">📖 Bacaan:</p>
+                                            <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed break-all" style={{ overflowWrap: 'anywhere' }}>{q.passage_text}</p>
+                                        </div>
+                                    )}
+
+                                    <SmartText text={q.question_text} className="text-text-main dark:text-white text-lg mb-4" />
 
                                     <div className="bg-secondary/5 dark:bg-black/20 p-4 rounded-xl border border-secondary/20 dark:border-white/10 space-y-3">
                                         <div>

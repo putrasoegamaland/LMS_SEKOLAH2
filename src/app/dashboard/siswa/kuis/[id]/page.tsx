@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import SmartText from '@/components/SmartText'
 import { AlertTriangle, AlarmClock } from 'lucide-react'
 
 interface QuizQuestion {
@@ -13,6 +14,7 @@ interface QuizQuestion {
     points: number
     order_index: number
     image_url?: string | null
+    passage_text?: string | null
 }
 
 interface Quiz {
@@ -279,12 +281,20 @@ export default function KerjakanKuisPage() {
             <div className="space-y-8 max-w-3xl mx-auto">
                 {quiz.questions.map((q, idx) => (
                     <div key={q.id} className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                        {/* Passage Text if exists */}
+                        {q.passage_text && (
+                            <div className="mb-4 p-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-xl">
+                                <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-2">📖 Bacaan:</p>
+                                <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed">{q.passage_text}</p>
+                            </div>
+                        )}
+
                         <div className="flex items-start gap-4 mb-4">
                             <span className="w-8 h-8 flex-shrink-0 bg-primary text-white rounded-full flex items-center justify-center font-bold">
                                 {idx + 1}
                             </span>
                             <div className="flex-1">
-                                <p className="text-text-main dark:text-white text-lg leading-relaxed whitespace-pre-wrap">{q.question_text}</p>
+                                <SmartText text={q.question_text} className="text-text-main dark:text-white text-lg leading-relaxed whitespace-pre-wrap" />
                             </div>
                             <span className="text-xs text-text-secondary font-medium px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">
                                 {q.points} Poin

@@ -74,9 +74,11 @@ export async function POST(
             question_type: q.question_type || 'MULTIPLE_CHOICE',
             options: q.options,
             correct_answer: q.correct_answer,
+            difficulty: q.difficulty || 'MEDIUM',
             points: q.points || 1,
             order_index: startOrder + idx,
-            image_url: q.image_url || null
+            image_url: q.image_url || null,
+            passage_text: q.passage_text || null
         }))
 
         const { data, error } = await supabase
@@ -111,7 +113,7 @@ export async function PUT(
         }
 
         const body = await request.json()
-        const { question_id, question_text, options, correct_answer, points, image_url } = body
+        const { question_id, question_text, options, correct_answer, difficulty, points, image_url } = body
 
         if (!question_id) {
             return NextResponse.json({ error: 'question_id required' }, { status: 400 })
@@ -121,6 +123,7 @@ export async function PUT(
         if (question_text !== undefined) updateData.question_text = question_text
         if (options !== undefined) updateData.options = options
         if (correct_answer !== undefined) updateData.correct_answer = correct_answer
+        if (difficulty !== undefined) updateData.difficulty = difficulty
         if (points !== undefined) updateData.points = points
         if (image_url !== undefined) updateData.image_url = image_url
 

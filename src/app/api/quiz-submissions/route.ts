@@ -171,6 +171,33 @@ export async function POST(request: NextRequest) {
 
         if (error) throw error
 
+        // Notify the teacher about new quiz submission
+        try {
+            const { data: quiz } = await supabase
+                .from('quizzes')
+                .select(`
+                    title,
+                    teaching_assignment:teaching_assignments(
+                        teacher:teachers(user_id)
+                    )
+                `)
+                .eq('id', quiz_id)
+                .single()
+
+            const teacherUserId = (quiz?.teaching_assignment as any)?.teacher?.user_id
+            if (teacherUserId) {
+                await supabase.from('notifications').insert({
+                    user_id: teacherUserId,
+                    type: 'SUBMISSION_KUIS',
+                    title: 'Kuis Dikumpulkan',
+                    message: `${user.full_name} telah mengumpulkan kuis "${quiz?.title}"`,
+                    link: `/dashboard/guru/kuis`
+                })
+            }
+        } catch (notifError) {
+            console.error('Error sending quiz submission notification:', notifError)
+        }
+
         return NextResponse.json(data)
     } catch (error) {
         console.error('Error submitting quiz:', error)

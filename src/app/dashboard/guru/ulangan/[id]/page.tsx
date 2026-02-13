@@ -3,6 +3,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import SmartText from '@/components/SmartText'
+import MathTextarea from '@/components/MathTextarea'
+import { PenLine, WandSparkles, FolderOpen, Plus } from 'lucide-react'
+import RapihAIModal from '@/components/RapihAIModal'
 import QuestionImageUpload from '@/components/QuestionImageUpload'
 import { Modal, PageHeader, Button, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
@@ -16,6 +20,8 @@ interface ExamQuestion {
     points: number
     order_index: number
     image_url?: string | null
+    passage_text?: string | null
+    difficulty?: 'EASY' | 'MEDIUM' | 'HARD'
 }
 
 interface Exam {
@@ -33,7 +39,7 @@ interface Exam {
     }
 }
 
-type Mode = 'list' | 'manual' | 'ocr' | 'ai' | 'bank'
+type Mode = 'list' | 'manual' | 'clean' | 'ai' | 'bank'
 
 export default function EditExamPage() {
     const params = useParams()
@@ -44,6 +50,7 @@ export default function EditExamPage() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [mode, setMode] = useState<Mode>('list')
+    const [showAddDropdown, setShowAddDropdown] = useState(false)
 
     // Manual mode state
     const [manualForm, setManualForm] = useState<ExamQuestion>({
@@ -55,26 +62,32 @@ export default function EditExamPage() {
         order_index: 0
     })
 
+    // Passage mode state
+    const [isPassageMode, setIsPassageMode] = useState(false)
+    const [passageText, setPassageText] = useState('')
+    const [passageQuestions, setPassageQuestions] = useState<ExamQuestion[]>([{
+        question_text: '', question_type: 'MULTIPLE_CHOICE', options: ['', '', '', ''], correct_answer: '', points: 10, order_index: 0
+    }])
+
     // Calculate total points
     const totalPoints = questions.reduce((sum, q) => sum + (q.points || 0), 0)
     const getDefaultPoints = () => Math.floor(100 / (questions.length + 1))
 
-    // OCR mode state
-    const [ocrLoading, setOcrLoading] = useState(false)
-    const [ocrResults, setOcrResults] = useState<ExamQuestion[]>([])
 
-    // AI Generate mode state
-    const [aiMaterial, setAiMaterial] = useState('')
-    const [aiCount, setAiCount] = useState(5)
-    const [aiType, setAiType] = useState('MIXED')
-    const [aiDifficulty, setAiDifficulty] = useState('MEDIUM')
-    const [aiLoading, setAiLoading] = useState(false)
-    const [aiResults, setAiResults] = useState<ExamQuestion[]>([])
 
     // Bank Soal mode state
     const [bankQuestions, setBankQuestions] = useState<any[]>([])
+    const [bankPassages, setBankPassages] = useState<any[]>([])
     const [bankLoading, setBankLoading] = useState(false)
     const [selectedBankIds, setSelectedBankIds] = useState<Set<string>>(new Set())
+
+    // Edit mode state
+    const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
+    const [editQuestionForm, setEditQuestionForm] = useState<ExamQuestion | null>(null)
+
+    // Bulk selection state for delete
+    const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<string>>(new Set())
+    const [isBulkSelectMode, setIsBulkSelectMode] = useState(false)
 
     const [showPublishConfirm, setShowPublishConfirm] = useState(false)
     const [publishing, setPublishing] = useState(false)
@@ -192,6 +205,41 @@ export default function EditExamPage() {
     }
 
     const handleAddManualQuestion = async () => {
+        // Passage mode: save all passage questions at once
+        if (isPassageMode) {
+            if (!passageText.trim() || passageQuestions.length === 0) return
+            const hasQuestion = passageQuestions.some(q => q.question_text.trim())
+            if (!hasQuestion) return
+            setSaving(true)
+            try {
+                const questionsToSave = passageQuestions
+                    .filter(q => q.question_text.trim())
+                    .map((q, idx) => ({
+                        question_text: q.question_text,
+                        question_type: q.question_type,
+                        options: q.question_type === 'MULTIPLE_CHOICE' ? q.options : null,
+                        correct_answer: q.correct_answer || null,
+                        points: q.points || 10,
+                        order_index: questions.length + idx,
+                        passage_text: passageText
+                    }))
+                await fetch(`/api/exams/${examId}/questions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ questions: questionsToSave })
+                })
+                setPassageText('')
+                setPassageQuestions([{ question_text: '', question_type: 'MULTIPLE_CHOICE', options: ['', '', '', ''], correct_answer: '', points: 10, order_index: 0 }])
+                setIsPassageMode(false)
+                setMode('list')
+                fetchExam()
+            } finally {
+                setSaving(false)
+            }
+            return
+        }
+
+        // Normal single-question mode
         if (!manualForm.question_text) return
         setSaving(true)
         try {
@@ -227,73 +275,40 @@ export default function EditExamPage() {
         fetchExam()
     }
 
-    const handleOCRUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-
-        setOcrLoading(true)
-        setOcrResults([])
-
+    const handleSaveEdit = async () => {
+        if (!editQuestionForm || !editingQuestionId) return
+        setSaving(true)
         try {
-            const formData = new FormData()
-            formData.append('image', file)
-
-            const res = await fetch('/api/ai/ocr-questions', {
-                method: 'POST',
-                body: formData
+            await fetch(`/api/exams/${examId}/questions`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    question_id: editingQuestionId,
+                    question_text: editQuestionForm.question_text,
+                    options: editQuestionForm.options,
+                    correct_answer: editQuestionForm.correct_answer
+                })
             })
-
-            const data = await res.json()
-            if (data.questions) {
-                setOcrResults(data.questions.map((q: any, idx: number) => ({
-                    ...q,
-                    points: 10,
-                    order_index: idx
-                })))
-            } else if (data.error) {
-                alert('Error: ' + data.error)
-            }
-        } catch (error) {
-            console.error('OCR Error:', error)
-            alert('Gagal mengekstrak soal dari gambar')
+            setEditingQuestionId(null)
+            setEditQuestionForm(null)
+            fetchExam()
         } finally {
-            setOcrLoading(false)
+            setSaving(false)
         }
     }
 
-    const handleAIGenerate = async () => {
-        if (!aiMaterial.trim()) return
-
-        setAiLoading(true)
-        setAiResults([])
-
+    const handleBulkDelete = async () => {
+        if (selectedQuestionIds.size === 0) return
+        if (!confirm(`Hapus ${selectedQuestionIds.size} soal yang dipilih?`)) return
         try {
-            const res = await fetch('/api/ai/generate-questions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    material: aiMaterial,
-                    count: aiCount,
-                    type: aiType,
-                    difficulty: aiDifficulty
-                })
-            })
-
-            const data = await res.json()
-            if (data.questions) {
-                setAiResults(data.questions.map((q: any, idx: number) => ({
-                    ...q,
-                    points: 10,
-                    order_index: idx
-                })))
-            } else if (data.error) {
-                alert('Error: ' + data.error)
+            for (const qId of selectedQuestionIds) {
+                await fetch(`/api/exams/${examId}/questions?question_id=${qId}`, { method: 'DELETE' })
             }
+            setSelectedQuestionIds(new Set())
+            setIsBulkSelectMode(false)
+            fetchExam()
         } catch (error) {
-            console.error('AI Generate Error:', error)
-            alert('Gagal generate soal')
-        } finally {
-            setAiLoading(false)
+            console.error('Bulk delete error:', error)
         }
     }
 
@@ -302,20 +317,34 @@ export default function EditExamPage() {
         setSaving(true)
         try {
             const newQuestions = results.map((q, idx) => ({
-                ...q,
-                order_index: questions.length + idx
+                question_text: q.question_text,
+                question_type: q.question_type,
+                options: q.options || null,
+                correct_answer: q.correct_answer || null,
+                difficulty: q.difficulty || 'MEDIUM',
+                points: q.points || 10,
+                order_index: questions.length + idx,
+                passage_text: q.passage_text || null,
             }))
 
-            await fetch(`/api/exams/${examId}/questions`, {
+            const res = await fetch(`/api/exams/${examId}/questions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ questions: newQuestions })
             })
 
-            setOcrResults([])
-            setAiResults([])
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}))
+                console.error('Error saving AI questions:', errData)
+                alert('Gagal menyimpan soal: ' + (errData.error || 'Server error'))
+                return
+            }
+
             setMode('list')
-            fetchExam()
+            await fetchExam()
+        } catch (err) {
+            console.error('Error saving AI results:', err)
+            alert('Gagal menyimpan soal. Cek koneksi internet.')
         } finally {
             setSaving(false)
         }
@@ -439,57 +468,138 @@ export default function EditExamPage() {
 
             {/* Mode Tabs */}
             {mode === 'list' && (
-                <div className="flex gap-4">
-                    <button onClick={() => {
-                        setManualForm({
-                            ...manualForm,
-                            points: getDefaultPoints(),
-                            question_text: '',
-                            correct_answer: '',
-                            options: ['', '', '', '']
-                        })
-                        setMode('manual')
-                    }} className="flex-1 p-4 bg-white dark:bg-surface-dark border-2 border-primary/30 rounded-2xl hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-95 transition-all text-center group cursor-pointer">
-                        <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">✏️</div>
-                        <div className="font-bold text-text-main dark:text-white mb-1">Manual</div>
-                        <div className="text-xs text-text-secondary">Tulis sendiri</div>
-                    </button>
-                    <button onClick={() => setMode('ocr')} className="flex-1 p-4 bg-white dark:bg-surface-dark border-2 border-primary/30 rounded-2xl hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-95 transition-all text-center group cursor-pointer">
-                        <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">📷</div>
-                        <div className="font-bold text-text-main dark:text-white mb-1">OCR Foto</div>
-                        <div className="text-xs text-text-secondary">Dari gambar</div>
-                    </button>
-                    <button onClick={() => setMode('ai')} className="flex-1 p-4 bg-white dark:bg-surface-dark border-2 border-primary/30 rounded-2xl hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-95 transition-all text-center group cursor-pointer">
-                        <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">🤖</div>
-                        <div className="font-bold text-text-main dark:text-white mb-1">AI Generate</div>
-                        <div className="text-xs text-text-secondary">Dari materi</div>
-                    </button>
+                <div className="relative inline-block">
                     <button
-                        onClick={async () => {
-                            setMode('bank')
-                            setBankLoading(true)
-                            try {
-                                const res = await fetch(`/api/question-bank?subject_id=${exam?.teaching_assignment?.subject?.id || ''}`)
-                                const data = await res.json()
-                                setBankQuestions(Array.isArray(data) ? data : [])
-                            } catch (e) {
-                                console.error(e)
-                            } finally {
-                                setBankLoading(false)
-                            }
-                        }}
-                        className="flex-1 p-4 bg-white dark:bg-surface-dark border-2 border-primary/30 rounded-2xl hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-95 transition-all text-center group cursor-pointer"
+                        onClick={() => setShowAddDropdown(!showAddDropdown)}
+                        className="flex items-center gap-2 px-5 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 active:scale-95 transition-all shadow-md shadow-primary/20 cursor-pointer"
                     >
-                        <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">🗃️</div>
-                        <div className="font-bold text-text-main dark:text-white mb-1">Bank Soal</div>
-                        <div className="text-xs text-text-secondary">Dari koleksi</div>
+                        <Plus className="w-5 h-5" />
+                        Tambah Soal
                     </button>
+                    {showAddDropdown && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setShowAddDropdown(false)} />
+                            <div className="absolute left-0 top-full mt-2 z-50 w-64 bg-white rounded-xl shadow-xl border border-gray-200 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <button
+                                    onClick={() => {
+                                        setManualForm({
+                                            ...manualForm,
+                                            points: getDefaultPoints(),
+                                            question_text: '',
+                                            correct_answer: '',
+                                            options: ['', '', '', '']
+                                        })
+                                        setMode('manual')
+                                        setShowAddDropdown(false)
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 transition-colors cursor-pointer"
+                                >
+                                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                        <PenLine className="w-4 h-4 text-blue-600" />
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="text-sm font-semibold text-text-main">Manual</div>
+                                        <div className="text-xs text-text-secondary">Ketik soal satu per satu</div>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => { setMode('clean'); setShowAddDropdown(false) }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-purple-50 transition-colors cursor-pointer"
+                                >
+                                    <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                                        <WandSparkles className="w-4 h-4 text-purple-600" />
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="text-sm font-semibold text-text-main">Rapih AI</div>
+                                        <div className="text-xs text-text-secondary">Rapikan, generate, atau upload soal</div>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        setShowAddDropdown(false)
+                                        setMode('bank')
+                                        setBankLoading(true)
+                                        try {
+                                            const subjectId = exam?.teaching_assignment?.subject?.id || ''
+                                            const [questionsRes, passagesRes] = await Promise.all([
+                                                fetch(`/api/question-bank?subject_id=${subjectId}`),
+                                                fetch(`/api/passages?subject_id=${subjectId}`)
+                                            ])
+                                            const questionsData = await questionsRes.json()
+                                            const passagesData = await passagesRes.json()
+                                            setBankQuestions(Array.isArray(questionsData) ? questionsData : [])
+                                            setBankPassages(Array.isArray(passagesData) ? passagesData : [])
+                                        } catch (e) {
+                                            console.error(e)
+                                        } finally {
+                                            setBankLoading(false)
+                                        }
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 transition-colors cursor-pointer"
+                                >
+                                    <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                        <FolderOpen className="w-4 h-4 text-emerald-600" />
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="text-sm font-semibold text-text-main">Bank Soal</div>
+                                        <div className="text-xs text-text-secondary">Pilih dari soal tersimpan</div>
+                                    </div>
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
 
             {/* Question List */}
             {mode === 'list' && (
                 <div className="space-y-4">
+                    {/* Bulk Selection Toolbar */}
+                    {questions.length > 0 && !exam?.is_active && (
+                        <div className="flex items-center justify-between bg-white dark:bg-surface-dark rounded-xl p-3 border border-secondary/20">
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    variant={isBulkSelectMode ? 'primary' : 'secondary'}
+                                    onClick={() => {
+                                        setIsBulkSelectMode(!isBulkSelectMode)
+                                        setSelectedQuestionIds(new Set())
+                                    }}
+                                    className="text-sm"
+                                >
+                                    {isBulkSelectMode ? '✓ Mode Pilih Aktif' : '☐ Pilih Beberapa'}
+                                </Button>
+                                {isBulkSelectMode && (
+                                    <>
+                                        <Button
+                                            variant="secondary"
+                                            onClick={() => {
+                                                if (selectedQuestionIds.size === questions.length) {
+                                                    setSelectedQuestionIds(new Set())
+                                                } else {
+                                                    setSelectedQuestionIds(new Set(questions.map(q => q.id || '')))
+                                                }
+                                            }}
+                                            className="text-sm"
+                                        >
+                                            {selectedQuestionIds.size === questions.length ? 'Batal Pilih Semua' : 'Pilih Semua'}
+                                        </Button>
+                                        <span className="text-sm text-text-secondary">
+                                            {selectedQuestionIds.size} dipilih
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+                            {isBulkSelectMode && selectedQuestionIds.size > 0 && (
+                                <Button
+                                    onClick={handleBulkDelete}
+                                    className="bg-red-500 hover:bg-red-600 text-white text-sm"
+                                >
+                                    🗑️ Hapus {selectedQuestionIds.size} Soal
+                                </Button>
+                            )}
+                        </div>
+                    )}
+
                     {questions.length === 0 ? (
                         <EmptyState
                             icon="📄"
@@ -498,8 +608,21 @@ export default function EditExamPage() {
                         />
                     ) : (
                         questions.map((q, idx) => (
-                            <Card key={q.id || idx} className="p-5">
+                            <Card key={q.id || idx} className={`p-5 ${selectedQuestionIds.has(q.id || '') ? 'ring-2 ring-primary' : ''}`}>
                                 <div className="flex items-start gap-5">
+                                    {/* Checkbox for bulk select */}
+                                    {isBulkSelectMode && (
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedQuestionIds.has(q.id || '')}
+                                            onChange={(e) => {
+                                                const newSet = new Set(selectedQuestionIds)
+                                                e.target.checked ? newSet.add(q.id || '') : newSet.delete(q.id || '')
+                                                setSelectedQuestionIds(newSet)
+                                            }}
+                                            className="w-5 h-5 mt-1 rounded bg-secondary/10 border-secondary/30 text-primary focus:ring-primary cursor-pointer"
+                                        />
+                                    )}
                                     <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-lg flex-shrink-0">
                                         {idx + 1}
                                     </div>
@@ -508,10 +631,22 @@ export default function EditExamPage() {
                                             <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${q.question_type === 'MULTIPLE_CHOICE' ? 'bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-500/20 dark:text-blue-400' : 'bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-500/20 dark:text-orange-400'}`}>
                                                 {q.question_type === 'MULTIPLE_CHOICE' ? 'Pilihan Ganda' : 'Essay'}
                                             </span>
+                                            {q.passage_text && (
+                                                <span className="px-2 py-0.5 text-xs rounded-full bg-teal-500/20 text-teal-600 dark:text-teal-400">
+                                                    📖 Passage
+                                                </span>
+                                            )}
                                         </div>
-                                        <div className="prose dark:prose-invert max-w-none text-text-main dark:text-white mb-4">
-                                            <p>{q.question_text}</p>
-                                        </div>
+
+                                        {/* Passage text if exists */}
+                                        {q.passage_text && (
+                                            <div className="mb-3 p-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg overflow-hidden">
+                                                <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1">📖 Bacaan:</p>
+                                                <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap break-all" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{q.passage_text}</p>
+                                            </div>
+                                        )}
+
+                                        <SmartText text={q.question_text} className="prose dark:prose-invert max-w-none text-text-main dark:text-white mb-4" />
                                         {/* Display question image if exists */}
                                         {q.image_url && (
                                             <div className="mb-4">
@@ -525,7 +660,7 @@ export default function EditExamPage() {
                                                         <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${q.correct_answer === String.fromCharCode(65 + optIdx) ? 'bg-green-500 text-white' : 'bg-secondary/20 text-text-secondary'}`}>
                                                             {String.fromCharCode(65 + optIdx)}
                                                         </span>
-                                                        {opt}
+                                                        <SmartText text={opt} as="span" />
                                                     </div>
                                                 ))}
                                             </div>
@@ -585,228 +720,569 @@ export default function EditExamPage() {
                                             }}
                                             disabled={exam?.is_active}
                                         />
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
+
+                                        {/* Edit Button */}
+                                        <button
+                                            onClick={() => {
+                                                setEditingQuestionId(q.id || null)
+                                                setEditQuestionForm(q)
+                                            }}
+                                            className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors"
+                                            disabled={exam?.is_active}
+                                            title="Edit soal"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+
+                                        <button
                                             onClick={() => q.id && handleDeleteQuestion(q.id)}
-                                            className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-2"
+                                            className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
                                             disabled={exam?.is_active}
                                         >
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
-                                        </Button>
+                                        </button>
                                     </div>
                                 </div>
                             </Card>
                         ))
                     )}
                 </div>
-            )}
+            )
+            }
+
+            {/* Edit Question Modal */}
+            {
+                editingQuestionId && editQuestionForm && (
+                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                        <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-xl font-bold text-text-main dark:text-white">✏️ Edit Soal</h2>
+                                <Button
+                                    variant="ghost"
+                                    icon={<>✕</>}
+                                    onClick={() => {
+                                        setEditingQuestionId(null)
+                                        setEditQuestionForm(null)
+                                    }}
+                                />
+                            </div>
+
+                            <div className="space-y-4">
+                                {/* Question Text */}
+                                <div>
+                                    <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Teks Soal</label>
+                                    <textarea
+                                        value={editQuestionForm.question_text}
+                                        onChange={(e) => setEditQuestionForm({ ...editQuestionForm, question_text: e.target.value })}
+                                        className="w-full px-4 py-3 bg-secondary/5 border border-secondary/30 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                                        rows={4}
+                                        placeholder="Masukkan teks soal..."
+                                    />
+                                </div>
+
+                                {/* Passage Text (if exists) */}
+                                {editQuestionForm.passage_text && (
+                                    <div className="p-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg">
+                                        <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1">📖 Bacaan (read-only):</p>
+                                        <p className="text-sm text-text-main dark:text-white line-clamp-3">{editQuestionForm.passage_text}</p>
+                                    </div>
+                                )}
+
+                                {/* Options for Multiple Choice */}
+                                {editQuestionForm.question_type === 'MULTIPLE_CHOICE' && editQuestionForm.options && (
+                                    <div>
+                                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Pilihan Jawaban</label>
+                                        <div className="space-y-2">
+                                            {editQuestionForm.options.map((opt, optIdx) => (
+                                                <div key={optIdx} className="flex items-center gap-2">
+                                                    <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${editQuestionForm.correct_answer === String.fromCharCode(65 + optIdx) ? 'bg-green-500 text-white' : 'bg-secondary/10 text-text-main dark:text-zinc-300'}`}>
+                                                        {String.fromCharCode(65 + optIdx)}
+                                                    </span>
+                                                    <input
+                                                        type="text"
+                                                        value={opt}
+                                                        onChange={(e) => {
+                                                            const newOptions = [...editQuestionForm.options!]
+                                                            newOptions[optIdx] = e.target.value
+                                                            setEditQuestionForm({ ...editQuestionForm, options: newOptions })
+                                                        }}
+                                                        className="flex-1 px-4 py-2 bg-secondary/5 border border-secondary/30 rounded-lg text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                                        placeholder={`Pilihan ${String.fromCharCode(65 + optIdx)}`}
+                                                    />
+                                                    <button
+                                                        onClick={() => setEditQuestionForm({ ...editQuestionForm, correct_answer: String.fromCharCode(65 + optIdx) })}
+                                                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${editQuestionForm.correct_answer === String.fromCharCode(65 + optIdx) ? 'bg-green-500 text-white' : 'bg-secondary/10 text-text-main dark:text-zinc-300 hover:bg-green-500/20'}`}
+                                                    >
+                                                        {editQuestionForm.correct_answer === String.fromCharCode(65 + optIdx) ? '✓ Benar' : 'Set Benar'}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Essay correct answer */}
+                                {editQuestionForm.question_type === 'ESSAY' && (
+                                    <div>
+                                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Kunci Jawaban (opsional)</label>
+                                        <textarea
+                                            value={editQuestionForm.correct_answer || ''}
+                                            onChange={(e) => setEditQuestionForm({ ...editQuestionForm, correct_answer: e.target.value })}
+                                            className="w-full px-4 py-3 bg-secondary/5 border border-secondary/30 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                                            rows={3}
+                                            placeholder="Kunci jawaban essay..."
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-secondary/20">
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => {
+                                        setEditingQuestionId(null)
+                                        setEditQuestionForm(null)
+                                    }}
+                                >
+                                    Batal
+                                </Button>
+                                <Button
+                                    onClick={handleSaveEdit}
+                                    disabled={saving || !editQuestionForm.question_text}
+                                >
+                                    {saving ? '⏳ Menyimpan...' : '💾 Simpan Perubahan'}
+                                </Button>
+                            </div>
+                        </Card>
+                    </div>
+                )
+            }
 
             {/* Manual Mode */}
-            {mode === 'manual' && (
-                <Card className="p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-text-main dark:text-white">✏️ Tambah Soal Manual</h2>
-                        <Button variant="secondary" onClick={() => setMode('list')} className="!p-2 aspect-square rounded-full">✕</Button>
-                    </div>
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Tipe Soal</label>
-                            <div className="flex gap-2">
-                                <button onClick={() => setManualForm({ ...manualForm, question_type: 'MULTIPLE_CHOICE', options: ['', '', '', ''] })} className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-all ${manualForm.question_type === 'MULTIPLE_CHOICE' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-secondary/10 text-text-secondary hover:bg-secondary/20'}`}>Pilihan Ganda</button>
-                                <button onClick={() => setManualForm({ ...manualForm, question_type: 'ESSAY', options: null, correct_answer: null })} className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-all ${manualForm.question_type === 'ESSAY' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-secondary/10 text-text-secondary hover:bg-secondary/20'}`}>Essay</button>
-                            </div>
+            {
+                mode === 'manual' && (
+                    <Card className="p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-bold text-text-main dark:text-white">✏️ Tambah Soal Manual</h2>
+                            <Button variant="secondary" onClick={() => { setMode('list'); setIsPassageMode(false) }} className="!p-2 aspect-square rounded-full">✕</Button>
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Pertanyaan</label>
-                            <textarea value={manualForm.question_text} onChange={(e) => setManualForm({ ...manualForm, question_text: e.target.value })} className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px]" placeholder="Tulis pertanyaan..." />
-                        </div>
-                        {manualForm.question_type === 'MULTIPLE_CHOICE' && (
-                            <>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {['A', 'B', 'C', 'D'].map((letter, idx) => (
-                                        <div key={letter}>
-                                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Opsi {letter}</label>
-                                            <div className="relative">
-                                                <div className="absolute left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-secondary/20 flex items-center justify-center text-xs font-bold text-text-secondary">{letter}</div>
-                                                <input type="text" value={manualForm.options?.[idx] || ''} onChange={(e) => { const newOptions = [...(manualForm.options || ['', '', '', ''])]; newOptions[idx] = e.target.value; setManualForm({ ...manualForm, options: newOptions }) }} className="w-full pl-12 pr-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary text-sm" placeholder={`Jawaban ${letter}`} />
-                                            </div>
-                                        </div>
-                                    ))}
+                        <div className="space-y-6">
+                            {/* Type selector: PG / Essay / Passage */}
+                            <div>
+                                <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Tipe Soal</label>
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setIsPassageMode(false); setManualForm({ ...manualForm, question_type: 'MULTIPLE_CHOICE', options: ['', '', '', ''] }) }} className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-all ${!isPassageMode && manualForm.question_type === 'MULTIPLE_CHOICE' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-secondary/10 text-text-secondary hover:bg-secondary/20'}`}>Pilihan Ganda</button>
+                                    <button onClick={() => { setIsPassageMode(false); setManualForm({ ...manualForm, question_type: 'ESSAY', options: null, correct_answer: null }) }} className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-all ${!isPassageMode && manualForm.question_type === 'ESSAY' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-secondary/10 text-text-secondary hover:bg-secondary/20'}`}>Essay</button>
+                                    <button onClick={() => setIsPassageMode(true)} className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold transition-all ${isPassageMode ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30' : 'bg-secondary/10 text-text-secondary hover:bg-secondary/20'}`}>📖 Passage</button>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Kunci Jawaban</label>
-                                    <div className="flex gap-3">
-                                        {['A', 'B', 'C', 'D'].map((letter) => (
-                                            <button key={letter} onClick={() => setManualForm({ ...manualForm, correct_answer: letter })} className={`w-12 h-12 rounded-xl font-bold transition-all ${manualForm.correct_answer === letter ? 'bg-green-500 text-white shadow-lg shadow-green-500/30 scale-110' : 'bg-secondary/10 text-text-secondary hover:bg-secondary/20'}`}>{letter}</button>
-                                        ))}
+                            </div>
+
+                            {/* === PASSAGE MODE === */}
+                            {isPassageMode ? (
+                                <div className="space-y-6">
+                                    {/* Passage text */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-teal-700 dark:text-teal-400 mb-2">📖 Teks Bacaan (Passage)</label>
+                                        <textarea
+                                            value={passageText}
+                                            onChange={(e) => setPassageText(e.target.value)}
+                                            className="w-full px-4 py-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-300 dark:border-teal-700 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 min-h-[120px]"
+                                            placeholder="Tulis teks bacaan / passage di sini..."
+                                        />
                                     </div>
+
+                                    {/* Questions under this passage */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-text-main dark:text-white mb-3">Soal-soal untuk Passage ini ({passageQuestions.length})</label>
+                                        <div className="space-y-4">
+                                            {passageQuestions.map((pq, pqIdx) => (
+                                                <div key={pqIdx} className="p-4 border border-secondary/20 rounded-xl bg-secondary/5">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <span className="text-sm font-bold text-text-main dark:text-white">Soal {pqIdx + 1}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <select
+                                                                value={pq.question_type}
+                                                                onChange={(e) => {
+                                                                    const updated = [...passageQuestions]
+                                                                    updated[pqIdx] = {
+                                                                        ...updated[pqIdx],
+                                                                        question_type: e.target.value as 'MULTIPLE_CHOICE' | 'ESSAY',
+                                                                        options: e.target.value === 'MULTIPLE_CHOICE' ? ['', '', '', ''] : null,
+                                                                        correct_answer: e.target.value === 'MULTIPLE_CHOICE' ? '' : null
+                                                                    }
+                                                                    setPassageQuestions(updated)
+                                                                }}
+                                                                className="text-xs px-2 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-secondary/30 text-text-main dark:text-white"
+                                                            >
+                                                                <option value="MULTIPLE_CHOICE">Pilihan Ganda</option>
+                                                                <option value="ESSAY">Essay</option>
+                                                            </select>
+                                                            {passageQuestions.length > 1 && (
+                                                                <button
+                                                                    onClick={() => setPassageQuestions(passageQuestions.filter((_, i) => i !== pqIdx))}
+                                                                    className="text-red-500 hover:text-red-700 text-sm font-bold px-2"
+                                                                >✕</button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <textarea
+                                                        value={pq.question_text}
+                                                        onChange={(e) => {
+                                                            const updated = [...passageQuestions]
+                                                            updated[pqIdx] = { ...updated[pqIdx], question_text: e.target.value }
+                                                            setPassageQuestions(updated)
+                                                        }}
+                                                        className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-secondary/20 rounded-lg text-text-main dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                                        rows={2}
+                                                        placeholder="Tulis pertanyaan..."
+                                                    />
+                                                    {pq.question_type === 'MULTIPLE_CHOICE' && (
+                                                        <div className="mt-3 space-y-2">
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                {['A', 'B', 'C', 'D'].map((letter, optIdx) => (
+                                                                    <input
+                                                                        key={letter}
+                                                                        type="text"
+                                                                        value={pq.options?.[optIdx] || ''}
+                                                                        onChange={(e) => {
+                                                                            const updated = [...passageQuestions]
+                                                                            const newOpts = [...(updated[pqIdx].options || ['', '', '', ''])]
+                                                                            newOpts[optIdx] = e.target.value
+                                                                            updated[pqIdx] = { ...updated[pqIdx], options: newOpts }
+                                                                            setPassageQuestions(updated)
+                                                                        }}
+                                                                        className="px-3 py-1.5 bg-white dark:bg-zinc-800 border border-secondary/20 rounded-lg text-sm text-text-main dark:text-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                                                        placeholder={`Opsi ${letter}`}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                            <div className="flex gap-2 mt-2">
+                                                                <span className="text-xs text-text-secondary mt-1">Jawaban:</span>
+                                                                {['A', 'B', 'C', 'D'].map((letter) => (
+                                                                    <button
+                                                                        key={letter}
+                                                                        onClick={() => {
+                                                                            const updated = [...passageQuestions]
+                                                                            updated[pqIdx] = { ...updated[pqIdx], correct_answer: letter }
+                                                                            setPassageQuestions(updated)
+                                                                        }}
+                                                                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${pq.correct_answer === letter ? 'bg-green-500 text-white' : 'bg-secondary/10 text-text-secondary hover:bg-secondary/20'}`}
+                                                                    >{letter}</button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <button
+                                            onClick={() => setPassageQuestions([...passageQuestions, { question_text: '', question_type: 'MULTIPLE_CHOICE', options: ['', '', '', ''], correct_answer: '', points: 10, order_index: 0 }])}
+                                            className="mt-3 w-full py-2 border-2 border-dashed border-teal-300 dark:border-teal-700 rounded-xl text-sm font-bold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
+                                        >
+                                            + Tambah Soal Passage
+                                        </button>
+                                    </div>
+
+                                    <div className="flex gap-3 pt-6 border-t border-secondary/10">
+                                        <Button variant="secondary" onClick={() => { setMode('list'); setIsPassageMode(false) }} className="flex-1">Batal</Button>
+                                        <Button
+                                            onClick={handleAddManualQuestion}
+                                            disabled={saving || !passageText.trim() || !passageQuestions.some(q => q.question_text.trim())}
+                                            loading={saving}
+                                            className="flex-1 !bg-teal-600 hover:!bg-teal-700"
+                                        >
+                                            {saving ? 'Menyimpan...' : `Simpan Passage + ${passageQuestions.filter(q => q.question_text.trim()).length} Soal`}
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* === NORMAL MODE (PG / Essay) === */
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Pertanyaan</label>
+                                        <MathTextarea
+                                            value={manualForm.question_text}
+                                            onChange={(val) => setManualForm({ ...manualForm, question_text: val })}
+                                            placeholder="Tulis pertanyaan..."
+                                            rows={3}
+                                        />
+                                    </div>
+                                    {manualForm.question_type === 'MULTIPLE_CHOICE' && (
+                                        <>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {['A', 'B', 'C', 'D'].map((letter, idx) => (
+                                                    <div key={letter}>
+                                                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Opsi {letter}</label>
+                                                        <div className="relative">
+                                                            <div className="absolute left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-secondary/20 flex items-center justify-center text-xs font-bold text-text-secondary">{letter}</div>
+                                                            <input type="text" value={manualForm.options?.[idx] || ''} onChange={(e) => { const newOptions = [...(manualForm.options || ['', '', '', ''])]; newOptions[idx] = e.target.value; setManualForm({ ...manualForm, options: newOptions }) }} className="w-full pl-12 pr-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary text-sm" placeholder={`Jawaban ${letter}`} />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Kunci Jawaban</label>
+                                                <div className="flex gap-3">
+                                                    {['A', 'B', 'C', 'D'].map((letter) => (
+                                                        <button key={letter} onClick={() => setManualForm({ ...manualForm, correct_answer: letter })} className={`w-12 h-12 rounded-xl font-bold transition-all ${manualForm.correct_answer === letter ? 'bg-green-500 text-white shadow-lg shadow-green-500/30 scale-110' : 'bg-secondary/10 text-text-secondary hover:bg-secondary/20'}`}>{letter}</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Tingkat Kesulitan <span className="text-red-500">*</span></label>
+                                            <select
+                                                value={manualForm.difficulty || ''}
+                                                onChange={(e) => setManualForm({ ...manualForm, difficulty: e.target.value as any })}
+                                                className={`w-full px-3 py-2 bg-secondary/5 border rounded-lg text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary ${!manualForm.difficulty ? 'border-red-300 dark:border-red-700' : 'border-secondary/30'}`}
+                                            >
+                                                <option value="">-- Pilih Kesulitan --</option>
+                                                <option value="EASY">Mudah</option>
+                                                <option value="MEDIUM">Sedang</option>
+                                                <option value="HARD">Sulit</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Poin</label>
+                                            <input type="number" value={manualForm.points} onChange={(e) => setManualForm({ ...manualForm, points: parseInt(e.target.value) || 10 })} className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary font-bold text-center" min={1} />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 pt-6 border-t border-secondary/10">
+                                        <Button variant="secondary" onClick={() => setMode('list')} className="flex-1">Batal</Button>
+                                        <Button onClick={handleAddManualQuestion} disabled={saving || !manualForm.question_text || !manualForm.difficulty || (manualForm.question_type === 'MULTIPLE_CHOICE' && !manualForm.correct_answer)} loading={saving} className="flex-1">{saving ? 'Menyimpan...' : 'Tambah Soal'}</Button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </Card>
+                )
+            }
+
+            {/* Rapih AI Mode (All-in-One) */}
+            <RapihAIModal
+                visible={mode === 'clean'}
+                onClose={() => setMode('list')}
+                onSaveResults={handleSaveResults}
+                onSaveToBank={handleSaveToBank}
+                saving={saving}
+                targetLabel="Ulangan"
+            />
+
+            {/* Bank Soal Mode */}
+            {
+                mode === 'bank' && (
+                    <Card className="p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-bold text-text-main dark:text-white">🗃️ Ambil dari Bank Soal</h2>
+                            <Button variant="ghost" icon={<>✕</>} onClick={() => { setMode('list'); setSelectedBankIds(new Set()) }} />
+                        </div>
+
+                        {bankLoading ? (
+                            <div className="flex justify-center py-12">
+                                <div className="animate-spin text-3xl text-primary">⏳</div>
+                            </div>
+                        ) : bankQuestions.length === 0 && bankPassages.length === 0 ? (
+                            <EmptyState
+                                icon="🗃️"
+                                title="Bank Soal Kosong"
+                                description="Belum ada soal tersimpan untuk mata pelajaran ini."
+                            />
+                        ) : (
+                            <>
+                                <p className="text-sm text-text-secondary dark:text-zinc-400 mb-4">Pilih soal yang ingin ditambahkan ke ulangan ini:</p>
+
+                                {/* Passages Section */}
+                                {bankPassages.length > 0 && (
+                                    <div className="mb-6">
+                                        <h3 className="text-md font-bold text-text-main dark:text-white mb-3 flex items-center gap-2">
+                                            📖 Passage ({bankPassages.length})
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {bankPassages.map((p: any) => (
+                                                <div key={p.id} className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-xl overflow-hidden">
+                                                    <div
+                                                        className="p-4 cursor-pointer hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors"
+                                                        onClick={() => {
+                                                            const passageQuestionIds = (p.questions || []).map((q: any) => q.id)
+                                                            const allSelected = passageQuestionIds.every((id: string) => selectedBankIds.has(id))
+                                                            const newSet = new Set(selectedBankIds)
+                                                            if (allSelected) {
+                                                                passageQuestionIds.forEach((id: string) => newSet.delete(id))
+                                                            } else {
+                                                                passageQuestionIds.forEach((id: string) => newSet.add(id))
+                                                            }
+                                                            setSelectedBankIds(newSet)
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={(p.questions || []).length > 0 && (p.questions || []).every((q: any) => selectedBankIds.has(q.id))}
+                                                                readOnly
+                                                                className="w-5 h-5 rounded bg-teal-100 border-teal-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                                            />
+                                                            <div className="flex-1">
+                                                                <h4 className="font-bold text-text-main dark:text-white">{p.title || 'Untitled Passage'}</h4>
+                                                                <span className="text-xs text-teal-600 dark:text-teal-400">{p.questions?.length || 0} soal terkait</span>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-sm text-text-secondary dark:text-zinc-400 mt-2 line-clamp-2">{p.passage_text}</p>
+                                                    </div>
+                                                    {/* Questions inside passage */}
+                                                    {(p.questions || []).length > 0 && (
+                                                        <div className="border-t border-teal-200 dark:border-teal-700 px-4 py-2 bg-white/50 dark:bg-black/10 space-y-2">
+                                                            {p.questions.map((q: any, idx: number) => (
+                                                                <label
+                                                                    key={q.id}
+                                                                    className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer text-sm ${selectedBankIds.has(q.id) ? 'bg-teal-100 dark:bg-teal-800/30' : 'hover:bg-teal-50 dark:hover:bg-teal-900/20'}`}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={selectedBankIds.has(q.id)}
+                                                                        onChange={(e) => {
+                                                                            const newSet = new Set(selectedBankIds)
+                                                                            e.target.checked ? newSet.add(q.id) : newSet.delete(q.id)
+                                                                            setSelectedBankIds(newSet)
+                                                                        }}
+                                                                        className="mt-0.5 w-4 h-4 rounded bg-teal-100 border-teal-300 text-teal-600 focus:ring-teal-500"
+                                                                    />
+                                                                    <span className="w-5 h-5 rounded-full bg-teal-500 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">{idx + 1}</span>
+                                                                    <span className="flex-1 text-text-main dark:text-white">{q.question_text}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Individual Questions Section - Only questions without passage_id */}
+                                {bankQuestions.filter((q: any) => q.passage_id == null).length > 0 && (
+                                    <div className="mb-4">
+                                        <h3 className="text-md font-bold text-text-main dark:text-white mb-3">❓ Soal Mandiri ({bankQuestions.filter((q: any) => q.passage_id == null).length})</h3>
+                                        <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+                                            {bankQuestions.filter((q: any) => q.passage_id == null).map((q: any) => (
+                                                <label
+                                                    key={q.id}
+                                                    className={`flex items-start gap-3 p-4 rounded-xl cursor-pointer transition-all border ${selectedBankIds.has(q.id)
+                                                        ? 'bg-primary/10 border-primary'
+                                                        : 'bg-secondary/5 border-transparent hover:bg-secondary/10'
+                                                        }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedBankIds.has(q.id)}
+                                                        onChange={(e) => {
+                                                            const newSet = new Set(selectedBankIds)
+                                                            if (e.target.checked) {
+                                                                newSet.add(q.id)
+                                                            } else {
+                                                                newSet.delete(q.id)
+                                                            }
+                                                            setSelectedBankIds(newSet)
+                                                        }}
+                                                        className="mt-1 w-5 h-5 rounded bg-secondary/10 border-secondary/30 text-primary focus:ring-primary"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                            <span className={`px-2 py-0.5 text-xs rounded ${q.question_type === 'MULTIPLE_CHOICE' ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400' : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'}`}>
+                                                                {q.question_type === 'MULTIPLE_CHOICE' ? 'PG' : 'Essay'}
+                                                            </span>
+                                                            <span className={`px-2 py-0.5 text-xs rounded ${q.difficulty === 'EASY' ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' :
+                                                                q.difficulty === 'HARD' ? 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400' : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
+                                                                }`}>
+                                                                {q.difficulty === 'EASY' ? 'Mudah' : q.difficulty === 'HARD' ? 'Sulit' : 'Sedang'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-text-main dark:text-white text-sm">{q.question_text}</p>
+                                                    </div>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-3 pt-4 border-t border-secondary/20 mt-4">
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => {
+                                            const allQuestionIds = [
+                                                ...bankQuestions.filter((q: any) => q.passage_id == null).map((q: any) => q.id),
+                                                ...bankPassages.flatMap((p: any) => (p.questions || []).map((q: any) => q.id))
+                                            ]
+                                            if (selectedBankIds.size === allQuestionIds.length) {
+                                                setSelectedBankIds(new Set())
+                                            } else {
+                                                setSelectedBankIds(new Set(allQuestionIds))
+                                            }
+                                        }}
+                                    >
+                                        Pilih Semua
+                                    </Button>
+                                    <Button
+                                        onClick={async () => {
+                                            if (selectedBankIds.size === 0) return
+                                            setSaving(true)
+                                            try {
+                                                // Collect selected questions from both individual and passages
+                                                // For passage questions, include the passage_text
+                                                const passageQuestionsWithText = bankPassages.flatMap((p: any) =>
+                                                    (p.questions || []).map((q: any) => ({
+                                                        ...q,
+                                                        passage_text: p.passage_text
+                                                    }))
+                                                )
+                                                const standaloneQuestions = bankQuestions.filter((q: any) => q.passage_id == null)
+                                                const allBankQuestions = [
+                                                    ...standaloneQuestions,
+                                                    ...passageQuestionsWithText
+                                                ]
+                                                const selectedQuestions = allBankQuestions
+                                                    .filter((q: any) => selectedBankIds.has(q.id))
+                                                    .map((q: any, idx: number) => ({
+                                                        question_text: q.question_text,
+                                                        question_type: q.question_type,
+                                                        options: q.options,
+                                                        correct_answer: q.correct_answer,
+                                                        points: 10,
+                                                        order_index: questions.length + idx,
+                                                        passage_text: q.passage_text || null
+                                                    }))
+
+                                                await fetch(`/api/exams/${examId}/questions`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ questions: selectedQuestions })
+                                                })
+
+                                                setSelectedBankIds(new Set())
+                                                setMode('list')
+                                                fetchExam()
+                                            } finally {
+                                                setSaving(false)
+                                            }
+                                        }}
+                                        disabled={saving || selectedBankIds.size === 0}
+                                        loading={saving}
+                                        className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600"
+                                    >
+                                        {saving ? 'Menyimpan...' : `Tambahkan ${selectedBankIds.size} Soal ke Ulangan`}
+                                    </Button>
                                 </div>
                             </>
                         )}
-                        <div>
-                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Poin</label>
-                            <input type="number" value={manualForm.points} onChange={(e) => setManualForm({ ...manualForm, points: parseInt(e.target.value) || 10 })} className="w-24 px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary font-bold text-center" min={1} />
-                        </div>
-                        <div className="flex gap-3 pt-6 border-t border-secondary/10">
-                            <Button variant="secondary" onClick={() => setMode('list')} className="flex-1">Batal</Button>
-                            <Button onClick={handleAddManualQuestion} disabled={saving || !manualForm.question_text} loading={saving} className="flex-1">{saving ? 'Menyimpan...' : 'Tambah Soal'}</Button>
-                        </div>
-                    </div>
-                </Card>
-            )}
-
-            {/* OCR Mode */}
-            {mode === 'ocr' && (
-                <Card className="p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-text-main dark:text-white">📷 Ekstrak Soal dari Foto</h2>
-                        <Button variant="secondary" onClick={() => { setMode('list'); setOcrResults([]) }} className="!p-2 aspect-square rounded-full">✕</Button>
-                    </div>
-                    {ocrResults.length === 0 && (
-                        <div className="border-2 border-dashed border-secondary/30 rounded-2xl p-12 text-center hover:border-primary/50 transition-colors bg-secondary/5">
-                            <input type="file" accept="image/*" onChange={handleOCRUpload} className="hidden" id="ocr-upload" disabled={ocrLoading} />
-                            <label htmlFor="ocr-upload" className="cursor-pointer block">
-                                {ocrLoading ? (
-                                    <div className="text-primary"><div className="text-5xl mb-4 animate-bounce">⏳</div><p className="font-bold">Menganalisis gambar dengan AI...</p></div>
-                                ) : (
-                                    <><div className="text-5xl mb-4 text-text-secondary">📷</div><p className="text-lg font-bold text-text-main dark:text-white mb-2">Klik untuk upload foto soal</p><p className="text-sm text-text-secondary">Mendukung JPG, PNG</p></>
-                                )}
-                            </label>
-                        </div>
-                    )}
-                    {ocrResults.length > 0 && (
-                        <div className="space-y-4">
-                            <p className="text-sm font-bold text-green-500">✅ Ditemukan {ocrResults.length} soal:</p>
-                            {ocrResults.map((q, idx) => (
-                                <div key={idx} className="bg-secondary/5 rounded-xl p-4 border border-secondary/20">
-                                    <div className="flex items-center gap-2 mb-2"><span className="text-primary font-bold">{idx + 1}.</span><span className={`px-2 py-0.5 text-xs font-bold rounded ${q.question_type === 'MULTIPLE_CHOICE' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>{q.question_type === 'MULTIPLE_CHOICE' ? 'PG' : 'Essay'}</span></div>
-                                    <p className="text-text-main dark:text-white text-sm">{q.question_text}</p>
-                                </div>
-                            ))}
-                            <div className="flex gap-3 pt-6 border-t border-secondary/10">
-                                <Button variant="secondary" onClick={() => handleSaveToBank(ocrResults)}>💾 Simpan ke Bank Soal</Button>
-                                <Button onClick={() => handleSaveResults(ocrResults)} disabled={saving} loading={saving} className="flex-1">Tambahkan {ocrResults.length} Soal</Button>
-                            </div>
-                        </div>
-                    )}
-                </Card>
-            )}
-
-            {/* AI Generate Mode */}
-            {mode === 'ai' && (
-                <Card className="p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-text-main dark:text-white">🤖 Generate Soal dari Materi</h2>
-                        <Button variant="secondary" onClick={() => { setMode('list'); setAiResults([]) }} className="!p-2 aspect-square rounded-full">✕</Button>
-                    </div>
-                    {aiResults.length === 0 && (
-                        <div className="space-y-6">
-                            <div>
-                                <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Materi / Teks Pembelajaran</label>
-                                <textarea value={aiMaterial} onChange={(e) => setAiMaterial(e.target.value)} className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary min-h-[150px]" placeholder="Paste materi pembelajaran di sini, AI akan membuat soal dari materi ini..." />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Jumlah Soal</label>
-                                    <input type="number" value={aiCount} onChange={(e) => setAiCount(parseInt(e.target.value) || 5)} className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary" min={1} max={20} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Tipe Soal</label>
-                                    <div className="relative">
-                                        <select value={aiType} onChange={(e) => setAiType(e.target.value)} className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                                            <option value="MIXED">Campuran</option>
-                                            <option value="MULTIPLE_CHOICE">Pilihan Ganda</option>
-                                            <option value="ESSAY">Essay</option>
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">▼</div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Kesulitan</label>
-                                    <div className="relative">
-                                        <select value={aiDifficulty} onChange={(e) => setAiDifficulty(e.target.value)} className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                                            <option value="EASY">Mudah</option>
-                                            <option value="MEDIUM">Sedang</option>
-                                            <option value="HARD">Sulit</option>
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">▼</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <Button onClick={handleAIGenerate} disabled={aiLoading || !aiMaterial.trim()} className="w-full" loading={aiLoading}>
-                                {aiLoading ? 'Sedang Menganalisis & Membuat Soal...' : '🚀 Generate Soal dengan AI'}
-                            </Button>
-                        </div>
-                    )}
-                    {aiResults.length > 0 && (
-                        <div className="space-y-4">
-                            <p className="text-sm font-bold text-green-500">✅ AI menghasilkan {aiResults.length} soal:</p>
-                            {aiResults.map((q, idx) => (
-                                <div key={idx} className="bg-secondary/5 rounded-xl p-4 border border-secondary/20">
-                                    <div className="flex items-center gap-2 mb-2"><span className="text-primary font-bold">{idx + 1}.</span><span className={`px-2 py-0.5 text-xs font-bold rounded ${q.question_type === 'MULTIPLE_CHOICE' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>{q.question_type === 'MULTIPLE_CHOICE' ? 'PG' : 'Essay'}</span></div>
-                                    <p className="text-text-main dark:text-white text-sm">{q.question_text}</p>
-                                </div>
-                            ))}
-                            <div className="flex gap-3 pt-6 border-t border-secondary/10">
-                                <Button variant="secondary" onClick={() => handleSaveToBank(aiResults)}>💾 Simpan ke Bank Soal</Button>
-                                <Button onClick={() => handleSaveResults(aiResults)} disabled={saving} loading={saving} className="flex-1">Tambahkan {aiResults.length} Soal</Button>
-                            </div>
-                        </div>
-                    )}
-                </Card>
-            )}
-
-            {/* Bank Soal Mode */}
-            {mode === 'bank' && (
-                <Card className="p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-text-main dark:text-white">🗃️ Ambil dari Bank Soal</h2>
-                        <Button variant="secondary" onClick={() => { setMode('list'); setSelectedBankIds(new Set()) }} className="!p-2 aspect-square rounded-full">✕</Button>
-                    </div>
-                    {bankLoading ? (
-                        <div className="text-center py-12"><div className="animate-spin text-3xl text-primary mx-auto mb-2">⏳</div><p className="text-text-secondary">Memuat bank soal...</p></div>
-                    ) : bankQuestions.length === 0 ? (
-                        <EmptyState icon="🗃️" title="Bank Soal Kosong" description="Belum ada soal tersimpan untuk mata pelajaran ini." />
-                    ) : (
-                        <div className="space-y-4">
-                            <p className="text-sm font-bold text-text-secondary">Pilih soal yang ingin ditambahkan:</p>
-                            <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar p-1">
-                                {bankQuestions.map((q) => (
-                                    <label key={q.id} className={`flex items-start gap-4 p-4 rounded-xl cursor-pointer transition-all border ${selectedBankIds.has(q.id) ? 'bg-primary/5 border-primary' : 'bg-secondary/5 border-transparent hover:bg-secondary/10'}`}>
-                                        <input type="checkbox" checked={selectedBankIds.has(q.id)} onChange={(e) => { const newSet = new Set(selectedBankIds); if (e.target.checked) newSet.add(q.id); else newSet.delete(q.id); setSelectedBankIds(newSet) }} className="mt-1 w-5 h-5 rounded border-secondary/30 text-primary focus:ring-primary bg-secondary/10" />
-                                        <div className="flex-1">
-                                            <span className={`px-2 py-0.5 text-xs font-bold rounded ${q.question_type === 'MULTIPLE_CHOICE' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>{q.question_type === 'MULTIPLE_CHOICE' ? 'PG' : 'Essay'}</span>
-                                            <p className="text-text-main dark:text-white text-sm mt-2">{q.question_text}</p>
-                                        </div>
-                                    </label>
-                                ))}
-                            </div>
-                            <div className="flex gap-3 pt-6 border-t border-secondary/10">
-                                <Button variant="secondary" onClick={() => setSelectedBankIds(selectedBankIds.size === bankQuestions.length ? new Set() : new Set(bankQuestions.map(q => q.id)))}>{selectedBankIds.size === bankQuestions.length ? 'Batal Pilih Semua' : 'Pilih Semua'}</Button>
-                                <Button
-                                    onClick={async () => {
-                                        if (selectedBankIds.size === 0) return
-                                        setSaving(true)
-                                        try {
-                                            const selectedQuestions = bankQuestions.filter(q => selectedBankIds.has(q.id)).map((q, idx) => ({ question_text: q.question_text, question_type: q.question_type, options: q.options, correct_answer: q.correct_answer, points: 10, order_index: questions.length + idx }))
-                                            await fetch(`/api/exams/${examId}/questions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ questions: selectedQuestions }) })
-                                            setSelectedBankIds(new Set())
-                                            setMode('list')
-                                            fetchExam()
-                                        } finally { setSaving(false) }
-                                    }}
-                                    disabled={saving || selectedBankIds.size === 0}
-                                    loading={saving}
-                                    className="flex-1"
-                                >Tambahkan {selectedBankIds.size} Soal</Button>
-                            </div>
-                        </div>
-                    )}
-                </Card>
-            )}
+                    </Card>
+                )
+            }
 
             {/* Publish Confirmation Modal */}
             <Modal
@@ -898,6 +1374,6 @@ export default function EditExamPage() {
                     </div>
                 </div>
             </Modal>
-        </div>
+        </div >
     )
 }

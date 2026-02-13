@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
         }
 
         const subjectId = request.nextUrl.searchParams.get('subject_id')
+        const search = request.nextUrl.searchParams.get('search')
 
         // Get teacher
         const { data: teacher } = await supabase
@@ -32,13 +33,18 @@ export async function GET(request: NextRequest) {
             .from('question_bank')
             .select(`
                 *,
-                subject:subjects(id, name)
+                subject:subjects(id, name),
+                teacher:teachers(id, user:users(full_name))
             `)
             .eq('teacher_id', teacher.id)
             .order('created_at', { ascending: false })
 
         if (subjectId) {
             query = query.eq('subject_id', subjectId)
+        }
+
+        if (search) {
+            query = query.ilike('question_text', `%${search}%`)
         }
 
         const { data, error } = await query
@@ -48,6 +54,54 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(data)
     } catch (error) {
         console.error('Error fetching question bank:', error)
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    }
+}
+
+// PUT update question in bank
+export async function PUT(request: NextRequest) {
+    try {
+        const token = request.cookies.get('session_token')?.value
+        if (!token) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const user = await validateSession(token)
+        if (!user || user.role !== 'GURU') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const body = await request.json()
+        const { id, question_text, question_type, options, correct_answer, difficulty, subject_id } = body
+
+        if (!id) {
+            return NextResponse.json({ error: 'ID diperlukan' }, { status: 400 })
+        }
+
+        const updateData: any = {}
+        if (question_text !== undefined) updateData.question_text = question_text
+        if (question_type !== undefined) updateData.question_type = question_type
+        if (options !== undefined) updateData.options = options
+        if (correct_answer !== undefined) updateData.correct_answer = correct_answer
+        if (difficulty !== undefined) updateData.difficulty = difficulty
+        if (subject_id !== undefined) updateData.subject_id = subject_id
+
+        const { data, error } = await supabase
+            .from('question_bank')
+            .update(updateData)
+            .eq('id', id)
+            .select(`
+                *,
+                subject:subjects(id, name),
+                teacher:teachers(id, user:users(full_name))
+            `)
+            .single()
+
+        if (error) throw error
+
+        return NextResponse.json(data)
+    } catch (error) {
+        console.error('Error updating question bank:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })
     }
 }

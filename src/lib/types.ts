@@ -205,6 +205,7 @@ export interface QuizQuestion {
     question_type: QuestionType
     options: string[] | null
     correct_answer: string | null
+    difficulty?: Difficulty
     points: number
     order_index: number
     created_at: string

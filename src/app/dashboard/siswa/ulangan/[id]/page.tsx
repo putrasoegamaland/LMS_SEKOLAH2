@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { FileText, AlertTriangle, Maximize, Clock, CheckCircle } from 'lucide-react'
+import SmartText from '@/components/SmartText'
 
 interface ExamQuestion {
     id: string
@@ -11,6 +12,7 @@ interface ExamQuestion {
     options: string[] | null
     points: number
     image_url?: string | null
+    passage_text?: string | null
 }
 
 interface Exam {
@@ -416,7 +418,15 @@ export default function TakeExamPage() {
                             <span className="text-xs text-text-secondary">({currentQuestion.points} poin)</span>
                         </div>
 
-                        <p className="text-text-main dark:text-white text-lg mb-4">{currentQuestion.question_text}</p>
+                        <SmartText text={currentQuestion.question_text} className="text-text-main dark:text-white text-lg mb-4" />
+
+                        {/* Display passage text if exists */}
+                        {currentQuestion.passage_text && (
+                            <div className="mb-6 p-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-xl">
+                                <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-2">📖 Bacaan:</p>
+                                <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed">{currentQuestion.passage_text}</p>
+                            </div>
+                        )}
 
                         {/* Display question image if exists */}
                         {currentQuestion.image_url && (

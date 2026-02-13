@@ -54,24 +54,13 @@ export default function QuestionImageUpload({ imageUrl, onImageChange, disabled 
         <>
             {/* Image Preview or Add Button */}
             {imageUrl ? (
-                <div className="relative group">
-                    <img
-                        src={imageUrl}
-                        alt="Question image"
-                        className="max-h-40 rounded-lg border border-slate-600 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => !disabled && setShowModal(true)}
-                    />
-                    {!disabled && (
-                        <button
-                            onClick={() => setShowModal(true)}
-                            className="absolute top-1 right-1 p-1 bg-slate-900/80 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                        </button>
-                    )}
-                </div>
+                <button
+                    onClick={() => !disabled && setShowModal(true)}
+                    disabled={disabled}
+                    className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-primary/30"
+                >
+                    🖼️ Edit Gambar
+                </button>
             ) : (
                 <button
                     onClick={() => !disabled && setShowModal(true)}
@@ -87,11 +76,11 @@ export default function QuestionImageUpload({ imageUrl, onImageChange, disabled 
 
             {/* Upload Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md">
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white border border-secondary/20 rounded-2xl p-6 w-full max-w-md shadow-xl">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-white">📷 Gambar Soal</h3>
-                            <button onClick={() => setShowModal(false)} className="p-1 text-slate-400 hover:text-white">
+                            <h3 className="text-lg font-semibold text-text-main">📷 Gambar Soal</h3>
+                            <button onClick={() => setShowModal(false)} className="p-1 text-text-secondary hover:text-text-main transition-colors">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -100,7 +89,7 @@ export default function QuestionImageUpload({ imageUrl, onImageChange, disabled 
 
                         {imageUrl && (
                             <div className="mb-4">
-                                <img src={imageUrl} alt="Current image" className="max-h-48 mx-auto rounded-lg border border-slate-600" />
+                                <img src={imageUrl} alt="Current image" className="max-h-48 mx-auto rounded-lg border border-secondary/20" />
                             </div>
                         )}
 
@@ -117,7 +106,7 @@ export default function QuestionImageUpload({ imageUrl, onImageChange, disabled 
 
                             <label
                                 htmlFor="question-image-upload"
-                                className={`flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium cursor-pointer hover:opacity-90 transition-opacity ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-xl font-medium cursor-pointer hover:opacity-90 transition-opacity ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {uploading ? (
                                     <>⏳ Mengupload...</>
@@ -134,13 +123,13 @@ export default function QuestionImageUpload({ imageUrl, onImageChange, disabled 
                             {imageUrl && (
                                 <button
                                     onClick={handleRemove}
-                                    className="w-full px-4 py-3 bg-red-500/20 text-red-400 rounded-xl hover:bg-red-500/30 transition-colors"
+                                    className="w-full px-4 py-3 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition-colors"
                                 >
                                     🗑️ Hapus Gambar
                                 </button>
                             )}
 
-                            <p className="text-xs text-slate-500 text-center">
+                            <p className="text-xs text-text-secondary text-center">
                                 Format: JPG, PNG, GIF, WebP • Max 5MB
                             </p>
                         </div>

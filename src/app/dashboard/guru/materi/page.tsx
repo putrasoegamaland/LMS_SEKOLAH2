@@ -134,6 +134,34 @@ export default function MateriPage() {
 
 
 
+    const [videoSource, setVideoSource] = useState<'UPLOAD' | 'YOUTUBE'>('YOUTUBE')
+
+    // Helper to get YouTube Embed URL
+    const getYouTubeEmbedUrl = (url: string) => {
+        try {
+            if (!url) return null
+            // Handle standard youtube.com/watch?v=ID
+            let videoId = ''
+            if (url.includes('youtube.com/watch')) {
+                const urlParams = new URLSearchParams(new URL(url).search)
+                videoId = urlParams.get('v') || ''
+            } else if (url.includes('youtu.be/')) {
+                // Handle youtu.be/ID
+                videoId = url.split('youtu.be/')[1]?.split('?')[0] || ''
+            } else if (url.includes('youtube.com/embed/')) {
+                // Already an embed link
+                return url
+            }
+
+            if (videoId) {
+                return `https://www.youtube.com/embed/${videoId}`
+            }
+            return null
+        } catch (e) {
+            return null
+        }
+    }
+
     const uploadFile = async (file: File, onProgress: (percent: number) => void): Promise<{ url: string }> => {
         try {
             const signRes = await fetch('/api/materials/upload', {
@@ -197,7 +225,13 @@ export default function MateriPage() {
             let finalContentUrl = formData.content_url
             let finalContentText = formData.content_text
 
+            // Handle PDF Upload
             if (formData.type === 'PDF' && file) {
+                const { url } = await uploadFile(file, setUploadProgress)
+                finalContentUrl = url
+            }
+            // Handle Video Upload
+            else if (formData.type === 'VIDEO' && videoSource === 'UPLOAD' && file) {
                 const { url } = await uploadFile(file, setUploadProgress)
                 finalContentUrl = url
             }
@@ -231,6 +265,7 @@ export default function MateriPage() {
                 content_text: ''
             })
             setFile(null)
+            setVideoSource('YOUTUBE') // Reset default
             fetchData()
         } catch (error: any) {
             setToast({ message: error.message, type: 'error' })
@@ -384,6 +419,27 @@ export default function MateriPage() {
                                     <h3 className="font-bold text-text-main dark:text-white mb-1 truncate">{material.title}</h3>
                                     <p className="text-sm text-text-secondary dark:text-[#A8BC9F] mb-3 line-clamp-2">{material.description || 'Tidak ada deskripsi'}</p>
 
+                                    {/* Video Player Embed */}
+                                    {material.type === 'VIDEO' && material.content_url && (
+                                        <div className="mb-3 rounded-xl overflow-hidden bg-black/5 dark:bg-black/20 aspect-video relative group">
+                                            {getYouTubeEmbedUrl(material.content_url) ? (
+                                                <iframe
+                                                    src={getYouTubeEmbedUrl(material.content_url)!}
+                                                    className="w-full h-full"
+                                                    allowFullScreen
+                                                    title={material.title}
+                                                />
+                                            ) : (
+                                                <video
+                                                    src={material.content_url}
+                                                    controls
+                                                    className="w-full h-full"
+                                                    preload="metadata"
+                                                />
+                                            )}
+                                        </div>
+                                    )}
+
                                     <div className="flex flex-wrap items-center gap-2 mb-4">
                                         <span className="px-2.5 py-1 bg-secondary/10 text-text-secondary text-xs rounded-full font-medium border border-secondary/20">
                                             {material.teaching_assignment?.class?.name}
@@ -411,7 +467,7 @@ export default function MateriPage() {
                                                 </a>
                                             </>
                                         )}
-                                        {material.content_url && material.type !== 'PDF' && material.type !== 'TEXT' && (
+                                        {material.content_url && material.type !== 'PDF' && material.type !== 'TEXT' && material.type !== 'VIDEO' && (
                                             <a
                                                 href={material.content_url}
                                                 target="_blank"
@@ -499,7 +555,59 @@ export default function MateriPage() {
                         </div>
                     </div>
 
-                    {formData.type === 'PDF' ? (
+                    {formData.type === 'VIDEO' ? (
+                        <div className="space-y-4">
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setVideoSource('YOUTUBE')}
+                                    className={`flex-1 py-2 text-xs font-bold rounded-lg border ${videoSource === 'YOUTUBE' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 text-red-600' : 'border-transparent text-text-secondary hover:bg-secondary/5'}`}
+                                >
+                                    YouTube Link
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setVideoSource('UPLOAD')}
+                                    className={`flex-1 py-2 text-xs font-bold rounded-lg border ${videoSource === 'UPLOAD' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 text-blue-600' : 'border-transparent text-text-secondary hover:bg-secondary/5'}`}
+                                >
+                                    Upload Video
+                                </button>
+                            </div>
+
+                            {videoSource === 'YOUTUBE' ? (
+                                <div>
+                                    <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Link YouTube</label>
+                                    <input
+                                        type="url"
+                                        value={formData.content_url || ''}
+                                        onChange={(e) => setFormData({ ...formData, content_url: e.target.value })}
+                                        className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                        placeholder="https://youtube.com/watch?v=..."
+                                    />
+                                    {formData.content_url && (
+                                        <div className="mt-2 text-xs text-text-secondary">
+                                            {getYouTubeEmbedUrl(formData.content_url) ? '✅ Link valid' : '⚠ Link tidak dikenali (pastikan link YouTube)'}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="bg-secondary/5 border-2 border-dashed border-secondary/30 rounded-2xl p-6 text-center hover:border-primary/50 transition-colors">
+                                    <div className="mb-3 text-4xl">🎥</div>
+                                    <label className="block text-sm font-bold text-text-main dark:text-white mb-1 cursor-pointer">
+                                        <span>Klik untuk upload Video</span>
+                                        <input
+                                            type="file"
+                                            accept="video/*"
+                                            onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+                                            className="hidden"
+                                            required={videoSource === 'UPLOAD'}
+                                        />
+                                    </label>
+                                    <p className="text-xs text-text-secondary">{file ? `Terpilih: ${file.name}` : 'Maksimal ukuran 50MB (MP4/WebM)'}</p>
+                                </div>
+                            )}
+                        </div>
+                    ) : formData.type === 'PDF' ? (
                         <div className="bg-secondary/5 border-2 border-dashed border-secondary/30 rounded-2xl p-6 text-center hover:border-primary/50 transition-colors">
                             <div className="mb-3 text-4xl">📄</div>
                             <label className="block text-sm font-bold text-text-main dark:text-white mb-1 cursor-pointer">
@@ -533,7 +641,7 @@ export default function MateriPage() {
                                 value={formData.content_url || ''}
                                 onChange={(e) => setFormData({ ...formData, content_url: e.target.value })}
                                 className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                                placeholder="https://youtube.com/..."
+                                placeholder="https://..."
                             />
                         </div>
                     )}
@@ -607,3 +715,4 @@ export default function MateriPage() {
         </div>
     )
 }
+

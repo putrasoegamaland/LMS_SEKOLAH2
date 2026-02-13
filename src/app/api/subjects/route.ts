@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
-// GET all subjects
+// GET subjects (filtered by teacher assignments for GURU role)
 export async function GET(request: NextRequest) {
     try {
         const token = request.cookies.get('session_token')?.value
@@ -15,6 +15,39 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
+        // If user is a teacher, only return their assigned subjects
+        if (user.role === 'GURU') {
+            // Get teacher record
+            const { data: teacher } = await supabase
+                .from('teachers')
+                .select('id')
+                .eq('user_id', user.id)
+                .single()
+
+            if (teacher) {
+                // Get unique subjects from teaching assignments
+                const { data: assignments, error } = await supabase
+                    .from('teaching_assignments')
+                    .select('subject:subjects(id, name)')
+                    .eq('teacher_id', teacher.id)
+
+                if (error) throw error
+
+                // Deduplicate subjects
+                const subjectMap = new Map<string, { id: string; name: string }>()
+                assignments?.forEach((a: { subject: { id: string; name: string } | null }) => {
+                    if (a.subject) subjectMap.set(a.subject.id, a.subject)
+                })
+
+                const subjects = Array.from(subjectMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+                return NextResponse.json(subjects)
+            }
+
+            // Teacher not found — return empty
+            return NextResponse.json([])
+        }
+
+        // Admin or other roles: return all subjects
         const { data, error } = await supabase
             .from('subjects')
             .select('*')

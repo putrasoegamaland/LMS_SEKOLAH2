@@ -183,6 +183,32 @@ export default function SiswaMateriPage() {
         )
     }
 
+    // Helper to get YouTube Embed URL
+    const getYouTubeEmbedUrl = (url: string) => {
+        try {
+            if (!url) return null
+            // Handle standard youtube.com/watch?v=ID
+            let videoId = ''
+            if (url.includes('youtube.com/watch')) {
+                const urlParams = new URLSearchParams(new URL(url).search)
+                videoId = urlParams.get('v') || ''
+            } else if (url.includes('youtu.be/')) {
+                // Handle youtu.be/ID
+                videoId = url.split('youtu.be/')[1]?.split('?')[0] || ''
+            } else if (url.includes('youtube.com/embed/')) {
+                // Already an embed link
+                return url
+            }
+
+            if (videoId) {
+                return `https://www.youtube.com/embed/${videoId}`
+            }
+            return null
+        } catch (e) {
+            return null
+        }
+    }
+
     // View 2: Material List for Selected Subject
     return (
         <div className="space-y-6">
@@ -219,6 +245,27 @@ export default function SiswaMateriPage() {
                                 <h3 className="text-lg font-bold text-text-main dark:text-white mb-1">{material.title}</h3>
                                 <p className="text-sm text-text-secondary dark:text-[#A8BC9F] mb-4 line-clamp-2">{material.description || 'Tidak ada deskripsi'}</p>
 
+                                {/* Video Player Embed */}
+                                {material.type === 'VIDEO' && material.content_url && (
+                                    <div className="mb-4 rounded-xl overflow-hidden bg-black/5 dark:bg-black/20 aspect-video relative group shadow-sm border border-secondary/10">
+                                        {getYouTubeEmbedUrl(material.content_url) ? (
+                                            <iframe
+                                                src={getYouTubeEmbedUrl(material.content_url)!}
+                                                className="w-full h-full"
+                                                allowFullScreen
+                                                title={material.title}
+                                            />
+                                        ) : (
+                                            <video
+                                                src={material.content_url}
+                                                controls
+                                                className="w-full h-full"
+                                                preload="metadata"
+                                            />
+                                        )}
+                                    </div>
+                                )}
+
                                 <div className="flex flex-wrap gap-2">
                                     {material.type === 'TEXT' ? (
                                         <Button
@@ -239,7 +286,7 @@ export default function SiswaMateriPage() {
                                             </Button>
 
                                         </>
-                                    ) : (
+                                    ) : material.type !== 'VIDEO' && (
                                         <a
                                             href={material.content_url || '#'}
                                             target="_blank"
