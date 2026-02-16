@@ -27,7 +27,7 @@ export async function GET(
                     id,
                     teacher:teachers(id, user:users(full_name)),
                     subject:subjects(name),
-                    class:classes(id, name)
+                    class:classes(id, name, school_level, grade_level)
                 )
             `)
             .eq('id', id)

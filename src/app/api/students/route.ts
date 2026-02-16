@@ -48,10 +48,10 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
-        return NextResponse.json(data)
+        return NextResponse.json(data || [])
     } catch (error) {
         console.error('Error fetching students:', error)
-        return NextResponse.json({ error: 'Server error' }, { status: 500 })
+        return NextResponse.json([])
     }
 }
 

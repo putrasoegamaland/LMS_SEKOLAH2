@@ -22,6 +22,8 @@ interface QuizQuestion {
     image_url?: string | null
     passage_text?: string | null
     difficulty?: 'EASY' | 'MEDIUM' | 'HARD'
+    status?: string
+    teacher_hots_claim?: boolean
 }
 
 interface Quiz {
@@ -57,7 +59,8 @@ export default function EditQuizPage() {
         correct_answer: '',
         difficulty: undefined as any,
         points: 10,
-        order_index: 0
+        order_index: 0,
+        teacher_hots_claim: false
     })
 
     // Passage mode state
@@ -191,7 +194,8 @@ export default function EditQuizPage() {
                 correct_answer: '',
                 difficulty: undefined as any,
                 points: 10,
-                order_index: 0
+                order_index: 0,
+                teacher_hots_claim: false
             })
             setMode('list')
             fetchQuiz()
@@ -268,6 +272,7 @@ export default function EditQuizPage() {
                 points: q.points || 10,
                 order_index: questions.length + idx,
                 passage_text: q.passage_text || null,
+                teacher_hots_claim: q.teacher_hots_claim || false,
             }))
 
             const res = await fetch(`/api/quizzes/${quizId}/questions`, {
@@ -277,8 +282,14 @@ export default function EditQuizPage() {
             })
 
             if (!res.ok) {
-                const errData = await res.json().catch(() => ({}))
-                console.error('Error saving AI questions:', errData)
+                const text = await res.text()
+                let errData
+                try {
+                    errData = JSON.parse(text)
+                } catch {
+                    errData = { error: text }
+                }
+                console.error('Error saving AI questions:', errData, res.status)
                 alert('Gagal menyimpan soal: ' + (errData.error || 'Server error'))
                 return
             }
@@ -296,7 +307,7 @@ export default function EditQuizPage() {
     const handleSaveToBank = async (results: QuizQuestion[]) => {
         if (results.length === 0) return
         try {
-            await fetch('/api/question-bank', {
+            const res = await fetch('/api/question-bank', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(results.map(q => ({
@@ -304,6 +315,13 @@ export default function EditQuizPage() {
                     subject_id: quiz?.teaching_assignment?.subject?.id
                 })))
             })
+
+            if (!res.ok) {
+                const text = await res.text()
+                console.error('Error saving to bank:', text)
+                alert('Gagal menyimpan ke Bank Soal.')
+                return
+            }
             alert('Soal berhasil disimpan ke Bank Soal!')
         } catch (error) {
             console.error('Error saving to bank:', error)
@@ -570,6 +588,10 @@ export default function EditQuizPage() {
                                                     📖 Passage
                                                 </span>
                                             )}
+                                            {q.status === 'approved' && <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">✅</span>}
+                                            {q.status === 'admin_review' && <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">⚠️ Review</span>}
+                                            {q.status === 'returned' && <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">❌ Returned</span>}
+                                            {q.status === 'ai_reviewing' && <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-pulse">🤖</span>}
                                         </div>
 
                                         {/* Passage text if exists */}
@@ -1006,6 +1028,21 @@ export default function EditQuizPage() {
                                             min={1}
                                         />
                                     </div>
+                                </div>
+
+                                {/* HOTS Toggle */}
+                                <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                    <input
+                                        type="checkbox"
+                                        id="hots-claim-kuis"
+                                        checked={manualForm.teacher_hots_claim || false}
+                                        onChange={e => setManualForm({ ...manualForm, teacher_hots_claim: e.target.checked })}
+                                        className="w-5 h-5 accent-emerald-600 rounded"
+                                    />
+                                    <label htmlFor="hots-claim-kuis" className="flex-1 cursor-pointer">
+                                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                        <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Centang jika soal ini membutuhkan kemampuan berpikir tingkat tinggi (Analisis, Evaluasi, atau Kreasi)</p>
+                                    </label>
                                 </div>
 
                                 <div className="flex gap-3 pt-4">

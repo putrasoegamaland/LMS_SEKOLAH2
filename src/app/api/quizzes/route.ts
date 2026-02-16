@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
                 teaching_assignment:teaching_assignments(
                     id,
                     subject:subjects(id, name),
-                    class:classes(id, name),
+                    class:classes(id, name, school_level, grade_level),
                     teacher:teachers(id, user:users(full_name))
                 ),
                 questions:quiz_questions(count)

@@ -15,6 +15,7 @@ interface AIQuestion {
     order_index: number
     difficulty?: 'EASY' | 'MEDIUM' | 'HARD'
     passage_text?: string
+    teacher_hots_claim?: boolean
     [key: string]: any
 }
 
@@ -451,6 +452,27 @@ A. Jakarta  B. Bandung  C. Surabaya  D. Medan"
                             ))}
                         </div>
 
+                        {/* Bulk HOTS claim */}
+                        <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                            <input
+                                type="checkbox"
+                                id="bulk-hots-claim"
+                                checked={results.every(q => q.teacher_hots_claim)}
+                                onChange={(e) => {
+                                    const checked = e.target.checked
+                                    const hasSelection = isSelectionMode && selected.some(Boolean)
+                                    setResults(prev => prev.map((item, i) =>
+                                        (hasSelection ? selected[i] : true) ? { ...item, teacher_hots_claim: checked } : item
+                                    ))
+                                }}
+                                className="w-5 h-5 accent-emerald-600 rounded"
+                            />
+                            <label htmlFor="bulk-hots-claim" className="flex-1 cursor-pointer">
+                                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS {isSelectionMode && selected.some(Boolean) ? '(yang dipilih)' : '(semua soal)'}</p>
+                                <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Tandai sebagai soal berpikir tingkat tinggi</p>
+                            </label>
+                        </div>
+
                         {(!allValid) && selected.some(Boolean) && (
                             <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-lg">
                                 <span className="text-sm">⚠️</span>
@@ -511,6 +533,18 @@ A. Jakarta  B. Bandung  C. Surabaya  D. Medan"
                                                             <option value="MEDIUM">🟡 Sedang</option>
                                                             <option value="HARD">🔴 Sulit</option>
                                                         </select>
+
+                                                        {/* Per-question HOTS toggle */}
+                                                        <button
+                                                            onClick={() => setResults(prev => prev.map((item, i) => i === idx ? { ...item, teacher_hots_claim: !item.teacher_hots_claim } : item))}
+                                                            className={`px-2 py-0.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${q.teacher_hots_claim
+                                                                ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+                                                                : 'bg-gray-100 dark:bg-gray-500/20 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-500/30 opacity-50 hover:opacity-100'
+                                                                }`}
+                                                            title={q.teacher_hots_claim ? 'Klaim HOTS aktif — klik untuk nonaktifkan' : 'Klik untuk klaim sebagai soal HOTS'}
+                                                        >
+                                                            🧠 {q.teacher_hots_claim ? 'HOTS' : 'HOTS'}
+                                                        </button>
 
                                                         <button
                                                             onClick={() => setEditIdx(editIdx === idx ? null : idx)}

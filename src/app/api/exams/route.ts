@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
                     id,
                     teacher:teachers(id, user:users(full_name)),
                     subject:subjects(name),
-                    class:classes(id, name)
+                    class:classes(id, name, school_level, grade_level)
                 ),
                 exam_questions(id)
             `)

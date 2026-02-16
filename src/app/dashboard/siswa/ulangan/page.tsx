@@ -27,6 +27,7 @@ interface ExamSubmission {
     is_submitted: boolean
     total_score: number
     max_score: number
+    started_at: string
 }
 
 export default function SiswaUlanganPage() {
@@ -61,25 +62,39 @@ export default function SiswaUlanganPage() {
     const getExamStatus = (exam: Exam) => {
         const now = new Date()
         const startTime = new Date(exam.start_time)
-        const endTime = new Date(startTime.getTime() + exam.duration_minutes * 60000)
+        // Default strict end time (if no submission)
+        const strictEndTime = new Date(startTime.getTime() + exam.duration_minutes * 60000)
 
         const submission = submissions.find(s => s.exam_id === exam.id)
 
         if (submission?.is_submitted) {
             return { status: 'submitted', label: 'Sudah Dikumpulkan', icon: CheckCircle, color: 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' }
         }
+
+        if (submission && !submission.is_submitted) {
+            // Check personal expiration
+            const subStartedAt = new Date(submission.started_at).getTime()
+            const durationMs = exam.duration_minutes * 60000
+            // Allow 1 min buffer
+            const isExpired = now.getTime() > (subStartedAt + durationMs + 60000)
+
+            if (isExpired) {
+                return { status: 'expired_open', label: 'Waktu Habis', icon: Clock, color: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300' }
+            }
+            return { status: 'in_progress', label: 'Lanjutkan', icon: Play, color: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' }
+        }
+
         if (now < startTime) {
             const diff = startTime.getTime() - now.getTime()
             const hours = Math.floor(diff / 3600000)
             const mins = Math.floor((diff % 3600000) / 60000)
             return { status: 'scheduled', label: `Mulai dalam ${hours}j ${mins}m`, icon: Clock, color: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' }
         }
-        if (now >= startTime && now <= endTime) {
-            if (submission) {
-                return { status: 'in_progress', label: 'Lanjutkan', icon: Play, color: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' }
-            }
+
+        if (now >= startTime && now <= strictEndTime) {
             return { status: 'available', label: 'Mulai Sekarang', icon: Rocket, color: 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' }
         }
+
         return { status: 'ended', label: 'Waktu Habis', icon: Clock, color: 'bg-slate-100 text-slate-500 dark:bg-slate-500/20 dark:text-slate-400' }
     }
 
@@ -197,6 +212,16 @@ export default function SiswaUlanganPage() {
                                                 <div className="flex items-center justify-center gap-2">
                                                     {status === 'in_progress' ? <Play className="w-5 h-5" /> : <Rocket className="w-5 h-5" />}
                                                     {status === 'in_progress' ? 'Lanjutkan Ulangan' : 'Mulai Ulangan'}
+                                                </div>
+                                            </Link>
+                                        )}
+                                        {status === 'expired_open' && (
+                                            <Link
+                                                href={`/dashboard/siswa/ulangan/${exam.id}`}
+                                                className="w-full block text-center px-5 py-3 bg-secondary/80 text-text-main dark:text-white rounded-xl font-bold hover:bg-secondary transition-all"
+                                            >
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <BarChart3 className="w-5 h-5" /> Lihat Hasil
                                                 </div>
                                             </Link>
                                         )}

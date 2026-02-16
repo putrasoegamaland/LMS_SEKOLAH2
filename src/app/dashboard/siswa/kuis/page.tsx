@@ -27,6 +27,7 @@ interface QuizSubmission {
     total_score: number
     max_score: number
     is_graded: boolean
+    started_at: string
 }
 
 export default function SiswaKuisPage() {
@@ -99,6 +100,7 @@ export default function SiswaKuisPage() {
                     {quizzes.map((quiz) => {
                         const submission = getSubmission(quiz.id)
                         const isCompleted = !!submission?.submitted_at
+                        const isInProgress = submission && !submission.submitted_at
                         const questionCount = quiz.questions?.[0]?.count || 0
 
                         return (
@@ -113,6 +115,11 @@ export default function SiswaKuisPage() {
                                                 {isCompleted && (
                                                     <span className="px-2.5 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-bold rounded-full">
                                                         ✓ Selesai
+                                                    </span>
+                                                )}
+                                                {isInProgress && (
+                                                    <span className="px-2.5 py-1 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-xs font-bold rounded-full">
+                                                        ⏳ Sedang Dikerjakan
                                                     </span>
                                                 )}
                                             </div>
@@ -157,6 +164,32 @@ export default function SiswaKuisPage() {
                                                     Lihat Hasil
                                                 </Link>
                                             </div>
+                                        ) : isInProgress ? (
+                                            (() => {
+                                                // Check expiration
+                                                const startedAt = new Date(submission.started_at).getTime()
+                                                const durationMs = quiz.duration_minutes * 60000
+                                                const isExpired = Date.now() > (startedAt + durationMs + 60000)
+
+                                                if (isExpired) {
+                                                    return (
+                                                        <Link
+                                                            href={`/dashboard/siswa/kuis/${quiz.id}`}
+                                                            className="w-full block text-center px-6 py-3 bg-secondary/80 text-text-main dark:text-white rounded-xl font-bold hover:bg-secondary transition-all text-sm"
+                                                        >
+                                                            Lihat Hasil
+                                                        </Link>
+                                                    )
+                                                }
+                                                return (
+                                                    <Link
+                                                        href={`/dashboard/siswa/kuis/${quiz.id}`}
+                                                        className="w-full block text-center px-6 py-3 bg-gradient-to-r from-orange-600 to-amber-600 text-white rounded-xl font-bold shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 hover:scale-[1.02] transition-all"
+                                                    >
+                                                        Lanjutkan Kuis
+                                                    </Link>
+                                                )
+                                            })()
                                         ) : (
                                             <Link
                                                 href={`/dashboard/siswa/kuis/${quiz.id}`}

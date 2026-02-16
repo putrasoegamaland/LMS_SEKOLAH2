@@ -27,6 +27,15 @@ export default function SiswaDashboard() {
     const [announcements, setAnnouncements] = useState<Announcement[]>([])
     const [loading, setLoading] = useState(true)
 
+    // Resume Modal State
+    const [resumeItem, setResumeItem] = useState<{
+        type: 'Kuis' | 'Ulangan'
+        title: string
+        link: string
+        remainingTime?: string
+    } | null>(null)
+    const [showResumeModal, setShowResumeModal] = useState(false)
+
     useEffect(() => {
         if (user && user.role !== 'SISWA') {
             router.replace('/dashboard')
@@ -57,6 +66,108 @@ export default function SiswaDashboard() {
             }
         }
         if (user) fetchData()
+    }, [user])
+
+    // Check for incomplete assessments and auto-submit expired ones
+    useEffect(() => {
+        if (!user || user.role !== 'SISWA') return
+
+        const checkIncomplete = async () => {
+            try {
+                // Fetch student ID first
+                const studentsRes = await fetch('/api/students')
+                const students = await studentsRes.json()
+                const myStudent = students.find((s: any) => s.user.id === user.id)
+
+                if (!myStudent) return
+
+                const [quizRes, examRes] = await Promise.all([
+                    fetch(`/api/quiz-submissions?student_id=${myStudent.id}`),
+                    fetch(`/api/exam-submissions?student_id=${myStudent.id}`)
+                ])
+
+                const quizzes = await quizRes.json()
+                const exams = await examRes.json()
+
+                let foundResumeItem = null
+
+                // Check active exams first (higher priority)
+                if (Array.isArray(exams)) {
+                    for (const e of exams) {
+                        if (!e.is_submitted && e.exam?.is_active) {
+                            const startedAt = new Date(e.started_at).getTime()
+                            const durationMs = (e.exam.duration_minutes || 0) * 60 * 1000
+                            const now = Date.now()
+                            // Buffer 1 min
+                            const isExpired = now > (startedAt + durationMs + 60000)
+
+                            if (isExpired) {
+                                // Auto-submit background
+                                console.log('Auto-submitting expired exam:', e.id)
+                                await fetch('/api/exam-submissions', {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        submission_id: e.id,
+                                        submit: true
+                                    })
+                                })
+                            } else if (!foundResumeItem) {
+                                foundResumeItem = {
+                                    type: 'Ulangan' as const,
+                                    title: e.exam?.title || 'Ulangan Tanpa Judul',
+                                    link: `/dashboard/siswa/ulangan/${e.exam_id}`,
+                                    // Calculate remaining time for display if needed
+                                    remainingTime: undefined
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Check active quizzes
+                if (Array.isArray(quizzes)) {
+                    for (const q of quizzes) {
+                        if (!q.submitted_at && q.quiz?.is_active) {
+                            const startedAt = new Date(q.started_at).getTime()
+                            const durationMs = (q.quiz.duration_minutes || 0) * 60 * 1000
+                            const now = Date.now()
+                            const isExpired = now > (startedAt + durationMs + 60000)
+
+                            if (isExpired) {
+                                // Auto-submit background
+                                console.log('Auto-submitting expired quiz:', q.id)
+                                await fetch('/api/quiz-submissions', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        quiz_id: q.quiz_id,
+                                        answers: [], // Safe: API uses existing answers if empty
+                                        submit: true
+                                    })
+                                })
+                            } else if (!foundResumeItem) {
+                                foundResumeItem = {
+                                    type: 'Kuis' as const,
+                                    title: q.quiz?.title || 'Kuis Tanpa Judul',
+                                    link: `/dashboard/siswa/kuis/${q.quiz_id}`
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (foundResumeItem) {
+                    setResumeItem(foundResumeItem)
+                    setShowResumeModal(true)
+                }
+
+            } catch (error) {
+                console.error('Error checking incomplete assessments:', error)
+            }
+        }
+
+        checkIncomplete()
     }, [user])
 
     const quickLinks = [
@@ -191,6 +302,52 @@ export default function SiswaDashboard() {
                             </div>
                         )}
                     </Card>
+                </div>
+            )}
+
+            {/* Global Resume Modal */}
+            {showResumeModal && resumeItem && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+                    <div className="bg-surface-light dark:bg-surface-dark border-2 border-primary/20 rounded-2xl p-8 w-full max-w-md text-center shadow-2xl relative overflow-hidden">
+                        {/* Decorative background blob */}
+                        <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
+                        <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
+
+                        <div className="relative">
+                            <div className="w-20 h-20 bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner ring-4 ring-white dark:ring-surface-dark">
+                                <Clock className="w-10 h-10" />
+                            </div>
+
+                            <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
+                                Ada {resumeItem.type} Belum Selesai!
+                            </h3>
+
+                            <div className="bg-surface-ground/50 dark:bg-surface-ground/30 rounded-xl p-4 my-6 border border-secondary/10">
+                                <p className="text-sm text-text-secondary dark:text-zinc-400 mb-1">
+                                    Kamu sedang mengerjakan:
+                                </p>
+                                <p className="text-lg font-bold text-primary truncate px-2">
+                                    {resumeItem.title}
+                                </p>
+                            </div>
+
+                            <div className="space-y-3">
+                                <Link
+                                    href={resumeItem.link}
+                                    className="w-full block py-3.5 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl font-bold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:scale-[1.02] transition-all"
+                                >
+                                    🚀 Lanjutkan Sekarang
+                                </Link>
+
+                                <button
+                                    onClick={() => setShowResumeModal(false)}
+                                    className="w-full py-3 text-text-secondary hover:text-text-main dark:text-zinc-400 dark:hover:text-white transition-colors"
+                                >
+                                    Nanti Saja
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

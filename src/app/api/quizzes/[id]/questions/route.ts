@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
+import { triggerHOTSAnalysis, triggerBulkHOTSAnalysis, type TriggerHOTSInput } from '@/lib/triggerHOTS'
 
 // GET questions for a quiz
 export async function GET(
@@ -65,7 +66,8 @@ export async function POST(
                 points: q.points || 10,
                 order_index: q.order_index ?? idx,
                 image_url: q.image_url || null,
-                passage_text: q.passage_text || null
+                passage_text: q.passage_text || null,
+                teacher_hots_claim: q.teacher_hots_claim || false
             }))
 
             const { data, error } = await supabase
@@ -75,11 +77,35 @@ export async function POST(
 
             if (error) throw error
 
+            // Trigger HOTS analysis for each saved question (fire-and-forget)
+            if (data && data.length > 0) {
+                const { data: quiz } = await supabase
+                    .from('quizzes')
+                    .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
+                    .eq('id', id).single()
+                const ta = quiz?.teaching_assignment as any
+                const subjectName = ta?.subject?.name || ''
+                const gradeBand = ta?.class?.school_level || 'SMP'
+                const hotsInputs: TriggerHOTSInput[] = data.map((q: any) => ({
+                    questionId: q.id,
+                    questionSource: 'quiz' as const,
+                    questionText: q.question_text,
+                    questionType: q.question_type,
+                    options: q.options,
+                    correctAnswer: q.correct_answer,
+                    teacherDifficulty: q.difficulty,
+                    teacherHotsClaim: q.teacher_hots_claim || false,
+                    subjectName,
+                    gradeBand
+                }))
+                triggerBulkHOTSAnalysis(hotsInputs)
+            }
+
             return NextResponse.json(data)
         }
 
         // Single insert
-        const { question_text, question_type, options, correct_answer, difficulty, points, order_index, image_url, passage_text } = body
+        const { question_text, question_type, options, correct_answer, difficulty, points, order_index, image_url, passage_text, teacher_hots_claim } = body
 
         const { data, error } = await supabase
             .from('quiz_questions')
@@ -93,12 +119,34 @@ export async function POST(
                 points: points || 10,
                 order_index: order_index || 0,
                 image_url: image_url || null,
-                passage_text: passage_text || null
+                passage_text: passage_text || null,
+                teacher_hots_claim: teacher_hots_claim || false
             })
             .select()
             .single()
 
         if (error) throw error
+
+        // Trigger HOTS analysis for single question (fire-and-forget)
+        if (data) {
+            const { data: quiz } = await supabase
+                .from('quizzes')
+                .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
+                .eq('id', id).single()
+            const ta = quiz?.teaching_assignment as any
+            triggerHOTSAnalysis({
+                questionId: data.id,
+                questionSource: 'quiz',
+                questionText: data.question_text,
+                questionType: data.question_type,
+                options: data.options,
+                correctAnswer: data.correct_answer,
+                teacherDifficulty: data.difficulty,
+                teacherHotsClaim: data.teacher_hots_claim || false,
+                subjectName: ta?.subject?.name || '',
+                gradeBand: ta?.class?.school_level || 'SMP'
+            }).catch(err => console.error('HOTS trigger error:', err))
+        }
 
         return NextResponse.json(data)
     } catch (error) {

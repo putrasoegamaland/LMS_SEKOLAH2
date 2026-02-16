@@ -6,8 +6,9 @@ import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import SmartText from '@/components/SmartText'
 import Card from '@/components/ui/Card'
 import RapihAIModal from '@/components/RapihAIModal'
-import { Archive, Plus, BookOpen, Trash2, Pencil, WandSparkles, PenLine } from 'lucide-react'
+import { Archive, Plus, BookOpen, Trash2, Pencil, WandSparkles, PenLine, ShieldCheck } from 'lucide-react'
 import Link from 'next/link' // Keep this import as it's used later
+import AIReviewPanel from '@/components/AIReviewPanel'
 
 interface QuestionBankItem {
     id: string
@@ -19,6 +20,9 @@ interface QuestionBankItem {
     image_url?: string | null
     created_at: string
     subject: { id: string; name: string } | null
+    status?: string
+    teacher_hots_claim?: boolean
+    ai_review?: any
 }
 
 interface Subject {
@@ -78,7 +82,8 @@ export default function BankSoalPage() {
         correct_answer: '',
         difficulty: 'MEDIUM' as 'EASY' | 'MEDIUM' | 'HARD',
         subject_id: '',
-        image_url: ''
+        image_url: '',
+        teacher_hots_claim: false
     })
     const [uploading, setUploading] = useState(false)
 
@@ -209,7 +214,8 @@ export default function BankSoalPage() {
             correct_answer: '',
             difficulty: 'MEDIUM',
             subject_id: '',
-            image_url: ''
+            image_url: '',
+            teacher_hots_claim: false
         })
         setPassageForm({
             title: '',
@@ -390,6 +396,23 @@ export default function BankSoalPage() {
             case 'MEDIUM': return 'Sedang'
             case 'HARD': return 'Sulit'
             default: return difficulty
+        }
+    }
+
+    const getStatusBadge = (status?: string) => {
+        switch (status) {
+            case 'approved':
+                return <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-medium">✅ Approved</span>
+            case 'ai_reviewing':
+                return <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium animate-pulse">🤖 AI Review...</span>
+            case 'admin_review':
+                return <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 font-medium">⚠️ Perlu Review</span>
+            case 'returned':
+                return <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 font-medium">❌ Dikembalikan</span>
+            case 'draft':
+                return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 font-medium">📝 Draft</span>
+            default:
+                return null
         }
     }
 
@@ -762,6 +785,7 @@ export default function BankSoalPage() {
                                                             {q.subject.name}
                                                         </span>
                                                     )}
+                                                    {getStatusBadge(q.status)}
                                                 </div>
                                                 <SmartText text={q.question_text} className="text-text-main dark:text-white mb-4 text-lg font-medium leading-relaxed" />
                                                 {q.question_type === 'MULTIPLE_CHOICE' && q.options && (
@@ -978,6 +1002,23 @@ export default function BankSoalPage() {
                                     </div>
                                 </>
                             )}
+
+                            {/* HOTS Claim Toggle */}
+                            <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={questionForm.teacher_hots_claim}
+                                        onChange={e => setQuestionForm({ ...questionForm, teacher_hots_claim: e.target.checked })}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                                <div>
+                                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                    <p className="text-xs text-emerald-600 dark:text-emerald-400">Tandai soal ini sebagai Higher-Order Thinking</p>
+                                </div>
+                            </div>
 
                             <div className="flex gap-3 pt-4">
                                 <Button variant="secondary" onClick={handleCloseModal} className="flex-1">Batal</Button>

@@ -50,6 +50,7 @@ export default function TakeExamPage() {
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
     const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
+    const [showOfflineTimeoutModal, setShowOfflineTimeoutModal] = useState(false)
     const [violationCount, setViolationCount] = useState(0)
     const [showViolationWarning, setShowViolationWarning] = useState(false)
     const [isFullscreen, setIsFullscreen] = useState(false)
@@ -57,6 +58,103 @@ export default function TakeExamPage() {
 
     const containerRef = useRef<HTMLDivElement>(null)
     const hasStarted = useRef(false)
+    const timerRef = useRef<NodeJS.Timeout | null>(null)
+    const answersRef = useRef(answers)
+
+    useEffect(() => {
+        answersRef.current = answers
+    }, [answers])
+
+    // Resume State
+    const [showResumeModal, setShowResumeModal] = useState(false)
+    const [resumeData, setResumeData] = useState<{
+        answeredCount: number
+        totalQuestions: number
+        timeRemaining: number
+    } | null>(null)
+
+    // Helper functions for Timer - just set initial state
+    const initializeExamFromResume = (examData: Exam, remainingTime: number) => {
+        setTimeLeft(remainingTime)
+        setLoading(false)
+        setShowResumeModal(false)
+    }
+
+    const startNewExamTimer = (examData: Exam, startedAt: number) => {
+        const endTime = startedAt + examData.duration_minutes * 60000
+        const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000))
+        setTimeLeft(remaining)
+        setLoading(false)
+    }
+
+    // LocalStorage helpers
+    const saveAnswersToLocal = (answers: { [key: string]: string }) => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(`exam_${examId}_answers`, JSON.stringify({
+                answers,
+                lastSaved: new Date().toISOString()
+            }))
+        }
+    }
+
+    const loadAnswersFromLocal = (): { [key: string]: string } => {
+        if (typeof window !== 'undefined') {
+            const data = localStorage.getItem(`exam_${examId}_answers`)
+            if (data) {
+                try {
+                    const parsed = JSON.parse(data)
+                    return parsed.answers || {}
+                } catch (e) {
+                    return {}
+                }
+            }
+        }
+        return {}
+    }
+
+    const clearLocalAnswers = () => {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem(`exam_${examId}_answers`)
+        }
+    }
+
+    // Sync local answers to server when reconnected
+    useEffect(() => {
+        const handleOnline = () => {
+            syncLocalToServer()
+        }
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('online', handleOnline)
+        }
+
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('online', handleOnline)
+            }
+        }
+    }, [])
+
+    const syncLocalToServer = async () => {
+        const localAnswers = loadAnswersFromLocal()
+        if (Object.keys(localAnswers).length > 0 && submission) {
+            try {
+                const answersArray = Object.entries(localAnswers).map(([question_id, answer]) => ({
+                    question_id, answer
+                }))
+                await fetch('/api/exam-submissions', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        submission_id: submission.id,
+                        answers: answersArray
+                    })
+                })
+            } catch (error) {
+                console.error('Error syncing to server:', error)
+            }
+        }
+    }
 
     // Start exam - create submission
     const startExam = useCallback(async () => {
@@ -102,40 +200,104 @@ export default function TakeExamPage() {
                 setQuestions(questionArr)
             }
 
-            // Calculate time left
+            // Load answers from localStorage if available
+            const localAnswers = loadAnswersFromLocal()
+            let initialAnswers = {}
+            if (Object.keys(localAnswers).length > 0) {
+                setAnswers(localAnswers)
+                initialAnswers = localAnswers
+            }
+
+            // Check for Resume
             const startedAt = new Date(subData.started_at).getTime()
-            const endTime = startedAt + examData.duration_minutes * 60000
-            const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000))
-            setTimeLeft(remaining)
+            const durationMs = examData.duration_minutes * 60000
+            const elapsed = Date.now() - startedAt
+            const remaining = Math.max(0, Math.floor((durationMs - elapsed) / 1000))
+
+            if (remaining <= 0) {
+                // Auto-submit if time expired
+                try {
+                    const formattedAnswers = Object.entries(initialAnswers).map(([qId, val]) => ({
+                        question_id: qId,
+                        answer: val as string
+                    }))
+
+                    await fetch('/api/exam-submissions', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            submission_id: subData.id,
+                            answers: formattedAnswers,
+                            submit: true
+                        })
+                    })
+
+                    if (typeof window !== 'undefined') {
+                        localStorage.removeItem(`exam_${examId}_answers`)
+                    }
+                    // alert('Waktu ulangan telah habis. Jawaban Anda otomatis dikumpulkan.')
+                    router.replace('/dashboard/siswa/ulangan')
+                } catch (e) {
+                    console.error('Auto-submit error:', e)
+                    router.replace('/dashboard/siswa/ulangan')
+                }
+                return
+            }
+
+            // If elapsed is significant (> 10s) OR we found local answers, assume it's a resume
+            // (Assuming a fresh start would be very close to 0 elapsed)
+            const isResume = elapsed > 10000 || Object.keys(localAnswers).length > 0
+
+            if (isResume) {
+                setResumeData({
+                    answeredCount: Object.keys(initialAnswers).length,
+                    totalQuestions: questionArr.length,
+                    timeRemaining: remaining
+                })
+                setShowResumeModal(true)
+                setLoading(false)
+            } else {
+                startNewExamTimer(examData, startedAt)
+            }
 
         } catch (error) {
             console.error('Error starting exam:', error)
             alert('Gagal memulai ulangan')
             router.push('/dashboard/siswa/ulangan')
-        } finally {
             setLoading(false)
         }
     }, [examId, router])
 
     useEffect(() => {
         startExam()
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current)
+        }
     }, [startExam])
 
-    // Timer countdown
+    // Timer countdown - useEffect ensures it reacts to state changes
     useEffect(() => {
         if (timeLeft <= 0 || !submission) return
 
-        const timer = setInterval(() => {
+        timerRef.current = setInterval(() => {
+
             setTimeLeft(prev => {
                 if (prev <= 1) {
-                    handleSubmit(true) // Auto-submit
+                    if (timerRef.current) clearInterval(timerRef.current)
+                    if (navigator.onLine) {
+                        handleSubmit(true)
+                    } else {
+                        setShowOfflineTimeoutModal(true)
+                    }
                     return 0
                 }
                 return prev - 1
             })
         }, 1000)
 
-        return () => clearInterval(timer)
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current)
+        }
     }, [submission])
 
     // Tab lock: detect visibility change
@@ -258,17 +420,23 @@ export default function TakeExamPage() {
 
     // Save answer
     const saveAnswer = async (questionId: string, answer: string) => {
-        setAnswers(prev => ({ ...prev, [questionId]: answer }))
+        const newAnswers = { ...answers, [questionId]: answer }
+        setAnswers(newAnswers)
+        saveAnswersToLocal(newAnswers)
 
         if (submission) {
-            await fetch('/api/exam-submissions', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    submission_id: submission.id,
-                    answers: [{ question_id: questionId, answer }]
+            try {
+                await fetch('/api/exam-submissions', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        submission_id: submission.id,
+                        answers: [{ question_id: questionId, answer }]
+                    })
                 })
-            })
+            } catch (error) {
+                console.error('Error saving answer:', error)
+            }
         }
     }
 
@@ -276,10 +444,11 @@ export default function TakeExamPage() {
     const handleSubmit = async (auto = false) => {
         if (!submission || submitting) return
         setSubmitting(true)
+        setShowOfflineTimeoutModal(false)
 
         try {
             // Save all current answers first
-            const answersArray = Object.entries(answers).map(([question_id, answer]) => ({
+            const answersArray = Object.entries(answersRef.current).map(([question_id, answer]) => ({
                 question_id, answer
             }))
 
@@ -292,6 +461,9 @@ export default function TakeExamPage() {
                     submit: true
                 })
             })
+
+            // Clear localStorage after successful submit
+            clearLocalAnswers()
 
             if (document.fullscreenElement) {
                 await document.exitFullscreen()
@@ -361,7 +533,7 @@ export default function TakeExamPage() {
 
             {/* Fullscreen Prompt */}
             {!isFullscreen && (
-                <div className="bg-amber-500/20 border-b border-amber-500/30 p-3 text-center">
+                <div className="border-b border-amber-500/30 p-3 text-center bg-amber-500/20">
                     <button onClick={requestFullscreen} className="text-amber-400 hover:text-amber-300 underline flex items-center justify-center gap-2 mx-auto">
                         <Maximize className="w-4 h-4" /> Klik untuk mode layar penuh (direkomendasikan)
                     </button>
@@ -381,7 +553,7 @@ export default function TakeExamPage() {
                             <AlertTriangle className="w-4 h-4" /> {violationCount}/{maxViolations}
                         </div>
                         {/* Timer */}
-                        <div className={`px-4 py-2 rounded-lg font-mono text-lg font-bold flex items-center gap-2 ${timeLeft <= 300 ? 'bg-red-500 text-white animate-pulse' : timeLeft <= 600 ? 'bg-amber-500 text-white' : 'bg-primary/20 text-primary dark:text-primary-light'}`}>
+                        <div className={`px-4 py-2 rounded-lg font-mono text-lg font-bold flex items-center gap-2 relative ${timeLeft <= 300 ? 'bg-red-500 text-white animate-pulse' : timeLeft <= 600 ? 'bg-amber-500 text-white' : 'bg-primary/20 text-primary dark:text-primary-light'}`}>
                             <Clock className="w-5 h-5" /> {formatTime(timeLeft)}
                         </div>
                     </div>
@@ -534,6 +706,78 @@ export default function TakeExamPage() {
                                 {submitting ? 'Mengumpulkan...' : 'Ya, Kumpulkan'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Offline Timeout Modal */}
+            {showOfflineTimeoutModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
+                        <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <AlertTriangle className="w-10 h-10" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
+                            Waktu Habis (Offline)
+                        </h3>
+                        <p className="text-text-secondary mb-6">
+                            Waktu ulangan telah habis, tetapi koneksi internet terputus. Jawaban Anda sudah tersimpan secara lokal dan akan dikumpulkan otomatis saat koneksi kembali.
+                        </p>
+                        <button
+                            onClick={() => handleSubmit(true)}
+                            className="w-full px-6 py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark transition-opacity"
+                        >
+                            Kumpulkan Sekarang
+                        </button>
+                    </div>
+                </div>
+            )}
+            {/* Resume Modal */}
+            {showResumeModal && resumeData && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-8 w-full max-w-md text-center shadow-2xl">
+                        <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Clock className="w-10 h-10" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
+                            Lanjutkan Ulangan
+                        </h3>
+                        <p className="text-text-secondary mb-6">
+                            Ulangan ini belum diselesaikan. Waktu terus berjalan saat Anda meninggalkan halaman.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="p-4 bg-primary/10 rounded-xl">
+                                <p className="text-xs text-text-secondary mb-1">Terjawab</p>
+                                <p className="text-2xl font-bold text-primary">
+                                    {resumeData.answeredCount}/{resumeData.totalQuestions}
+                                </p>
+                            </div>
+                            <div className="p-4 bg-blue-500/10 rounded-xl">
+                                <p className="text-xs text-text-secondary mb-1">Sisa Waktu</p>
+                                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono">
+                                    {formatTime(timeLeft)}
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                if (exam) {
+                                    initializeExamFromResume(exam, timeLeft)
+                                }
+                            }}
+                            className="w-full px-6 py-4 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark transition-all text-lg shadow-lg shadow-primary/20"
+                        >
+                            🚀 Lanjutkan Ulangan
+                        </button>
+
+                        <button
+                            onClick={() => router.push('/dashboard/siswa/ulangan')}
+                            className="w-full mt-3 px-6 py-3 text-text-secondary hover:text-text-main transition-colors text-sm"
+                        >
+                            Kembali ke Daftar
+                        </button>
                     </div>
                 </div>
             )}

@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import StatsCard from '@/components/ui/StatsCard'
-import { Calendar, School, BookOpen, UserCheck, Users, UserPlus, BarChart3, TrendingUp, GraduationCap, Megaphone } from 'lucide-react'
+import { Calendar, School, BookOpen, UserCheck, Users, UserPlus, BarChart3, TrendingUp, GraduationCap, Megaphone, ShieldCheck } from 'lucide-react'
 
 interface StatsData {
     totalTeachers: number
@@ -113,6 +113,12 @@ export default function AdminDashboard() {
             description: 'Performa per mapel',
             icon: TrendingUp,
             href: '/dashboard/admin/analitik',
+        },
+        {
+            title: 'Review Soal',
+            description: 'Review kualitas soal HOTS',
+            icon: ShieldCheck,
+            href: '/dashboard/admin/review-soal',
         },
         {
             title: 'Pengumuman',

@@ -49,6 +49,67 @@ export async function GET(request: NextRequest) {
         const examId = request.nextUrl.searchParams.get('exam_id')
         const studentId = request.nextUrl.searchParams.get('student_id')
 
+        // Lazy Sweep: Auto-close expired submissions if examId is provided (Teacher View)
+        if (examId && user.role === 'GURU') {
+            try {
+                const { data: examData } = await supabase
+                    .from('exams')
+                    .select('duration_minutes, start_time')
+                    .eq('id', examId)
+                    .single()
+
+                if (examData) {
+                    const { data: inProgress } = await supabase
+                        .from('exam_submissions')
+                        .select('id, started_at')
+                        .eq('exam_id', examId)
+                        .eq('is_submitted', false)
+
+                    if (inProgress && inProgress.length > 0) {
+                        const now = Date.now()
+                        const durationMs = (examData.duration_minutes || 0) * 60000
+                        const bufferMs = 2 * 60000 // 2 min buffer
+
+                        // Filter expired
+                        const expired = inProgress.filter(sub => {
+                            const start = new Date(sub.started_at).getTime()
+                            return now > (start + durationMs + bufferMs)
+                        })
+
+                        // Process expired
+                        if (expired.length > 0) {
+                            console.log(`[Auto-Close] Found ${expired.length} expired exam submissions for exam ${examId}`)
+
+                            // Process in parallel
+                            await Promise.all(expired.map(async (sub) => {
+                                // Calculate score
+                                const { data: answers } = await supabase
+                                    .from('exam_answers')
+                                    .select('points_earned')
+                                    .eq('submission_id', sub.id)
+
+                                const score = answers?.reduce((sum, a) => sum + (a.points_earned || 0), 0) || 0
+
+                                // force close
+                                await supabase
+                                    .from('exam_submissions')
+                                    .update({
+                                        is_submitted: true,
+                                        submitted_at: new Date().toISOString(),
+                                        total_score: score,
+                                        violations_log: undefined // optional: log auto-close reason?
+                                    })
+                                    .eq('id', sub.id)
+                            }))
+                        }
+                    }
+                }
+            } catch (sweepError) {
+                console.error('Lazy sweep error:', sweepError)
+                // Continue even if sweep fails
+            }
+        }
+
         let query = supabase
             .from('exam_submissions')
             .select(`

@@ -46,18 +46,140 @@ export default function KerjakanKuisPage() {
     const [timeLeft, setTimeLeft] = useState<number | null>(null)
     const [startTime, setStartTime] = useState<string | null>(null)
     const [showTimeoutModal, setShowTimeoutModal] = useState(false)
+    const [showOfflineTimeoutModal, setShowOfflineTimeoutModal] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
+    // Resume State
+    const [showResumeModal, setShowResumeModal] = useState(false)
+    const [resumeData, setResumeData] = useState<{
+        answeredCount: number
+        totalQuestions: number
+        timeRemaining: number
+    } | null>(null)
+
     const timerRef = useRef<NodeJS.Timeout | null>(null)
+    const answersRef = useRef(answers)
+
+    useEffect(() => {
+        answersRef.current = answers
+    }, [answers])
+
+    // LocalStorage helpers
+    const saveAnswersToLocal = (answers: Record<string, string>) => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(`quiz_${quizId}_answers`, JSON.stringify({
+                answers,
+                lastSaved: new Date().toISOString()
+            }))
+        }
+    }
+
+    const loadAnswersFromLocal = (): Record<string, string> => {
+        if (typeof window !== 'undefined') {
+            const data = localStorage.getItem(`quiz_${quizId}_answers`)
+            if (data) {
+                try {
+                    const parsed = JSON.parse(data)
+                    return parsed.answers || {}
+                } catch (e) {
+                    return {}
+                }
+            }
+        }
+        return {}
+    }
+
+    const clearLocalAnswers = () => {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem(`quiz_${quizId}_answers`)
+        }
+    }
+
+    // Sync local answers to server when called manually
+    useEffect(() => {
+        const handleOnline = () => {
+            syncLocalToServer()
+        }
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('online', handleOnline)
+        }
+
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('online', handleOnline)
+            }
+        }
+    }, [])
+
+    const syncLocalToServer = async () => {
+        const localAnswers = loadAnswersFromLocal()
+        if (Object.keys(localAnswers).length > 0 && startTime) {
+            try {
+                const formattedAnswers = Object.entries(localAnswers).map(([qId, val]) => ({
+                    question_id: qId,
+                    answer: val
+                }))
+                await fetch('/api/quiz-submissions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        quiz_id: quizId,
+                        answers: formattedAnswers,
+                        started_at: startTime
+                    })
+                })
+            } catch (error) {
+                console.error('Error syncing to server:', error)
+            }
+        }
+    }
 
     useEffect(() => {
         if (user) {
             fetchQuizData()
         }
+    }, [quizId, user])
+
+    // Continuous Timer Effect
+    useEffect(() => {
+        // Don't run if critical data is missing or submitting
+        if (!quiz || !startTime || submitting || timeLeft === null) return
+
+        // If time is already up, don't start timer (handled by check below, but optimization)
+        if (timeLeft <= 0) return
+
+        timerRef.current = setInterval(() => {
+            const now = new Date().getTime()
+            const startStr = startTime
+            if (!startStr) return
+
+            const durationMs = quiz.duration_minutes * 60 * 1000
+            const start = new Date(startStr).getTime()
+            const currentElapsed = now - start
+            const currentRemaining = Math.max(0, durationMs - currentElapsed)
+
+            setTimeLeft(currentRemaining)
+
+            if (currentRemaining <= 0) {
+                if (timerRef.current) clearInterval(timerRef.current)
+                if (navigator.onLine) {
+                    // Call handleSubmit directly here. 
+                    // Note: accessing handleSubmit inside useEffect might require it to be dependency 
+                    // or wrapped in useCallback. Since it's defined in component, it changes on render.
+                    // But handleSubmit functionality is static enough.
+                    // Better to just copy the submit logic or call the confirmSubmit(true)
+                    confirmSubmit(true)
+                } else {
+                    setShowOfflineTimeoutModal(true)
+                }
+            }
+        }, 1000)
+
         return () => {
             if (timerRef.current) clearInterval(timerRef.current)
         }
-    }, [quizId, user])
+    }, [quiz, startTime, submitting]) // Intentionally omitting timeLeft to prevent re-running every second
 
     const fetchQuizData = async () => {
         try {
@@ -100,6 +222,23 @@ export default function KerjakanKuisPage() {
         }
     }
 
+    const initializeAttemptFromResume = (quizData: Quiz, remainingTime: number) => {
+        setTimeLeft(remainingTime)
+        setLoading(false)
+        // Timer handled by useEffect
+    }
+
+    // Helper for new attempt initialization
+    const startNewAttemptTimer = (quizData: Quiz, startedAt: Date) => {
+        const durationMs = quizData.duration_minutes * 60 * 1000
+        const elapsed = new Date().getTime() - startedAt.getTime()
+        const remaining = Math.max(0, durationMs - elapsed)
+
+        setTimeLeft(remaining)
+        setLoading(false)
+        // Timer handled by useEffect
+    }
+
     const initializeAttempt = async (quizData: Quiz, myStudent: any) => {
         // Check existing submission
         const subRes = await fetch(`/api/quiz-submissions?quiz_id=${quizData.id}&student_id=${myStudent.id}`)
@@ -115,20 +254,70 @@ export default function KerjakanKuisPage() {
                 router.push('/dashboard/siswa/kuis')
                 return
             }
-            // Resume
-            startedAt = new Date(existingSub.started_at)
-            setStartTime(existingSub.started_at)
 
-            // Load types answers depending on how we store them. 
-            // The DB stores answers as JSONB array: [{question_id, answer, ...}]
-            // We need to map it back to state
+            // Show resume modal/logic
+            const localAnswers = loadAnswersFromLocal()
+            const dbAnswers: Record<string, string> = {}
+
             if (existingSub.answers) {
-                const answerMap: Record<string, string> = {}
                 existingSub.answers.forEach((ans: any) => {
-                    answerMap[ans.question_id] = ans.answer
+                    dbAnswers[ans.question_id] = ans.answer
                 })
-                setAnswers(answerMap)
             }
+
+            // Merge: prefer localStorage if it has more answers or same
+            // Actually usually we want the latest. But here we assume local is latest if valid.
+            const mergedAnswers = Object.keys(localAnswers).length >= Object.keys(dbAnswers).length
+                ? { ...dbAnswers, ...localAnswers }
+                : { ...localAnswers, ...dbAnswers } // If DB has more, maybe we cleared local?
+
+            const startedAtDate = new Date(existingSub.started_at)
+            const durationMs = quizData.duration_minutes * 60 * 1000
+            const elapsed = new Date().getTime() - startedAtDate.getTime()
+            const remaining = Math.max(0, durationMs - elapsed)
+
+            if (remaining <= 0) {
+                // Auto-submit immediately if time expired
+                try {
+                    const formattedAnswers = Object.entries(mergedAnswers).map(([qId, val]) => ({
+                        question_id: qId,
+                        answer: val as string
+                    }))
+
+                    await fetch('/api/quiz-submissions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            quiz_id: quizData.id,
+                            answers: formattedAnswers,
+                            started_at: existingSub.started_at,
+                            submit: true
+                        })
+                    })
+
+                    clearLocalAnswers()
+                    // alert('Waktu pengerjaan telah habis. Jawaban Anda otomatis dikumpulkan.')
+                    router.replace(`/dashboard/siswa/kuis/${quizData.id}/hasil`)
+                } catch (e) {
+                    console.error('Auto-submit error:', e)
+                    router.replace('/dashboard/siswa/kuis')
+                }
+                return
+            }
+
+            setResumeData({
+                answeredCount: Object.keys(mergedAnswers).length,
+                totalQuestions: quizData.questions.length,
+                timeRemaining: remaining
+            })
+            setAnswers(mergedAnswers)
+            setStartTime(existingSub.started_at)
+            setTimeLeft(remaining) // Set timeLeft so modal shows live timer
+
+            // Show modal to ask user to resume
+            setShowResumeModal(true)
+            setLoading(false)
+            return
 
         } else {
             // Start new attempt (implicitly by setting start time now, will be saved on first save/submit)
@@ -164,29 +353,9 @@ export default function KerjakanKuisPage() {
             // Too complex for now. Let's just use the order from DB.
         }
 
-        // Calculate Time Left
-        const durationMs = quizData.duration_minutes * 60 * 1000
-        const elapsed = new Date().getTime() - startedAt.getTime()
-        const remaining = Math.max(0, durationMs - elapsed)
-
-        setTimeLeft(remaining)
-        setLoading(false)
-
-        // Start Timer
-        timerRef.current = setInterval(() => {
-            const now = new Date().getTime()
-            const startStr = existingSub ? existingSub.started_at : startedAt.toISOString()
-            const start = new Date(startStr).getTime()
-            const currentElapsed = now - start
-            const currentRemaining = Math.max(0, durationMs - currentElapsed)
-
-            setTimeLeft(currentRemaining)
-
-            if (currentRemaining <= 0) {
-                handleSubmit(true) // Auto submit
-            }
-        }, 1000)
+        startNewAttemptTimer(quizData, startedAt)
     }
+
 
     const formatTime = (ms: number) => {
         const totalSeconds = Math.floor(ms / 1000)
@@ -198,7 +367,7 @@ export default function KerjakanKuisPage() {
 
     const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
 
-    // ... (existing code)
+
 
     const handleSubmit = async (auto = false) => {
         if (submitting) return
@@ -213,11 +382,12 @@ export default function KerjakanKuisPage() {
     const confirmSubmit = async (auto = false) => {
         setSubmitting(true)
         setShowSubmitConfirm(false)
+        setShowOfflineTimeoutModal(false)
         if (timerRef.current) clearInterval(timerRef.current)
 
         try {
             // Format answers for API
-            const formattedAnswers = Object.entries(answers).map(([qId, val]) => ({
+            const formattedAnswers = Object.entries(answersRef.current).map(([qId, val]) => ({
                 question_id: qId,
                 answer: val
             }))
@@ -228,9 +398,13 @@ export default function KerjakanKuisPage() {
                 body: JSON.stringify({
                     quiz_id: quizId,
                     answers: formattedAnswers,
-                    started_at: startTime
+                    started_at: startTime,
+                    submit: true
                 })
             })
+
+            // Clear localStorage after successful submit
+            clearLocalAnswers()
 
             if (auto) {
                 setShowTimeoutModal(true)
@@ -270,8 +444,7 @@ export default function KerjakanKuisPage() {
                         <h1 className="text-xl font-bold text-text-main dark:text-white truncate max-w-xs md:max-w-md">{quiz.title}</h1>
                         <p className="text-xs text-text-secondary">Total: {quiz.questions.length} Soal</p>
                     </div>
-                    <div className={`px-4 py-2 rounded-xl font-mono text-xl font-bold shadow-lg ${(timeLeft || 0) < 60000 ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 dark:bg-surface-dark text-primary dark:text-primary-light'
-                        }`}>
+                    <div className={`px-4 py-2 rounded-xl font-mono text-xl font-bold shadow-lg relative ${(timeLeft || 0) < 60000 ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 dark:bg-surface-dark text-primary dark:text-primary-light'}`}>
                         {timeLeft !== null ? formatTime(timeLeft) : '--:--:--'}
                     </div>
                 </div>
@@ -339,7 +512,11 @@ export default function KerjakanKuisPage() {
                                                     name={`q-${q.id}`}
                                                     value={letter}
                                                     checked={isSelected}
-                                                    onChange={() => setAnswers({ ...answers, [q.id]: letter })}
+                                                    onChange={() => {
+                                                        const newAnswers = { ...answers, [q.id]: letter }
+                                                        setAnswers(newAnswers)
+                                                        saveAnswersToLocal(newAnswers)
+                                                    }}
                                                     className="hidden"
                                                 />
                                                 <span className="font-medium">
@@ -353,7 +530,11 @@ export default function KerjakanKuisPage() {
                             ) : (
                                 <textarea
                                     value={answers[q.id] || ''}
-                                    onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                                    onChange={(e) => {
+                                        const newAnswers = { ...answers, [q.id]: e.target.value }
+                                        setAnswers(newAnswers)
+                                        saveAnswersToLocal(newAnswers)
+                                    }}
                                     className="w-full h-32 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary placeholder-gray-400"
                                     placeholder="Tulis jawaban Anda di sini..."
                                 />
@@ -431,6 +612,82 @@ export default function KerjakanKuisPage() {
                             className="w-full px-6 py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark transition-opacity"
                         >
                             Lihat Hasil
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Offline Timeout Modal */}
+            {showOfflineTimeoutModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
+                        <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <AlertTriangle className="w-10 h-10" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
+                            Waktu Habis (Offline)
+                        </h3>
+                        <p className="text-text-secondary mb-6">
+                            Waktu kuis telah habis, tetapi koneksi internet terputus. Jawaban Anda sudah tersimpan secara lokal dan akan dikumpulkan otomatis saat koneksi kembali.
+                        </p>
+                        <button
+                            onClick={() => confirmSubmit(true)}
+                            className="w-full px-6 py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark transition-opacity"
+                        >
+                            Kumpulkan Sekarang
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Resume Modal */}
+            {showResumeModal && resumeData && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-8 w-full max-w-md text-center shadow-2xl">
+                        <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
+                            Ada Kuis yang Belum Selesai
+                        </h3>
+                        <p className="text-text-secondary mb-6">
+                            Kamu belum menyelesaikan kuis ini. Lanjutkan dari mana kamu berhenti.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="p-4 bg-primary/10 rounded-xl">
+                                <p className="text-xs text-text-secondary mb-1">Terjawab</p>
+                                <p className="text-2xl font-bold text-primary">
+                                    {resumeData.answeredCount}/{resumeData.totalQuestions}
+                                </p>
+                            </div>
+                            <div className="p-4 bg-blue-500/10 rounded-xl">
+                                <p className="text-xs text-text-secondary mb-1">Sisa Waktu</p>
+                                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono">
+                                    {formatTime(timeLeft || 0)}
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                setShowResumeModal(false)
+                                if (quiz && timeLeft) {
+                                    initializeAttemptFromResume(quiz, timeLeft)
+                                }
+                            }}
+                            className="w-full px-6 py-4 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark transition-all text-lg shadow-lg shadow-primary/20"
+                        >
+                            🚀 Lanjutkan Kuis
+                        </button>
+
+                        <button
+                            onClick={() => router.push('/dashboard/siswa/kuis')}
+                            className="w-full mt-3 px-6 py-3 text-text-secondary hover:text-text-main transition-colors text-sm"
+                        >
+                            Kembali ke Daftar Kuis
                         </button>
                     </div>
                 </div>
