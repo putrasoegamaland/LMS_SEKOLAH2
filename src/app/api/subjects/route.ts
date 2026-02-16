@@ -35,8 +35,10 @@ export async function GET(request: NextRequest) {
 
                 // Deduplicate subjects
                 const subjectMap = new Map<string, { id: string; name: string }>()
-                assignments?.forEach((a: { subject: { id: string; name: string } | null }) => {
-                    if (a.subject) subjectMap.set(a.subject.id, a.subject)
+                assignments?.forEach((a: any) => {
+                    // Handle potential array return from join
+                    const subj = Array.isArray(a.subject) ? a.subject[0] : a.subject
+                    if (subj) subjectMap.set(subj.id, subj)
                 })
 
                 const subjects = Array.from(subjectMap.values()).sort((a, b) => a.name.localeCompare(b.name))
