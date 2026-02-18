@@ -6,10 +6,11 @@ import { PageHeader, Modal, Button, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { AcademicYear, Class, SchoolLevel } from '@/lib/types'
 import {
-    ArrowRight, Users, CheckCircle, XCircle, AlertTriangle, Loader2,
-    GraduationCap, ArrowUpRight, ChevronDown, ChevronRight, Search,
-    Download, ShieldAlert, UserCheck, UserX
-} from 'lucide-react'
+    ArrowRight, People as Users, TickSquare as CheckCircle, CloseSquare as XCircle,
+    Danger as AlertTriangle, Document as GraduationCap, ArrowUpSquare as ArrowUpRight,
+    ChevronDown, ChevronRight, Search, Download, ShieldFail as ShieldAlert
+} from 'react-iconly'
+import { Loader2, UserCheck, UserX } from 'lucide-react'
 
 interface Student {
     id: string
@@ -414,21 +415,21 @@ export default function KenaikanKelasPage() {
             case 'PROMOTE':
                 return (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold">
-                        <ArrowUpRight className="w-3 h-3" />
+                        <ArrowUpRight set="bold" primaryColor="currentColor" size={12} />
                         Naik Kelas
                     </span>
                 )
             case 'GRADUATE':
                 return (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-500/10 text-green-600 dark:text-green-400 rounded-full text-xs font-bold">
-                        <GraduationCap className="w-3 h-3" />
+                        <GraduationCap set="bold" primaryColor="currentColor" size={12} />
                         Lulus
                     </span>
                 )
             case 'TRANSITION':
                 return (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full text-xs font-bold">
-                        <ArrowRight className="w-3 h-3" />
+                        <ArrowRight set="bold" primaryColor="currentColor" size={12} />
                         Transisi SMA
                     </span>
                 )
@@ -483,7 +484,7 @@ export default function KenaikanKelasPage() {
             <div key={group.sourceClass.id} className={`transition-colors ${group.isCompleted ? 'opacity-60' : ''}`}>
                 {/* Main row */}
                 <div
-                    className={`p-4 flex items-center gap-3 hover:bg-secondary/5 transition-colors ${isSelected ? 'bg-primary/5' : ''} ${group.isCompleted ? 'bg-green-50 dark:bg-green-900/10' : ''}`}
+                    className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isSelected ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''} ${group.isCompleted ? 'bg-green-50 dark:bg-green-900/10' : ''}`}
                 >
                     {/* Checkbox */}
                     <input
@@ -491,17 +492,17 @@ export default function KenaikanKelasPage() {
                         checked={isSelected}
                         onChange={() => toggleGroup(group.sourceClass.id)}
                         disabled={group.isCompleted}
-                        className="w-5 h-5 rounded border-secondary text-primary focus:ring-primary/50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500/50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     />
 
                     {/* Expand toggle */}
                     <button
                         onClick={(e) => { e.stopPropagation(); toggleExpand(group.sourceClass.id) }}
-                        className="p-1 rounded-lg hover:bg-secondary/10 transition-colors"
+                        className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
                         {isExpanded
-                            ? <ChevronDown className="w-4 h-4 text-text-secondary" />
-                            : <ChevronRight className="w-4 h-4 text-text-secondary" />
+                            ? <ChevronDown set="bold" primaryColor="currentColor" size={16} />
+                            : <ChevronRight set="bold" primaryColor="currentColor" size={16} />
                         }
                     </button>
 
@@ -519,7 +520,7 @@ export default function KenaikanKelasPage() {
 
                         {/* Arrow */}
                         <div className="hidden md:flex md:col-span-1 items-center justify-center">
-                            <ArrowRight className="w-4 h-4 text-text-secondary" />
+                            <ArrowRight set="bold" primaryColor="currentColor" size={16} />
                         </div>
 
                         {/* Target class (dropdown for PROMOTE, static for others) */}
@@ -530,7 +531,7 @@ export default function KenaikanKelasPage() {
                                         value={group.targetClassId}
                                         onChange={(e) => updateTargetClass(group.sourceClass.id, e.target.value)}
                                         disabled={group.isCompleted}
-                                        className="w-full px-3 py-1.5 bg-secondary/5 border border-secondary/20 rounded-lg text-sm text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none disabled:opacity-50"
+                                        className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 appearance-none disabled:opacity-50"
                                     >
                                         {targetOptions.map(c => (
                                             <option key={c.id} value={c.id}>{c.name}</option>
@@ -552,7 +553,7 @@ export default function KenaikanKelasPage() {
                         <div className="md:col-span-2 flex justify-end">
                             {group.isCompleted ? (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 rounded-full text-xs font-bold">
-                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    <CheckCircle set="bold" primaryColor="currentColor" size={14} />
                                     Selesai ({group.completedCount})
                                 </span>
                             ) : (
@@ -564,8 +565,8 @@ export default function KenaikanKelasPage() {
 
                 {/* Expanded student list */}
                 {isExpanded && (
-                    <div className="bg-secondary/3 dark:bg-white/2 border-t border-secondary/10">
-                        <div className="px-4 py-2 flex items-center justify-between border-b border-secondary/10">
+                    <div className="bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200 dark:border-slate-700">
+                        <div className="px-4 py-2 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
                             <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">Daftar Siswa</span>
                             <div className="flex gap-2">
                                 <button
@@ -634,7 +635,7 @@ export default function KenaikanKelasPage() {
                 title="Kenaikan Kelas"
                 subtitle="Proses kenaikan kelas, transisi, dan kelulusan siswa"
                 backHref="/dashboard/admin"
-                icon={<ArrowUpRight className="w-6 h-6 text-emerald-500" />}
+                icon={<div className="text-emerald-500"><ArrowUpRight set="bold" primaryColor="currentColor" size={24} /></div>}
             />
 
             {/* Active Year Info */}
@@ -660,7 +661,7 @@ export default function KenaikanKelasPage() {
             {!activeYear ? (
                 <Card className="p-6">
                     <EmptyState
-                        icon={<AlertTriangle className="w-12 h-12 text-amber-500" />}
+                        icon={<div className="text-amber-500"><AlertTriangle set="bold" primaryColor="currentColor" size={48} /></div>}
                         title="Tidak Ada Tahun Ajaran Aktif"
                         description="Aktifkan tahun ajaran terlebih dahulu untuk melakukan kenaikan kelas"
                         action={
@@ -673,7 +674,7 @@ export default function KenaikanKelasPage() {
             ) : classGroups.length === 0 ? (
                 <Card className="p-6">
                     <EmptyState
-                        icon={<Users className="w-12 h-12 text-secondary" />}
+                        icon={<div className="text-secondary"><Users set="bold" primaryColor="currentColor" size={48} /></div>}
                         title="Tidak Ada Siswa Aktif"
                         description="Tidak ada siswa aktif yang terdaftar di kelas pada tahun ajaran ini"
                         action={
@@ -694,13 +695,13 @@ export default function KenaikanKelasPage() {
                                     : 'Pilih Semua'}
                             </Button>
                             <div className="relative flex-1 sm:w-64">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary"><Search set="bold" primaryColor="currentColor" size={16} /></span>
                                 <input
                                     type="text"
                                     placeholder="Cari kelas..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-secondary/5 border border-secondary/20 rounded-xl text-sm text-text-main dark:text-white placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+                                    className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                 />
                             </div>
                         </div>
@@ -709,7 +710,7 @@ export default function KenaikanKelasPage() {
                                 onClick={handleExportCSV}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-text-secondary hover:text-text-main dark:hover:text-white hover:bg-secondary/10 rounded-lg transition-colors"
                             >
-                                <Download className="w-4 h-4" />
+                                <Download set="bold" primaryColor="currentColor" size={16} />
                                 Export CSV
                             </button>
                             <span className="text-sm text-text-secondary">
@@ -745,7 +746,7 @@ export default function KenaikanKelasPage() {
                     {filteredGroups.length === 0 && searchQuery && (
                         <Card className="p-6">
                             <EmptyState
-                                icon={<Search className="w-12 h-12 text-secondary" />}
+                                icon={<div className="text-secondary"><Search set="bold" primaryColor="currentColor" size={48} /></div>}
                                 title="Tidak Ditemukan"
                                 description={`Tidak ada kelas yang cocok dengan "${searchQuery}"`}
                             />
@@ -758,7 +759,7 @@ export default function KenaikanKelasPage() {
                             onClick={handleProcessClick}
                             loading={processing}
                             disabled={selectedGroups.size === 0 || processing}
-                            icon={<CheckCircle className="w-5 h-5" />}
+                            icon={<CheckCircle set="bold" primaryColor="currentColor" size={20} />}
                             className="px-8"
                         >
                             {processing
@@ -779,7 +780,7 @@ export default function KenaikanKelasPage() {
                 <div className="space-y-4">
                     <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 rounded-xl">
                         <div className="flex items-start gap-3">
-                            <ShieldAlert className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                            <div className="text-amber-500 mt-0.5 flex-shrink-0"><ShieldAlert set="bold" primaryColor="currentColor" size={20} /></div>
                             <div>
                                 <p className="font-bold text-amber-700 dark:text-amber-300 text-sm">Perhatian!</p>
                                 <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
@@ -805,7 +806,7 @@ export default function KenaikanKelasPage() {
                         {confirmStats.promote > 0 && (
                             <div className="flex items-center justify-between text-sm">
                                 <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                                    <ArrowUpRight className="w-4 h-4" /> Naik Kelas
+                                    <ArrowUpRight set="bold" primaryColor="currentColor" size={16} /> Naik Kelas
                                 </span>
                                 <span className="font-bold text-text-main dark:text-white">{confirmStats.promote} siswa</span>
                             </div>
@@ -813,7 +814,7 @@ export default function KenaikanKelasPage() {
                         {confirmStats.graduate > 0 && (
                             <div className="flex items-center justify-between text-sm">
                                 <span className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                                    <GraduationCap className="w-4 h-4" /> Lulus
+                                    <GraduationCap set="bold" primaryColor="currentColor" size={16} /> Lulus
                                 </span>
                                 <span className="font-bold text-text-main dark:text-white">{confirmStats.graduate} siswa</span>
                             </div>
@@ -821,7 +822,7 @@ export default function KenaikanKelasPage() {
                         {confirmStats.transition > 0 && (
                             <div className="flex items-center justify-between text-sm">
                                 <span className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-                                    <ArrowRight className="w-4 h-4" /> Transisi SMA
+                                    <ArrowRight set="bold" primaryColor="currentColor" size={16} /> Transisi SMA
                                 </span>
                                 <span className="font-bold text-text-main dark:text-white">{confirmStats.transition} siswa</span>
                             </div>
@@ -847,7 +848,7 @@ export default function KenaikanKelasPage() {
                         <Button
                             onClick={handleConfirmProcess}
                             className="flex-1"
-                            icon={<CheckCircle className="w-4 h-4" />}
+                            icon={<CheckCircle set="bold" primaryColor="currentColor" size={16} />}
                         >
                             Ya, Proses Sekarang
                         </Button>
@@ -864,12 +865,12 @@ export default function KenaikanKelasPage() {
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-xl text-center">
-                            <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                            <div className="text-green-500 mx-auto mb-2"><CheckCircle set="bold" primaryColor="currentColor" size={32} /></div>
                             <p className="text-2xl font-bold text-green-600 dark:text-green-400">{results.success}</p>
                             <p className="text-sm text-green-700 dark:text-green-300">Berhasil</p>
                         </div>
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-xl text-center">
-                            <XCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                            <div className="text-red-500 mx-auto mb-2"><XCircle set="bold" primaryColor="currentColor" size={32} /></div>
                             <p className="text-2xl font-bold text-red-600 dark:text-red-400">{results.failed}</p>
                             <p className="text-sm text-red-700 dark:text-red-300">Gagal</p>
                         </div>

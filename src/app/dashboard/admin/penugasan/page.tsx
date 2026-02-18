@@ -5,10 +5,10 @@ import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { AssignmentWizard } from '@/components/AssignmentWizard'
 import {
-    BookOpen, UserPlus, Loader2, User, Trash2, Edit,
-    AlertCircle, ChevronDown, ChevronUp, School, ChevronRight, X,
-    HeartHandshake, Save, Check
-} from 'lucide-react'
+    Document as BookOpen, AddUser as UserPlus, User, Delete as Trash2, Edit,
+    InfoCircle as AlertCircle, ChevronDown, ChevronUp, Home as School, ChevronRight
+} from 'react-iconly'
+import { Loader2, X, HeartHandshake, Save, Check } from 'lucide-react'
 import { AcademicYear, Class, Subject } from '@/lib/types'
 
 interface Teacher {
@@ -307,10 +307,10 @@ export default function PenugasanPage() {
                 title="Penugasan"
                 subtitle="Assign guru ke kelas, mata pelajaran, dan wali kelas"
                 backHref="/dashboard/admin"
-                icon={<BookOpen className="w-6 h-6 text-teal-500" />}
+                icon={<div className="text-teal-500"><BookOpen set="bold" primaryColor="currentColor" size={24} /></div>}
                 action={
                     activeTab === 'mengajar' ? (
-                        <Button onClick={() => openAddNew()} icon={<UserPlus className="w-4 h-4" />}>
+                        <Button onClick={() => openAddNew()} icon={<UserPlus set="bold" primaryColor="currentColor" size={16} />}>
                             Tambah Penugasan
                         </Button>
                     ) : undefined
@@ -318,7 +318,7 @@ export default function PenugasanPage() {
             />
 
             {/* Tab Navigation */}
-            <div className="flex gap-2 bg-secondary/5 dark:bg-white/5 rounded-2xl p-1.5">
+            <div className="flex gap-2 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-1.5">
                 <button
                     onClick={() => setActiveTab('mengajar')}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'mengajar'
@@ -326,7 +326,7 @@ export default function PenugasanPage() {
                         : 'text-text-secondary hover:text-text-main dark:hover:text-white'
                         }`}
                 >
-                    <BookOpen className="w-4 h-4" />
+                    <BookOpen set="bold" primaryColor="currentColor" size={16} />
                     Penugasan Mengajar
                 </button>
                 <button
@@ -353,7 +353,7 @@ export default function PenugasanPage() {
                             <select
                                 value={selectedYearId}
                                 onChange={(e) => setSelectedYearId(e.target.value)}
-                                className="w-full px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 appearance-none"
                             >
                                 <option value="">Pilih Tahun</option>
                                 {academicYears.map((y) => (
@@ -389,7 +389,7 @@ export default function PenugasanPage() {
                                 <div className="text-2xl font-bold text-red-600 dark:text-red-400">{unassignedSlots.length}</div>
                             </div>
                             <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
-                                <ChevronRight className="w-5 h-5 text-red-500 group-hover:translate-x-0.5 transition-transform" />
+                                <ChevronRight set="bold" primaryColor="currentColor" size={20} />
                             </div>
                         </div>
                         {unassignedSlots.length > 0 && (
@@ -409,7 +409,7 @@ export default function PenugasanPage() {
                                 </div>
                                 <button
                                     onClick={() => setShowUnassignedModal(false)}
-                                    className="p-2 rounded-full hover:bg-secondary/10 text-text-secondary hover:text-primary-dark transition-colors"
+                                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-text-secondary hover:text-primary-dark transition-colors"
                                 >
                                     <X className="w-6 h-6" />
                                 </button>
@@ -421,10 +421,10 @@ export default function PenugasanPage() {
                                     if (unassignedForSubject.length === 0) return null
 
                                     return (
-                                        <div key={subject.id} className="bg-secondary/5 dark:bg-white/5 rounded-xl p-3">
+                                        <div key={subject.id} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
                                             <div className="flex items-center justify-between mb-2">
                                                 <span className="font-bold text-text-main dark:text-white flex items-center gap-2">
-                                                    <BookOpen className="w-4 h-4 text-primary" />
+                                                    <BookOpen set="bold" primaryColor="currentColor" size={16} />
                                                     {subject.name}
                                                 </span>
                                                 <span className="text-xs text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full">
@@ -449,9 +449,9 @@ export default function PenugasanPage() {
                                 })}
                             </div>
 
-                            <div className="pt-4 border-t border-secondary/10 mt-4">
+                            <div className="pt-4 border-t border-slate-200 dark:border-slate-700 mt-4">
                                 <Button onClick={() => { setShowUnassignedModal(false); openAddNew() }} className="w-full">
-                                    <UserPlus className="w-4 h-4 mr-2" />
+                                    <UserPlus set="bold" primaryColor="currentColor" size={16} />
                                     Mulai Assign Guru
                                 </Button>
                             </div>
@@ -468,7 +468,7 @@ export default function PenugasanPage() {
                     ) : !selectedYearId ? (
                         <div className="p-6">
                             <EmptyState
-                                icon={<BookOpen className="w-12 h-12 text-teal-200" />}
+                                icon={<div className="text-teal-200"><BookOpen set="bold" primaryColor="currentColor" size={48} /></div>}
                                 title="Pilih Tahun Ajaran"
                                 description="Pilih tahun ajaran untuk melihat penugasan"
                             />
@@ -476,7 +476,7 @@ export default function PenugasanPage() {
                     ) : teacherGroups.length === 0 ? (
                         <div className="p-6">
                             <EmptyState
-                                icon={<School className="w-12 h-12 text-teal-200" />}
+                                icon={<div className="text-teal-200"><School set="bold" primaryColor="currentColor" size={48} /></div>}
                                 title="Belum Ada Guru"
                                 description="Tambahkan guru terlebih dahulu"
                             />
@@ -488,7 +488,7 @@ export default function PenugasanPage() {
                                 const hasAssignments = group.total_classes > 0
 
                                 return (
-                                    <div key={group.teacher.id} className="hover:bg-secondary/5 transition-colors">
+                                    <div key={group.teacher.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                         {/* Teacher Header */}
                                         <div className="flex items-center gap-4 p-4">
                                             <div
@@ -499,7 +499,7 @@ export default function PenugasanPage() {
                                                     ? 'bg-gradient-to-r from-indigo-500 to-violet-500'
                                                     : 'bg-amber-500'
                                                     }`}>
-                                                    {group.teacher.name[0]?.toUpperCase() || <User className="w-5 h-5" />}
+                                                    {group.teacher.name[0]?.toUpperCase() || <User set="bold" primaryColor="currentColor" size={20} />}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-bold text-text-main dark:text-white">
@@ -524,8 +524,8 @@ export default function PenugasanPage() {
                                                     className="p-2.5 bg-primary/10 hover:bg-primary/20 rounded-xl transition-all"
                                                 >
                                                     {isExpanded
-                                                        ? <ChevronUp className="w-5 h-5 text-primary" />
-                                                        : <ChevronDown className="w-5 h-5 text-primary" />
+                                                        ? <ChevronUp set="bold" primaryColor="currentColor" size={20} />
+                                                        : <ChevronDown set="bold" primaryColor="currentColor" size={20} />
                                                     }
                                                 </button>
                                             ) : (
@@ -541,7 +541,7 @@ export default function PenugasanPage() {
                                                 {group.subjects.map((subj) => (
                                                     <div
                                                         key={subj.subject.id}
-                                                        className="bg-secondary/5 dark:bg-white/5 rounded-xl p-3"
+                                                        className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3"
                                                     >
                                                         <div className="flex items-center justify-between mb-2">
                                                             <span className="px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 rounded-full text-xs font-bold border border-green-500/20">
@@ -553,7 +553,7 @@ export default function PenugasanPage() {
                                                                     className="p-2 rounded-lg bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors"
                                                                     title="Edit"
                                                                 >
-                                                                    <Edit className="w-4 h-4" />
+                                                                    <Edit set="bold" primaryColor="currentColor" size={16} />
                                                                 </button>
                                                                 <button
                                                                     onClick={() => handleDeleteSubject(group.teacher.id, subj.subject.id)}
@@ -561,7 +561,7 @@ export default function PenugasanPage() {
                                                                     className="p-2 rounded-lg bg-red-500/10 text-red-600 hover:bg-red-500/20 transition-colors disabled:opacity-50"
                                                                     title="Hapus"
                                                                 >
-                                                                    <Trash2 className="w-4 h-4" />
+                                                                    <Trash2 set="bold" primaryColor="currentColor" size={16} />
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -587,7 +587,7 @@ export default function PenugasanPage() {
                                                         onClick={() => openAddNew(group.teacher.id)}
                                                         className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-teal-500 text-white rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:scale-[1.02] transition-all font-bold text-sm"
                                                     >
-                                                        <BookOpen className="w-4 h-4" />
+                                                        <BookOpen set="bold" primaryColor="currentColor" size={16} />
                                                         + Tambah Mapel Lain
                                                     </button>
                                                     <button
@@ -595,7 +595,7 @@ export default function PenugasanPage() {
                                                         disabled={deleting === group.teacher.id}
                                                         className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
                                                     >
-                                                        <Trash2 className="w-4 h-4" />
+                                                        <Trash2 set="bold" primaryColor="currentColor" size={16} />
                                                         Hapus Semua
                                                     </button>
                                                 </div>
@@ -637,7 +637,7 @@ export default function PenugasanPage() {
                             <select
                                 value={selectedYearId}
                                 onChange={(e) => setSelectedYearId(e.target.value)}
-                                className="w-full px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 appearance-none"
                             >
                                 <option value="">Pilih Tahun</option>
                                 {academicYears.map((y) => (
@@ -666,15 +666,15 @@ export default function PenugasanPage() {
                         ) : filteredClasses.length === 0 ? (
                             <div className="p-6">
                                 <EmptyState
-                                    icon={<School className="w-12 h-12 text-teal-200" />}
+                                    icon={<div className="text-teal-200"><School set="bold" primaryColor="currentColor" size={48} /></div>}
                                     title="Belum Ada Kelas"
                                     description="Buat kelas terlebih dahulu di menu Kelas"
                                 />
                             </div>
                         ) : (
-                            <div className="divide-y divide-secondary/10">
+                            <div className="divide-y divide-slate-200 dark:divide-slate-700">
                                 {/* Header */}
-                                <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-secondary/5 dark:bg-white/5">
+                                <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 dark:bg-slate-800/50">
                                     <div className="col-span-4 text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Kelas</div>
                                     <div className="col-span-5 text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Wali Kelas</div>
                                     <div className="col-span-3 text-sm font-bold text-text-main dark:text-white uppercase tracking-wider text-right">Aksi</div>
@@ -698,7 +698,7 @@ export default function PenugasanPage() {
                                     const isLocked = hasSavedWali && !isEditing
 
                                     return (
-                                        <div key={cls.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 px-4 md:px-6 py-4 hover:bg-secondary/5 transition-colors items-center">
+                                        <div key={cls.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 px-4 md:px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors items-center">
                                             {/* Class info */}
                                             <div className="md:col-span-4 flex items-center gap-3">
                                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white ${cls.school_level === 'SMP'
@@ -742,9 +742,9 @@ export default function PenugasanPage() {
                                                                 ...prev,
                                                                 [cls.id]: e.target.value
                                                             }))}
-                                                            className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none transition-colors ${hasChanged
-                                                                ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-text-main dark:text-white'
-                                                                : 'bg-secondary/5 border-secondary/20 text-text-main dark:text-white'
+                                                            className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 appearance-none transition-colors ${hasChanged
+                                                                ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/30 text-slate-900 dark:text-white'
+                                                                : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white'
                                                                 }`}
                                                         >
                                                             <option value="">— Belum ada wali kelas —</option>
@@ -769,7 +769,7 @@ export default function PenugasanPage() {
                                                         size="sm"
                                                         variant="secondary"
                                                         onClick={() => setEditingWali(prev => new Set(prev).add(cls.id))}
-                                                        icon={<Edit className="w-4 h-4" />}
+                                                        icon={<Edit set="bold" primaryColor="currentColor" size={16} />}
                                                     >
                                                         Edit
                                                     </Button>

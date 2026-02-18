@@ -6,8 +6,11 @@ import { PageHeader, Button } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { AcademicYear } from '@/lib/types'
 import {
-    CheckCircle, Circle, ChevronRight, Calendar, ArrowRight,
-    GraduationCap, Copy, Loader2, AlertTriangle, ArrowLeft,
+    TickSquare as CheckCircle, ChevronRight, Calendar, ArrowRight,
+    Document as GraduationCap, Danger as AlertTriangle
+} from 'react-iconly'
+import {
+    Circle, Copy, Loader2, ArrowLeft,
     Sparkles, ExternalLink, RefreshCw
 } from 'lucide-react'
 import Link from 'next/link'
@@ -297,7 +300,7 @@ export default function PergantianTahunPage() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="mt-4 h-2 bg-secondary/20 rounded-full overflow-hidden">
+                <div className="mt-4 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div
                         className={`h-full rounded-full transition-all duration-500 ${allStepsCompleted ? 'bg-green-500' : 'bg-amber-500'}`}
                         style={{ width: `${(steps.filter(s => s.completed).length / 4) * 100}%` }}
@@ -309,7 +312,7 @@ export default function PergantianTahunPage() {
             <Card className={`border-2 transition-all ${steps[0].completed ? 'border-green-500/20' : 'border-primary/20'}`}>
                 <div className="flex items-start gap-4">
                     <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm ${steps[0].completed ? 'bg-green-500' : 'bg-primary'}`}>
-                        {steps[0].completed ? <CheckCircle className="w-5 h-5" /> : '1'}
+                        {steps[0].completed ? <CheckCircle set="bold" primaryColor="currentColor" size={20} /> : '1'}
                     </div>
                     <div className="flex-1">
                         <h3 className="text-lg font-bold text-text-main dark:text-white mb-1">
@@ -342,10 +345,10 @@ export default function PergantianTahunPage() {
             </Card>
 
             {/* Step 2: Create New Year */}
-            <Card className={`border-2 transition-all ${steps[1].completed ? 'border-green-500/20' : steps[0].completed ? 'border-primary/20' : 'border-secondary/10 opacity-60'}`}>
+            <Card className={`border-2 transition-all ${steps[1].completed ? 'border-green-500/20' : steps[0].completed ? 'border-emerald-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}>
                 <div className="flex items-start gap-4">
                     <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm ${steps[1].completed ? 'bg-green-500' : steps[0].completed ? 'bg-primary' : 'bg-gray-400'}`}>
-                        {steps[1].completed ? <CheckCircle className="w-5 h-5" /> : '2'}
+                        {steps[1].completed ? <CheckCircle set="bold" primaryColor="currentColor" size={20} /> : '2'}
                     </div>
                     <div className="flex-1">
                         <h3 className="text-lg font-bold text-text-main dark:text-white mb-1">
@@ -361,7 +364,7 @@ export default function PergantianTahunPage() {
                                     <select
                                         value={newYearName}
                                         onChange={(e) => setNewYearName(e.target.value)}
-                                        className="px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary transition-all appearance-none pr-10 min-w-[200px]"
+                                        className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all appearance-none pr-10 min-w-[200px]"
                                     >
                                         <option value="">Pilih tahun...</option>
                                         {getYearNameOptions().map(name => (
@@ -377,7 +380,7 @@ export default function PergantianTahunPage() {
                                     {creatingYear ? (
                                         <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Membuat...</>
                                     ) : (
-                                        <><Calendar className="w-4 h-4 mr-2" /> Buat & Aktifkan</>
+                                        <><Calendar set="bold" primaryColor="currentColor" size={16} /> Buat &amp; Aktifkan</>
                                     )}
                                 </Button>
                             </div>
@@ -387,10 +390,10 @@ export default function PergantianTahunPage() {
             </Card>
 
             {/* Step 3: Kenaikan Kelas */}
-            <Card className={`border-2 transition-all ${steps[2].completed ? 'border-green-500/20' : steps[1].completed ? 'border-primary/20' : 'border-secondary/10 opacity-60'}`}>
+            <Card className={`border-2 transition-all ${steps[2].completed ? 'border-green-500/20' : steps[1].completed ? 'border-emerald-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}>
                 <div className="flex items-start gap-4">
                     <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm ${steps[2].completed ? 'bg-green-500' : steps[1].completed ? 'bg-primary' : 'bg-gray-400'}`}>
-                        {steps[2].completed ? <CheckCircle className="w-5 h-5" /> : '3'}
+                        {steps[2].completed ? <CheckCircle set="bold" primaryColor="currentColor" size={20} /> : '3'}
                     </div>
                     <div className="flex-1">
                         <h3 className="text-lg font-bold text-text-main dark:text-white mb-1">
@@ -403,7 +406,7 @@ export default function PergantianTahunPage() {
                         {steps[1].completed && (
                             <Link href="/dashboard/admin/kenaikan-kelas">
                                 <Button className="bg-purple-500 hover:bg-purple-600 text-white">
-                                    <GraduationCap className="w-4 h-4 mr-2" />
+                                    <GraduationCap set="bold" primaryColor="currentColor" size={16} />
                                     Buka Halaman Kenaikan Kelas
                                     <ExternalLink className="w-3 h-3 ml-2" />
                                 </Button>
@@ -414,10 +417,10 @@ export default function PergantianTahunPage() {
             </Card>
 
             {/* Step 4: Copy Assignments */}
-            <Card className={`border-2 transition-all ${steps[3].completed ? 'border-green-500/20' : steps[1].completed ? 'border-primary/20' : 'border-secondary/10 opacity-60'}`}>
+            <Card className={`border-2 transition-all ${steps[3].completed ? 'border-green-500/20' : steps[1].completed ? 'border-emerald-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}>
                 <div className="flex items-start gap-4">
                     <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm ${steps[3].completed ? 'bg-green-500' : steps[1].completed ? 'bg-primary' : 'bg-gray-400'}`}>
-                        {steps[3].completed ? <CheckCircle className="w-5 h-5" /> : '4'}
+                        {steps[3].completed ? <CheckCircle set="bold" primaryColor="currentColor" size={20} /> : '4'}
                     </div>
                     <div className="flex-1">
                         <h3 className="text-lg font-bold text-text-main dark:text-white mb-1">
@@ -436,7 +439,7 @@ export default function PergantianTahunPage() {
                                         <select
                                             value={sourceYearId || lastCompletedYear?.id || ''}
                                             onChange={(e) => setSourceYearId(e.target.value)}
-                                            className="px-4 py-2 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary transition-all appearance-none pr-10 min-w-[200px]"
+                                            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all appearance-none pr-10 min-w-[200px]"
                                         >
                                             {completedYears.map(y => (
                                                 <option key={y.id} value={y.id}>📅 {y.name}</option>
@@ -449,7 +452,7 @@ export default function PergantianTahunPage() {
                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">▼</div>
                                     </div>
 
-                                    <ArrowRight className="w-5 h-5 text-text-secondary" />
+                                    <ArrowRight set="bold" primaryColor="currentColor" size={20} />
 
                                     <div className="px-4 py-2 bg-green-50 dark:bg-green-900/20 rounded-xl text-sm font-medium text-green-600 dark:text-green-400">
                                         📅 {activeYear?.name}
