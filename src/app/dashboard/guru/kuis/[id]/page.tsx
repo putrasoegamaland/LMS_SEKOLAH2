@@ -5,7 +5,9 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import SmartText from '@/components/SmartText'
 import MathTextarea from '@/components/MathTextarea'
-import { PenLine, WandSparkles, FolderOpen, Plus } from 'lucide-react'
+// import { PenLine, WandSparkles, FolderOpen, Plus } from 'lucide-react'
+import { Edit, Discovery, Folder, Plus, Upload, Danger, InfoCircle, TickSquare, CloseSquare, Delete, Document, Search } from 'react-iconly'
+import { Loader2 } from 'lucide-react'
 import RapihAIModal from '@/components/RapihAIModal'
 import QuestionImageUpload from '@/components/QuestionImageUpload'
 import { PageHeader, Button, Modal, EmptyState } from '@/components/ui'
@@ -331,7 +333,7 @@ export default function EditQuizPage() {
     if (loading) {
         return (
             <div className="flex justify-center py-12">
-                <div className="animate-spin text-3xl text-primary">⏳</div>
+                <div className="animate-spin text-primary"><Loader2 className="w-10 h-10" /></div>
             </div>
         )
     }
@@ -339,7 +341,7 @@ export default function EditQuizPage() {
     if (!quiz) {
         return (
             <EmptyState
-                icon="❓"
+                icon={<div className="text-secondary"><Search set="bold" primaryColor="currentColor" size={48} /></div>}
                 title="Kuis tidak ditemukan"
                 description="Kuis yang Anda cari tidak tersedia."
             />
@@ -362,11 +364,9 @@ export default function EditQuizPage() {
                             <Button
                                 onClick={handlePublishClick}
                                 disabled={questions.length === 0}
-                                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
+                                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white flex items-center gap-2"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                                <Upload set="bold" primaryColor="currentColor" size={20} />
                                 Publish Kuis
                             </Button>
                         )}
@@ -390,7 +390,7 @@ export default function EditQuizPage() {
             {totalPoints !== 100 && questions.length > 0 && (
                 <div className={`px-4 py-3 rounded-xl flex items-center justify-between ${totalPoints > 100 ? 'bg-red-500/20 border border-red-500/30' : 'bg-amber-500/20 border border-amber-500/30'}`}>
                     <div className="flex items-center gap-2">
-                        <span>{totalPoints > 100 ? '⚠️' : '💡'}</span>
+                        <span>{totalPoints > 100 ? <Danger set="bold" primaryColor="currentColor" size={20} /> : <InfoCircle set="bold" primaryColor="currentColor" size={20} />}</span>
                         <span className={totalPoints > 100 ? 'text-red-400' : 'text-amber-400'}>
                             {totalPoints > 100
                                 ? `Total poin melebihi 100 (${totalPoints}). Kurangi poin beberapa soal.`
@@ -433,7 +433,7 @@ export default function EditQuizPage() {
                         onClick={() => setShowAddDropdown(!showAddDropdown)}
                         className="flex items-center gap-2 px-5 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 active:scale-95 transition-all shadow-md shadow-primary/20 cursor-pointer"
                     >
-                        <Plus className="w-5 h-5" />
+                        <Plus set="bold" primaryColor="currentColor" size={20} />
                         Tambah Soal
                     </button>
                     {showAddDropdown && (
@@ -455,7 +455,7 @@ export default function EditQuizPage() {
                                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 transition-colors cursor-pointer"
                                 >
                                     <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                        <PenLine className="w-4 h-4 text-blue-600" />
+                                        <Edit set="bold" primaryColor="currentColor" size={16} />
                                     </div>
                                     <div className="text-left">
                                         <div className="text-sm font-semibold text-text-main">Manual</div>
@@ -467,7 +467,7 @@ export default function EditQuizPage() {
                                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-purple-50 transition-colors cursor-pointer"
                                 >
                                     <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                                        <WandSparkles className="w-4 h-4 text-purple-600" />
+                                        <Discovery set="bold" primaryColor="currentColor" size={16} />
                                     </div>
                                     <div className="text-left">
                                         <div className="text-sm font-semibold text-text-main">Rapih AI</div>
@@ -498,7 +498,7 @@ export default function EditQuizPage() {
                                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 transition-colors cursor-pointer"
                                 >
                                     <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                                        <FolderOpen className="w-4 h-4 text-emerald-600" />
+                                        <Folder set="bold" primaryColor="currentColor" size={16} />
                                     </div>
                                     <div className="text-left">
                                         <div className="text-sm font-semibold text-text-main">Bank Soal</div>
@@ -529,9 +529,9 @@ export default function EditQuizPage() {
                                     }`}
                             >
                                 {isBulkSelectMode ? (
-                                    <>✕ Batal</>
+                                    <><CloseSquare set="bold" primaryColor="currentColor" size={16} /> Batal</>
                                 ) : (
-                                    <>☐ Pilih Soal</>
+                                    <><TickSquare set="bold" primaryColor="currentColor" size={16} /> Pilih Soal</>
                                 )}
                             </Button>
 
@@ -542,10 +542,10 @@ export default function EditQuizPage() {
                                     </span>
                                     <Button
                                         onClick={handleBulkDelete}
-                                        className="bg-red-500 hover:bg-red-600 text-white text-sm"
+                                        className="bg-red-500 hover:bg-red-600 text-white text-sm flex items-center gap-1"
                                         size="sm"
                                     >
-                                        🗑️ Hapus
+                                        <Delete set="bold" primaryColor="currentColor" size={16} /> Hapus
                                     </Button>
                                 </div>
                             )}
@@ -554,7 +554,7 @@ export default function EditQuizPage() {
 
                     {questions.length === 0 ? (
                         <EmptyState
-                            icon="📝"
+                            icon={<div className="text-secondary"><Document set="bold" primaryColor="currentColor" size={48} /></div>}
                             title="Belum ada soal"
                             description="Mulai tambahkan soal menggunakan salah satu menu di atas."
                         />
@@ -584,20 +584,20 @@ export default function EditQuizPage() {
                                                 {q.question_type === 'MULTIPLE_CHOICE' ? 'Pilihan Ganda' : 'Essay'}
                                             </span>
                                             {q.passage_text && (
-                                                <span className="px-2 py-0.5 text-xs rounded-full bg-teal-500/20 text-teal-400">
-                                                    📖 Passage
+                                                <span className="px-2 py-0.5 text-xs rounded-full bg-teal-500/20 text-teal-400 flex items-center gap-1">
+                                                    <Document set="bold" primaryColor="currentColor" size={10} /> Passage
                                                 </span>
                                             )}
-                                            {q.status === 'approved' && <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">✅</span>}
-                                            {q.status === 'admin_review' && <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">⚠️ Review</span>}
-                                            {q.status === 'returned' && <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">❌ Returned</span>}
-                                            {q.status === 'ai_reviewing' && <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-pulse">🤖</span>}
+                                            {q.status === 'approved' && <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 flex items-center gap-1"><TickSquare set="bold" primaryColor="currentColor" size={10} /></span>}
+                                            {q.status === 'admin_review' && <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 flex items-center gap-1"><InfoCircle set="bold" primaryColor="currentColor" size={10} /> Review</span>}
+                                            {q.status === 'returned' && <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 flex items-center gap-1"><CloseSquare set="bold" primaryColor="currentColor" size={10} /> Returned</span>}
+                                            {q.status === 'ai_reviewing' && <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-pulse flex items-center gap-1"><Discovery set="bold" primaryColor="currentColor" size={10} /></span>}
                                         </div>
 
                                         {/* Passage text if exists */}
                                         {q.passage_text && (
                                             <div className="mb-3 p-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg overflow-hidden">
-                                                <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1">📖 Bacaan:</p>
+                                                <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1 flex items-center gap-1"><Document set="bold" primaryColor="currentColor" size={12} /> Bacaan:</p>
                                                 <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap break-all" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{q.passage_text}</p>
                                             </div>
                                         )}
@@ -675,9 +675,7 @@ export default function EditQuizPage() {
                                             disabled={quiz?.is_active}
                                             title="Edit soal"
                                         >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
+                                            <Edit set="bold" primaryColor="currentColor" size={20} />
                                         </button>
 
                                         <button
@@ -685,9 +683,7 @@ export default function EditQuizPage() {
                                             className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
                                             disabled={quiz?.is_active}
                                         >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
+                                            <Delete set="bold" primaryColor="currentColor" size={20} />
                                         </button>
                                     </div>
                                 </div>
@@ -702,7 +698,7 @@ export default function EditQuizPage() {
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
                         <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-text-main dark:text-white">✏️ Edit Soal</h2>
+                            <h2 className="text-xl font-bold text-text-main dark:text-white flex items-center gap-2"><Edit set="bold" primaryColor="currentColor" size={24} /> Edit Soal</h2>
                             <Button
                                 variant="ghost"
                                 icon={<>✕</>}
@@ -729,7 +725,7 @@ export default function EditQuizPage() {
                             {/* Passage Text (if exists) */}
                             {editForm.passage_text && (
                                 <div className="p-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg">
-                                    <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1">📖 Bacaan (read-only):</p>
+                                    <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1 flex items-center gap-1"><Document set="bold" primaryColor="currentColor" size={12} /> Bacaan (read-only):</p>
                                     <p className="text-sm text-text-main dark:text-white line-clamp-3">{editForm.passage_text}</p>
                                 </div>
                             )}
@@ -796,7 +792,7 @@ export default function EditQuizPage() {
                                 onClick={handleSaveEdit}
                                 disabled={saving || !editForm.question_text}
                             >
-                                {saving ? '⏳ Menyimpan...' : '💾 Simpan Perubahan'}
+                                {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...</> : <><TickSquare set="bold" primaryColor="currentColor" size={16} /> Simpan Perubahan</>}
                             </Button>
                         </div>
                     </Card>

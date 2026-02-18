@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Modal, Button, EmptyState, Toast, type ToastType, PageHeader } from '@/components/ui'
 import Card from '@/components/ui/Card'
-import { BookOpen, FileText, Video, Type, Link as LinkIcon, UserCheck, Eye, ExternalLink } from 'lucide-react'
+import { Document as BookOpen, Paper as FileText, Video, Document as Type, Discovery as LinkIcon, Plus, Show as Eye, Delete as Trash, Download, ArrowRight, TickSquare as CheckCircle, Danger as AlertTriangle } from 'react-iconly'
+import { Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 interface TeachingAssignment {
@@ -303,7 +304,7 @@ export default function MateriPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[50vh]">
-                <div className="animate-spin text-4xl text-primary">⏳</div>
+                <div className="animate-spin text-primary"><Loader2 className="w-10 h-10" /></div>
             </div>
         )
     }
@@ -311,7 +312,7 @@ export default function MateriPage() {
     if (assignments.length === 0) {
         return (
             <EmptyState
-                icon="👨‍🏫"
+                icon={<div className="text-secondary"><BookOpen set="bold" primaryColor="currentColor" size={48} /></div>}
                 title="Belum Ada Penugasan"
                 description="Anda belum ditugaskan di kelas manapun. Hubungi Administrator."
             />
@@ -335,8 +336,8 @@ export default function MateriPage() {
                         >
                             <div onClick={() => setSelectedSubject(subject)}>
                                 <div className="flex items-center gap-4 mb-4">
-                                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-2xl group-hover:bg-primary group-hover:text-white transition-colors">
-                                        📚
+                                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                                        <BookOpen set="bold" primaryColor="currentColor" size={24} />
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-bold text-text-main dark:text-white group-hover:text-primary transition-colors">{subject.subjectName}</h3>
@@ -363,9 +364,7 @@ export default function MateriPage() {
                 onBack={() => setSelectedSubject(null)}
                 action={
                     <Button onClick={handleAddMaterial} icon={
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <div className="text-white"><Plus set="bold" primaryColor="currentColor" size={20} /></div>
                     }>
                         Tambah Materi
                     </Button>
@@ -374,7 +373,7 @@ export default function MateriPage() {
 
             {selectedSubject.materials.length === 0 ? (
                 <EmptyState
-                    icon="📂"
+                    icon={<div className="text-secondary"><FileText set="bold" primaryColor="currentColor" size={48} /></div>}
                     title="Folder Kosong"
                     description={`Belum ada materi untuk ${selectedSubject.subjectName}`}
                     action={<Button onClick={handleAddMaterial}>Upload Materi Pertama</Button>}
@@ -389,7 +388,7 @@ export default function MateriPage() {
                                     const colors = getTypeColor(material.type)
                                     return (
                                         <div className={`w-12 h-12 rounded-xl ${colors.bg} flex items-center justify-center flex-shrink-0`}>
-                                            <IconComponent className={`w-6 h-6 ${colors.text}`} strokeWidth={2} />
+                                            <div className={colors.text}><IconComponent set="bold" primaryColor="currentColor" size={24} /></div>
                                         </div>
                                     )
                                 })()}
@@ -432,7 +431,7 @@ export default function MateriPage() {
                                                     onClick={() => setPreviewingPDF(material.content_url)}
                                                     className="text-xs font-bold text-primary-dark dark:text-primary hover:text-text-main transition-colors flex items-center gap-1"
                                                 >
-                                                    👁️ Preview
+                                                    <span className="text-primary"><Eye set="bold" primaryColor="currentColor" size={16} /></span> Preview
                                                 </button>
                                                 <span className="text-secondary/30">|</span>
                                                 <a
@@ -441,7 +440,7 @@ export default function MateriPage() {
                                                     rel="noopener noreferrer"
                                                     className="text-xs font-bold text-text-secondary hover:text-text-main transition-colors flex items-center gap-1"
                                                 >
-                                                    📥 Download
+                                                    <span className="text-text-secondary"><Download set="bold" primaryColor="currentColor" size={16} /></span> Download
                                                 </a>
                                             </>
                                         )}
@@ -452,7 +451,7 @@ export default function MateriPage() {
                                                 rel="noopener noreferrer"
                                                 className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
                                             >
-                                                🔗 Buka Link
+                                                <span className="text-primary"><ArrowRight set="bold" primaryColor="currentColor" size={16} /></span> Buka Link
                                             </a>
                                         )}
                                         <div className="flex-1"></div>
@@ -460,7 +459,7 @@ export default function MateriPage() {
                                             onClick={() => handleDelete(material.id)}
                                             className="text-xs font-bold text-red-500/70 hover:text-red-600 transition-colors flex items-center gap-1"
                                         >
-                                            Hapus
+                                            <span className="text-red-500"><Trash set="bold" primaryColor="currentColor" size={16} /></span> Hapus
                                         </button>
                                     </div>
                                 </div>
@@ -563,14 +562,16 @@ export default function MateriPage() {
                                         placeholder="https://youtube.com/watch?v=..."
                                     />
                                     {formData.content_url && (
-                                        <div className="mt-2 text-xs text-text-secondary">
-                                            {getYouTubeEmbedUrl(formData.content_url) ? '✅ Link valid' : '⚠ Link tidak dikenali (pastikan link YouTube)'}
+                                        <div className="mt-2 text-xs text-text-secondary flex items-center gap-1">
+                                            {getYouTubeEmbedUrl(formData.content_url) ?
+                                                <><span className="text-green-500"><CheckCircle set="bold" primaryColor="currentColor" size={14} /></span> Link valid</> :
+                                                <><span className="text-amber-500"><AlertTriangle set="bold" primaryColor="currentColor" size={14} /></span> Link tidak dikenali (pastikan link YouTube)</>}
                                         </div>
                                     )}
                                 </div>
                             ) : (
                                 <div className="bg-secondary/5 border-2 border-dashed border-secondary/30 rounded-2xl p-6 text-center hover:border-primary/50 transition-colors">
-                                    <div className="mb-3 text-4xl">🎥</div>
+                                    <div className="mb-3 text-secondary flex justify-center"><Video set="bold" primaryColor="currentColor" size={32} /></div>
                                     <label className="block text-sm font-bold text-text-main dark:text-white mb-1 cursor-pointer">
                                         <span>Klik untuk upload Video</span>
                                         <input
@@ -587,7 +588,7 @@ export default function MateriPage() {
                         </div>
                     ) : formData.type === 'PDF' ? (
                         <div className="bg-secondary/5 border-2 border-dashed border-secondary/30 rounded-2xl p-6 text-center hover:border-primary/50 transition-colors">
-                            <div className="mb-3 text-4xl">📄</div>
+                            <div className="mb-3 text-secondary flex justify-center"><FileText set="bold" primaryColor="currentColor" size={32} /></div>
                             <label className="block text-sm font-bold text-text-main dark:text-white mb-1 cursor-pointer">
                                 <span>Klik untuk upload PDF</span>
                                 <input

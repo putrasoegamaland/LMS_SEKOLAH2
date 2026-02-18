@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader, Card, Button, StatsCard, EmptyState } from '@/components/ui'
-import { BarChart3, Users, CheckCircle, Clock, TrendingUp, Search, ChevronRight, FileText, Brain, Download, ClipboardList, PenTool } from 'lucide-react'
+import { Chart, User, TickSquare, TimeCircle, Activity, Search, ArrowRight, Document, Discovery, Download, Paper, Edit } from 'react-iconly'
 
 interface Student {
     id: string
@@ -304,7 +304,7 @@ export default function NilaiPage() {
             <PageHeader
                 title="Nilai"
                 subtitle="Lihat dan kelola rekap nilai siswa"
-                icon={<BarChart3 className="w-6 h-6 text-green-600" />}
+                icon={<Chart set="bold" primaryColor="currentColor" size={24} />}
                 backHref="/dashboard/guru"
             />
 
@@ -322,7 +322,9 @@ export default function NilaiPage() {
                                 placeholder="Ketik nama kelas atau mata pelajaran..."
                                 className="w-full px-5 py-4 pl-12 bg-white dark:bg-surface-dark border border-secondary/20 rounded-full text-text-main dark:text-white text-lg focus:outline-none focus:ring-2 focus:ring-primary placeholder-text-secondary/50"
                             />
-                            <Search className="w-6 h-6 text-text-secondary absolute left-4 top-1/2 -translate-y-1/2" />
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary">
+                                <Search set="light" primaryColor="currentColor" size={24} />
+                            </div>
                         </div>
                     </Card>
 
@@ -331,7 +333,7 @@ export default function NilaiPage() {
                         <div className="text-center text-text-secondary py-8">Memuat...</div>
                     ) : filteredTAs.length === 0 ? (
                         <EmptyState
-                            icon={<BarChart3 className="w-12 h-12 text-secondary/30" />}
+                            icon={<div className="text-secondary/30"><Chart set="bold" primaryColor="currentColor" size={48} /></div>}
                             title={searchQuery ? 'Tidak ada yang cocok' : 'Belum ada kelas'}
                             description={searchQuery ? 'Cobalah kata kunci yang lain.' : 'Anda belum memiliki kelas yang diampu.'}
                         />
@@ -356,7 +358,7 @@ export default function NilaiPage() {
                                             </div>
                                         </div>
                                         <div className="p-3 bg-secondary/10 rounded-full group-hover:bg-primary/20 transition-colors">
-                                            <ChevronRight className="w-6 h-6 text-primary" />
+                                            <ArrowRight set="bold" primaryColor="currentColor" size={24} />
                                         </div>
                                     </div>
                                     <p className="text-text-secondary text-sm">Klik untuk melihat nilai</p>
@@ -381,9 +383,7 @@ export default function NilaiPage() {
                             size="sm"
                             onClick={() => setSelectedTA('')}
                             icon={
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                                </svg>
+                                <ArrowRight set="bold" primaryColor="currentColor" size={16} style={{ transform: 'rotate(180deg)' }} />
                             }
                         >
                             Ganti Kelas
@@ -395,33 +395,33 @@ export default function NilaiPage() {
                         <StatsCard
                             label="Siswa"
                             value={students.length}
-                            icon={<Users className="w-6 h-6 text-blue-500" />}
+                            icon={<User set="bold" primaryColor="currentColor" size={24} />}
                         />
                         <StatsCard
                             label="Sudah Dinilai"
                             value={totalGraded}
-                            icon={<CheckCircle className="w-6 h-6 text-green-500" />}
+                            icon={<TickSquare set="bold" primaryColor="currentColor" size={24} />}
                             trend="submissions"
                         />
                         <StatsCard
                             label="Belum Dinilai"
                             value={totalUngraded}
-                            icon={<Clock className="w-6 h-6 text-amber-500" />}
+                            icon={<TimeCircle set="bold" primaryColor="currentColor" size={24} />}
                         />
                         <StatsCard
                             label="Rata-rata Kelas"
                             value={classAverage || '-'}
-                            icon={<TrendingUp className="w-6 h-6 text-purple-500" />}
+                            icon={<Activity set="bold" primaryColor="currentColor" size={24} />}
                         />
                     </div>
 
                     {/* Tabs */}
                     <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
                         {[
-                            { id: 'rekap', label: 'Rekap', icon: ClipboardList, color: 'bg-primary' },
-                            { id: 'tugas', label: `Tugas (${tugasAssignments.length})`, icon: PenTool, color: 'bg-amber-500' },
-                            { id: 'kuis', label: `Kuis (${quizzes.length})`, icon: Brain, color: 'bg-purple-500' },
-                            { id: 'ulangan', label: `Ulangan (${exams.length})`, icon: Clock, color: 'bg-red-500' },
+                            { id: 'rekap', label: 'Rekap', icon: Paper, color: 'bg-primary' },
+                            { id: 'tugas', label: `Tugas (${tugasAssignments.length})`, icon: Edit, color: 'bg-amber-500' },
+                            { id: 'kuis', label: `Kuis (${quizzes.length})`, icon: Discovery, color: 'bg-purple-500' },
+                            { id: 'ulangan', label: `Ulangan (${exams.length})`, icon: TimeCircle, color: 'bg-red-500' },
                             { id: 'export', label: 'Export', icon: Download, color: 'bg-blue-500' }
                         ].map(tab => (
                             <button
@@ -432,7 +432,7 @@ export default function NilaiPage() {
                                     : 'bg-white dark:bg-surface-dark border border-secondary/20 text-text-secondary hover:text-primary hover:border-primary/30'
                                     }`}
                             >
-                                <tab.icon className="w-4 h-4" />
+                                <tab.icon set="bold" primaryColor="currentColor" size={16} />
                                 {tab.label}
                             </button>
                         ))}
@@ -486,7 +486,7 @@ export default function NilaiPage() {
                                                                         {score !== undefined ? (
                                                                             <span className="text-text-main dark:text-white font-bold">{score}</span>
                                                                         ) : sub ? (
-                                                                            <span className="text-amber-500 text-xs">⏳</span>
+                                                                            <span className="text-amber-500 flex justify-center"><TimeCircle set="bold" primaryColor="currentColor" size={16} /></span>
                                                                         ) : (
                                                                             <span className="text-text-secondary/30">-</span>
                                                                         )}
@@ -502,7 +502,7 @@ export default function NilaiPage() {
                                                                                 {Math.round((qs.total_score / qs.max_score) * 100)}
                                                                             </span>
                                                                         ) : qs ? (
-                                                                            <span className="text-amber-500 text-xs">⏳</span>
+                                                                            <span className="text-amber-500 flex justify-center"><TimeCircle set="bold" primaryColor="currentColor" size={16} /></span>
                                                                         ) : (
                                                                             <span className="text-text-secondary/30">-</span>
                                                                         )}
@@ -545,7 +545,7 @@ export default function NilaiPage() {
                             {activeTab === 'tugas' && (
                                 <div className="space-y-4">
                                     {tugasAssignments.length === 0 ? (
-                                        <EmptyState title="Belum ada tugas" description="Anda belum membuat tugas untuk kelas ini." icon={<PenTool className="w-12 h-12 text-amber-200" />} />
+                                        <EmptyState title="Belum ada tugas" description="Anda belum membuat tugas untuk kelas ini." icon={<div className="text-amber-200"><Edit set="bold" primaryColor="currentColor" size={48} /></div>} />
                                     ) : (
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {tugasAssignments.map(assignment => {
@@ -555,7 +555,7 @@ export default function NilaiPage() {
                                                     <Card key={assignment.id} padding="p-5" className="hover:border-amber-500/50 transition-colors">
                                                         <div className="flex items-center justify-between mb-2">
                                                             <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                                                                <PenTool className="w-5 h-5" />
+                                                                <Edit set="bold" primaryColor="currentColor" size={20} />
                                                             </div>
                                                             <span className="text-xs text-text-secondary bg-secondary/10 px-2 py-1 rounded-full font-medium">{assignment.type}</span>
                                                         </div>
@@ -578,7 +578,7 @@ export default function NilaiPage() {
                             {activeTab === 'kuis' && (
                                 <div className="space-y-4">
                                     {quizzes.length === 0 ? (
-                                        <EmptyState title="Belum ada kuis" description="Anda belum membuat kuis untuk kelas ini." icon={<Brain className="w-12 h-12 text-purple-200" />} />
+                                        <EmptyState title="Belum ada kuis" description="Anda belum membuat kuis untuk kelas ini." icon={<div className="text-purple-200"><Discovery set="bold" primaryColor="currentColor" size={48} /></div>} />
                                     ) : (
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {quizzes.map(quiz => {
@@ -588,7 +588,7 @@ export default function NilaiPage() {
                                                     <Card key={quiz.id} padding="p-5" className="hover:border-purple-500/50 transition-colors">
                                                         <div className="flex items-center justify-between mb-2">
                                                             <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-600 flex items-center justify-center">
-                                                                <Brain className="w-5 h-5" />
+                                                                <Discovery set="bold" primaryColor="currentColor" size={20} />
                                                             </div>
                                                             <span className="text-xs text-text-secondary bg-secondary/10 px-2 py-1 rounded-full font-medium">KUIS</span>
                                                         </div>
@@ -611,7 +611,7 @@ export default function NilaiPage() {
                             {activeTab === 'ulangan' && (
                                 <div className="space-y-4">
                                     {exams.length === 0 ? (
-                                        <EmptyState title="Belum ada ulangan" description="Anda belum membuat ulangan untuk kelas ini." icon={<Clock className="w-12 h-12 text-red-200" />} />
+                                        <EmptyState title="Belum ada ulangan" description="Anda belum membuat ulangan untuk kelas ini." icon={<div className="text-red-200"><TimeCircle set="bold" primaryColor="currentColor" size={48} /></div>} />
                                     ) : (
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {exams.map(exam => {
@@ -620,7 +620,7 @@ export default function NilaiPage() {
                                                     <Card key={exam.id} padding="p-5" className="hover:border-red-500/50 transition-colors">
                                                         <div className="flex items-center justify-between mb-2">
                                                             <div className="w-10 h-10 rounded-full bg-red-500/10 text-red-600 flex items-center justify-center">
-                                                                <Clock className="w-5 h-5" />
+                                                                <TimeCircle set="bold" primaryColor="currentColor" size={20} />
                                                             </div>
                                                             <span className="text-xs text-text-secondary bg-secondary/10 px-2 py-1 rounded-full font-medium">ULANGAN</span>
                                                         </div>
@@ -643,7 +643,7 @@ export default function NilaiPage() {
                             {activeTab === 'export' && (
                                 <Card padding="p-8" className="text-center flex flex-col items-center justify-center min-h-[400px]">
                                     <div className="w-20 h-20 bg-blue-500/10 text-blue-600 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-blue-500/10">
-                                        <Download className="w-10 h-10" />
+                                        <Download set="bold" primaryColor="currentColor" size={40} />
                                     </div>
                                     <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">Export Nilai ke Excel</h3>
                                     <p className="text-text-secondary mb-8 max-w-lg">
@@ -653,11 +653,11 @@ export default function NilaiPage() {
                                     <div className="bg-secondary/5 rounded-2xl p-6 mb-8 max-w-md w-full text-left border border-secondary/10">
                                         <p className="text-sm text-text-secondary mb-3 uppercase tracking-wider font-bold">Format export meliputi:</p>
                                         <ul className="text-sm text-text-main dark:text-white space-y-3">
-                                            <li className="flex items-center gap-3"><span className="text-success"><CheckCircle className="w-4 h-4" /></span> Nama dan NIS siswa</li>
-                                            <li className="flex items-center gap-3"><span className="text-success"><CheckCircle className="w-4 h-4" /></span> Nilai Tugas (T1, T2, ...)</li>
-                                            <li className="flex items-center gap-3"><span className="text-success"><CheckCircle className="w-4 h-4" /></span> Nilai Kuis (K1, K2, ...)</li>
-                                            <li className="flex items-center gap-3"><span className="text-success"><CheckCircle className="w-4 h-4" /></span> Nilai Ulangan (U1, U2, ...)</li>
-                                            <li className="flex items-center gap-3"><span className="text-success"><CheckCircle className="w-4 h-4" /></span> Rata-rata nilai</li>
+                                            <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Nama dan NIS siswa</li>
+                                            <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Nilai Tugas (T1, T2, ...)</li>
+                                            <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Nilai Kuis (K1, K2, ...)</li>
+                                            <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Nilai Ulangan (U1, U2, ...)</li>
+                                            <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Rata-rata nilai</li>
                                         </ul>
                                     </div>
 

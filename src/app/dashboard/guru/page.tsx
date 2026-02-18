@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
-import { BookOpen, PenTool, Clock, Brain, Archive, BarChart3, School } from 'lucide-react'
+import { Document as BookOpen, Edit as PenTool, TimeCircle as Clock, Discovery as Brain, Folder as Archive, Graph as BarChart3, ArrowRight, Home as School } from 'react-iconly'
+import { Loader2 } from 'lucide-react'
 
 interface TeachingAssignment {
     id: string
@@ -79,20 +80,14 @@ export default function GuruDashboard() {
                         <Card className="h-full border-2 border-primary/30 hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-95 transition-all group bg-white dark:bg-surface-dark cursor-pointer p-3 sm:p-4">
                             <div className="flex flex-col items-center text-center gap-2 sm:gap-3">
                                 {/* Duotone Icon Container */}
-                                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all duration-300 ${link.href.includes('materi') ? 'bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-600' :
-                                    link.href.includes('tugas') ? 'bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-600' :
-                                        link.href.includes('ulangan') ? 'bg-red-100 dark:bg-red-900/30 group-hover:bg-red-600' :
-                                            link.href.includes('kuis') ? 'bg-purple-100 dark:bg-purple-900/30 group-hover:bg-purple-600' :
-                                                link.href.includes('bank-soal') ? 'bg-slate-100 dark:bg-slate-900/30 group-hover:bg-slate-600' :
-                                                    'bg-green-100 dark:bg-green-900/30 group-hover:bg-green-600'
+                                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all duration-300 ${link.href.includes('materi') ? 'bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-600 text-blue-600 dark:text-blue-400 group-hover:text-white' :
+                                    link.href.includes('tugas') ? 'bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-600 text-amber-600 dark:text-amber-400 group-hover:text-white' :
+                                        link.href.includes('ulangan') ? 'bg-red-100 dark:bg-red-900/30 group-hover:bg-red-600 text-red-600 dark:text-red-400 group-hover:text-white' :
+                                            link.href.includes('kuis') ? 'bg-purple-100 dark:bg-purple-900/30 group-hover:bg-purple-600 text-purple-600 dark:text-purple-400 group-hover:text-white' :
+                                                link.href.includes('bank-soal') ? 'bg-slate-100 dark:bg-slate-900/30 group-hover:bg-slate-600 text-slate-600 dark:text-slate-400 group-hover:text-white' :
+                                                    'bg-green-100 dark:bg-green-900/30 group-hover:bg-green-600 text-green-600 dark:text-green-400 group-hover:text-white'
                                     }`}>
-                                    <link.icon className={`w-5 h-5 sm:w-6 sm:h-6 transition-colors ${link.href.includes('materi') ? 'text-blue-600 dark:text-blue-400 group-hover:text-white' :
-                                        link.href.includes('tugas') ? 'text-amber-600 dark:text-amber-400 group-hover:text-white' :
-                                            link.href.includes('ulangan') ? 'text-red-600 dark:text-red-400 group-hover:text-white' :
-                                                link.href.includes('kuis') ? 'text-purple-600 dark:text-purple-400 group-hover:text-white' :
-                                                    link.href.includes('bank-soal') ? 'text-slate-600 dark:text-slate-400 group-hover:text-white' :
-                                                        'text-green-600 dark:text-green-400 group-hover:text-white'
-                                        }`} strokeWidth={2} />
+                                    <link.icon set="bold" primaryColor="currentColor" size={24} />
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-text-main dark:text-white group-hover:text-primary transition-colors text-sm sm:text-base">{link.label}</h3>
@@ -117,11 +112,11 @@ export default function GuruDashboard() {
 
                 {loading ? (
                     <div className="flex items-center justify-center h-40">
-                        <div className="animate-spin text-3xl text-primary">⏳</div>
+                        <div className="animate-spin text-primary"><Loader2 className="w-8 h-8" /></div>
                     </div>
                 ) : assignments.length === 0 ? (
                     <Card className="text-center py-12 border-dashed">
-                        <div className="text-4xl mb-3">👨‍🏫</div>
+                        <div className="text-secondary mb-3"><BookOpen set="bold" primaryColor="currentColor" size={48} /></div>
                         <h3 className="text-lg font-bold text-text-main dark:text-white">Belum Ada Penugasan</h3>
                         <p className="text-text-secondary dark:text-[#A8BC9F]">Hubungi Administrator untuk mendapatkan akses kelas.</p>
                     </Card>
@@ -161,9 +156,7 @@ export default function GuruDashboard() {
                                         </span>
                                         <span className="text-primary font-bold text-[10px] flex items-center gap-1 group-hover:gap-1.5 transition-all">
                                             Masuk
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                                            </svg>
+                                            <div className="text-primary"><ArrowRight set="bold" primaryColor="currentColor" size={12} /></div>
                                         </span>
                                     </div>
                                 </Card>

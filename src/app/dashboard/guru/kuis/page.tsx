@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
-import { Clock, FileText, BarChart3, Brain, Calendar } from 'lucide-react'
+import { TimeCircle as Clock, Document as FileText, Graph as BarChart3, Game as Brain, Calendar, Plus, Game, Graph, Edit, Swap } from 'react-iconly'
+import { Loader2 } from 'lucide-react'
 
 interface Quiz {
     id: string
@@ -124,9 +125,7 @@ export default function GuruKuisPage() {
                 backHref="/dashboard/guru"
                 action={
                     <Button onClick={() => setShowCreate(true)} className="flex items-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <div className="text-white"><Plus set="bold" primaryColor="currentColor" size={20} /></div>
                         Buat Kuis
                     </Button>
                 }
@@ -134,11 +133,11 @@ export default function GuruKuisPage() {
 
             {loading ? (
                 <div className="flex justify-center py-12">
-                    <div className="animate-spin text-3xl text-primary">⏳</div>
+                    <div className="animate-spin text-primary"><Loader2 className="w-10 h-10" /></div>
                 </div>
             ) : quizzes.length === 0 ? (
                 <EmptyState
-                    icon="🎯"
+                    icon={<div className="text-secondary"><Game set="bold" primaryColor="currentColor" size={48} /></div>}
                     title="Belum Ada Kuis"
                     description="Buat kuis pertama Anda dengan bantuan AI!"
                     action={
@@ -164,14 +163,14 @@ export default function GuruKuisPage() {
                                     <p className="text-sm text-text-secondary dark:text-zinc-400 mb-2">{quiz.description || '-'}</p>
                                     <div className="flex items-center gap-4 text-xs text-text-secondary dark:text-zinc-500">
                                         <span className="flex items-center gap-1.5">
-                                            <Calendar className="w-3.5 h-3.5" />
+                                            <Calendar set="bold" primaryColor="currentColor" size={14} />
                                             Dibuat: {new Date(quiz.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </span>
                                         <span className="px-2 py-1 bg-secondary/10 rounded">{quiz.teaching_assignment?.subject?.name}</span>
                                         <span className="px-2 py-1 bg-secondary/10 rounded">{quiz.teaching_assignment?.class?.name}</span>
-                                        <span>⏱️ {quiz.duration_minutes} menit</span>
-                                        <span>📝 {quiz.questions?.[0]?.count || 0} soal</span>
-                                        {quiz.is_randomized && <span>🔀 Acak</span>}
+                                        <span className="flex items-center gap-1"><Clock set="bold" primaryColor="currentColor" size={14} /> {quiz.duration_minutes} menit</span>
+                                        <span className="flex items-center gap-1"><Edit set="bold" primaryColor="currentColor" size={14} /> {quiz.questions?.[0]?.count || 0} soal</span>
+                                        {quiz.is_randomized && <span className="flex items-center gap-1"><Swap set="bold" primaryColor="currentColor" size={14} /> Acak</span>}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -180,7 +179,7 @@ export default function GuruKuisPage() {
                                             href={`/dashboard/guru/kuis/${quiz.id}/hasil`}
                                             className="px-3 py-1.5 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full hover:bg-green-200 dark:hover:bg-green-500/30 transition-colors text-sm font-medium"
                                         >
-                                            📊 Hasil
+                                            <span className="flex items-center gap-1"><Graph set="bold" primaryColor="currentColor" size={16} /> Hasil</span>
                                         </Link>
                                     )}
                                     <Link
@@ -266,7 +265,7 @@ export default function GuruKuisPage() {
                                     onChange={(e) => setForm({ ...form, is_randomized: e.target.checked })}
                                     className="w-5 h-5 rounded bg-white border-secondary/30 text-primary focus:ring-primary"
                                 />
-                                <span className="text-text-main dark:text-white">🔀 Acak Soal</span>
+                                <span className="text-text-main dark:text-white flex items-center gap-1"><Swap set="bold" primaryColor="currentColor" size={16} /> Acak Soal</span>
                             </label>
                         </div>
                     </div>

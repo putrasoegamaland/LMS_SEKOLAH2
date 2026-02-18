@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Modal, PageHeader, Button, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
-import { PenTool, BarChart3, Calendar, Clock } from 'lucide-react'
+import { Edit as PenTool, Graph as BarChart3, Calendar, TimeCircle as Clock, Plus, ChevronDown, Paper, Activity } from 'react-iconly'
+import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface TeachingAssignment {
@@ -101,13 +102,11 @@ export default function TugasPage() {
             <PageHeader
                 title="Tugas"
                 subtitle="Buat dan kelola tugas siswa"
-                icon={<PenTool className="w-6 h-6 text-amber-500" />}
+                icon={<div className="text-amber-500"><PenTool set="bold" primaryColor="currentColor" size={24} /></div>}
                 backHref="/dashboard/guru"
                 action={
                     <Button onClick={() => setShowModal(true)} icon={
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <div className="text-white"><Plus set="bold" primaryColor="currentColor" size={20} /></div>
                     }>
                         Buat Tugas
                     </Button>
@@ -116,11 +115,11 @@ export default function TugasPage() {
 
             {loading ? (
                 <div className="p-12 flex justify-center">
-                    <div className="animate-spin text-3xl text-primary">⏳</div>
+                    <div className="animate-spin text-primary"><Loader2 className="w-10 h-10" /></div>
                 </div>
             ) : assignments.length === 0 ? (
                 <EmptyState
-                    icon="📝"
+                    icon={<div className="text-secondary"><Paper set="bold" primaryColor="currentColor" size={48} /></div>}
                     title="Belum Ada Tugas"
                     description="Buat tugas baru untuk siswa Anda"
                     action={<Button onClick={() => setShowModal(true)}>Buat Tugas</Button>}
@@ -148,11 +147,11 @@ export default function TugasPage() {
                                     </p>
                                     <div className="flex items-center gap-4 text-xs text-text-secondary dark:text-zinc-500">
                                         <div className="flex items-center gap-1.5">
-                                            <Calendar className="w-4 h-4" />
+                                            <Calendar set="bold" primaryColor="currentColor" size={16} />
                                             <span>Dibuat: {new Date(assignment.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5">
-                                            <Clock className="w-4 h-4" />
+                                            <Clock set="bold" primaryColor="currentColor" size={16} />
                                             <span>Deadline: {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</span>
                                         </div>
                                     </div>
@@ -162,7 +161,7 @@ export default function TugasPage() {
                                         href={`/dashboard/guru/tugas/${assignment.id}/hasil`}
                                     >
                                         <Button variant="secondary" size="sm" className="w-full justify-center">
-                                            📊 Hasil
+                                            <span className="text-secondary"><Activity set="bold" primaryColor="currentColor" size={16} /></span> Hasil
                                         </Button>
                                     </Link>
                                     <Button
@@ -183,7 +182,7 @@ export default function TugasPage() {
             <Modal
                 open={showModal}
                 onClose={() => setShowModal(false)}
-                title="📝 Buat Tugas Baru"
+                title="Buat Tugas Baru"
             >
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
@@ -200,7 +199,7 @@ export default function TugasPage() {
                                     <option key={a.id} value={a.id}>{a.class.name} - {a.subject.name}</option>
                                 ))}
                             </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">▼</div>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary"><ChevronDown set="bold" primaryColor="currentColor" size={20} /></div>
                         </div>
                     </div>
                     <div>

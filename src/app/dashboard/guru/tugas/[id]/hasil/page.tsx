@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Modal, PageHeader, Button } from '@/components/ui'
 import Card from '@/components/ui/Card'
+import { Graph, Edit, Paper, Document } from 'react-iconly'
+import { Loader2 } from 'lucide-react'
 
 interface Submission {
     id: string
@@ -118,7 +120,7 @@ export default function TugasHasilPage() {
     }
 
     if (loading) {
-        return <div className="text-center text-text-secondary py-12 flex justify-center"><div className="animate-spin text-3xl text-primary">⏳</div></div>
+        return <div className="text-center text-text-secondary py-12 flex justify-center"><div className="animate-spin text-primary"><Loader2 className="w-10 h-10" /></div></div>
     }
 
     if (!assignment) {
@@ -130,8 +132,9 @@ export default function TugasHasilPage() {
     return (
         <div className="space-y-6">
             <PageHeader
-                title={`📊 Hasil: ${assignment.title}`}
+                title={`Hasil: ${assignment.title}`}
                 subtitle={`${assignment.teaching_assignment?.class?.name} • ${assignment.teaching_assignment?.subject?.name}`}
+                icon={<div className="text-primary"><Graph set="bold" primaryColor="currentColor" size={24} /></div>}
                 backHref="/dashboard/guru/tugas"
             />
 
@@ -189,10 +192,10 @@ export default function TugasHasilPage() {
                                         <td className="px-6 py-4 text-center">
                                             {sub.grade?.length > 0 ? (
                                                 <span className={`inline-flex px-3 py-1.5 rounded-full text-sm font-bold shadow-sm ${sub.grade[0].score >= 75
-                                                        ? 'bg-green-500/10 text-green-600 border border-green-200 dark:border-green-500/20 dark:text-green-400'
-                                                        : sub.grade[0].score >= 60
-                                                            ? 'bg-amber-500/10 text-amber-600 border border-amber-200 dark:border-amber-500/20 dark:text-amber-400'
-                                                            : 'bg-red-500/10 text-red-600 border border-red-200 dark:border-red-500/20 dark:text-red-400'
+                                                    ? 'bg-green-500/10 text-green-600 border border-green-200 dark:border-green-500/20 dark:text-green-400'
+                                                    : sub.grade[0].score >= 60
+                                                        ? 'bg-amber-500/10 text-amber-600 border border-amber-200 dark:border-amber-500/20 dark:text-amber-400'
+                                                        : 'bg-red-500/10 text-red-600 border border-red-200 dark:border-red-500/20 dark:text-red-400'
                                                     }`}>
                                                     {sub.grade[0].score}
                                                 </span>
@@ -213,7 +216,10 @@ export default function TugasHasilPage() {
                                                 })}
                                                 className="w-full justify-center"
                                             >
-                                                {sub.grade?.length ? '✏️ Edit Nilai' : '📝 Beri Nilai'}
+                                                <div className="flex items-center gap-2">
+                                                    {sub.grade?.length ? <Edit set="bold" primaryColor="currentColor" size={16} /> : <Paper set="bold" primaryColor="currentColor" size={16} />}
+                                                    <span>{sub.grade?.length ? 'Edit Nilai' : 'Beri Nilai'}</span>
+                                                </div>
                                             </Button>
                                         </td>
                                     </tr>
@@ -228,7 +234,7 @@ export default function TugasHasilPage() {
             <Modal
                 open={!!grading}
                 onClose={() => setGrading(null)}
-                title="📝 Input Nilai"
+                title="Input Nilai"
                 subtitle={grading?.studentName}
                 maxWidth="lg"
             >
@@ -236,7 +242,9 @@ export default function TugasHasilPage() {
                     <div className="space-y-6">
                         {/* Jawaban Siswa */}
                         <div>
-                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">📄 Jawaban Siswa</label>
+                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2 flex items-center gap-2">
+                                <Document set="bold" primaryColor="currentColor" size={16} /> Jawaban Siswa
+                            </label>
                             <div className="bg-secondary/5 border border-secondary/20 rounded-xl p-4 max-h-[40vh] overflow-y-auto custom-scrollbar">
                                 <pre className="text-text-main dark:text-slate-200 whitespace-pre-wrap font-mono text-sm leading-relaxed">{grading.answers}</pre>
                             </div>

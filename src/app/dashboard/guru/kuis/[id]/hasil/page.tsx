@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { PageHeader, Card, Button, EmptyState, StatsCard } from '@/components/ui'
+import { InfoCircle, TickSquare, User, TimeCircle, Document, ArrowDown, ChevronDown } from 'react-iconly'
+import { Loader2 } from 'lucide-react'
 
 interface QuizSubmission {
     id: string
@@ -84,7 +86,7 @@ export default function QuizSubmissionsPage() {
 
     if (loading) return (
         <div className="flex justify-center py-12">
-            <div className="animate-spin text-3xl text-primary">⏳</div>
+            <div className="animate-spin text-primary"><Loader2 className="w-10 h-10" /></div>
         </div>
     )
 
@@ -101,17 +103,17 @@ export default function QuizSubmissionsPage() {
                 <StatsCard
                     value={submissions.length}
                     label="Sudah Mengerjakan"
-                    icon={<>✅</>}
+                    icon={<div className="text-white"><TickSquare set="bold" primaryColor="currentColor" size={24} /></div>}
                 />
                 <StatsCard
                     value={notSubmittedStudents.length}
                     label="Belum Mengerjakan"
-                    icon={<>⚠️</>}
+                    icon={<div className="text-white"><TimeCircle set="bold" primaryColor="currentColor" size={24} /></div>}
                 />
                 <StatsCard
                     value={classStudents.length}
                     label="Total Siswa"
-                    icon={<>👥</>}
+                    icon={<div className="text-white"><User set="bold" primaryColor="currentColor" size={24} /></div>}
                 />
             </div>
 
@@ -123,12 +125,12 @@ export default function QuizSubmissionsPage() {
                         className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-red-500/20 transition-colors rounded-lg"
                     >
                         <div className="flex items-center gap-3">
-                            <span className="text-red-400 text-xl">⚠️</span>
+                            <span className="text-red-400"><InfoCircle set="bold" primaryColor="currentColor" size={20} /></span>
                             <span className="text-red-400 font-medium">{notSubmittedStudents.length} Siswa Belum Mengerjakan</span>
                         </div>
-                        <svg className={`w-5 h-5 text-red-400 transition-transform ${showNotSubmitted ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
+                        <div className={`text-red-400 transition-transform ${showNotSubmitted ? 'rotate-180' : ''}`}>
+                            <ChevronDown set="bold" primaryColor="currentColor" size={20} />
+                        </div>
                     </button>
                     {showNotSubmitted && (
                         <div className="px-4 pb-4 space-y-2 mt-2">
@@ -151,7 +153,7 @@ export default function QuizSubmissionsPage() {
             {/* Submissions Table */}
             {submissions.length === 0 ? (
                 <EmptyState
-                    icon="📝"
+                    icon={<div className="text-secondary"><Document set="bold" primaryColor="currentColor" size={48} /></div>}
                     title="Belum ada pengumpulan"
                     description="Belum ada siswa yang mengerjakan dan mengumpulkan kuis ini."
                 />

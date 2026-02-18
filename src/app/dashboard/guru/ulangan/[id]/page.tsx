@@ -5,7 +5,9 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import SmartText from '@/components/SmartText'
 import MathTextarea from '@/components/MathTextarea'
-import { PenLine, WandSparkles, FolderOpen, Plus } from 'lucide-react'
+// import { PenLine, WandSparkles, FolderOpen, Plus } from 'lucide-react'
+import { Edit, Discovery, Folder, Plus, Setting, Upload, Danger, InfoCircle, Document, TickSquare, CloseSquare, Delete } from 'react-iconly'
+import { Loader2 } from 'lucide-react'
 import RapihAIModal from '@/components/RapihAIModal'
 import QuestionImageUpload from '@/components/QuestionImageUpload'
 import { Modal, PageHeader, Button, EmptyState } from '@/components/ui'
@@ -393,7 +395,7 @@ export default function EditExamPage() {
     }
 
     if (loading) {
-        return <div className="text-center text-text-secondary py-12 flex justify-center"><div className="animate-spin text-3xl text-primary">⏳</div></div>
+        return <div className="text-center text-text-secondary py-12 flex justify-center"><div className="animate-spin text-primary"><Loader2 className="w-10 h-10" /></div></div>
     }
 
     if (!exam) {
@@ -409,10 +411,7 @@ export default function EditExamPage() {
                 action={
                     <div className="flex items-center gap-3">
                         <Button variant="secondary" onClick={openEditSettings} icon={
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
+                            <Setting set="bold" primaryColor="currentColor" size={20} />
                         }>
                             Pengaturan
                         </Button>
@@ -421,9 +420,7 @@ export default function EditExamPage() {
                                 onClick={handlePublishClick}
                                 disabled={questions.length === 0}
                                 icon={
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
+                                    <Upload set="bold" primaryColor="currentColor" size={20} />
                                 }
                             >
                                 Publish Ulangan
@@ -449,7 +446,7 @@ export default function EditExamPage() {
             {totalPoints !== 100 && questions.length > 0 && (
                 <div className={`px-4 py-3 rounded-xl flex items-center justify-between ${totalPoints > 100 ? 'bg-red-500/10 border border-red-200 dark:border-red-500/30' : 'bg-amber-500/10 border border-amber-200 dark:border-amber-500/30'}`}>
                     <div className="flex items-center gap-2">
-                        <span>{totalPoints > 100 ? '⚠️' : '💡'}</span>
+                        <span>{totalPoints > 100 ? <Danger set="bold" primaryColor="currentColor" size={20} /> : <InfoCircle set="bold" primaryColor="currentColor" size={20} />}</span>
                         <span className={totalPoints > 100 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-amber-600 dark:text-amber-400 font-medium'}>
                             {totalPoints > 100
                                 ? `Total poin melebihi 100 (${totalPoints}). Kurangi poin beberapa soal.`
@@ -491,7 +488,7 @@ export default function EditExamPage() {
                         onClick={() => setShowAddDropdown(!showAddDropdown)}
                         className="flex items-center gap-2 px-5 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 active:scale-95 transition-all shadow-md shadow-primary/20 cursor-pointer"
                     >
-                        <Plus className="w-5 h-5" />
+                        <Plus set="bold" primaryColor="currentColor" size={20} />
                         Tambah Soal
                     </button>
                     {showAddDropdown && (
@@ -513,7 +510,7 @@ export default function EditExamPage() {
                                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 transition-colors cursor-pointer"
                                 >
                                     <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                        <PenLine className="w-4 h-4 text-blue-600" />
+                                        <Edit set="bold" primaryColor="currentColor" size={16} />
                                     </div>
                                     <div className="text-left">
                                         <div className="text-sm font-semibold text-text-main">Manual</div>
@@ -525,7 +522,7 @@ export default function EditExamPage() {
                                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-purple-50 transition-colors cursor-pointer"
                                 >
                                     <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                                        <WandSparkles className="w-4 h-4 text-purple-600" />
+                                        <Discovery set="bold" primaryColor="currentColor" size={16} />
                                     </div>
                                     <div className="text-left">
                                         <div className="text-sm font-semibold text-text-main">Rapih AI</div>
@@ -556,7 +553,7 @@ export default function EditExamPage() {
                                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 transition-colors cursor-pointer"
                                 >
                                     <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                                        <FolderOpen className="w-4 h-4 text-emerald-600" />
+                                        <Folder set="bold" primaryColor="currentColor" size={16} />
                                     </div>
                                     <div className="text-left">
                                         <div className="text-sm font-semibold text-text-main">Bank Soal</div>
@@ -612,7 +609,7 @@ export default function EditExamPage() {
                                     onClick={handleBulkDelete}
                                     className="bg-red-500 hover:bg-red-600 text-white text-sm"
                                 >
-                                    🗑️ Hapus {selectedQuestionIds.size} Soal
+                                    <Delete set="bold" primaryColor="currentColor" size={16} /> Hapus {selectedQuestionIds.size} Soal
                                 </Button>
                             )}
                         </div>
@@ -620,7 +617,7 @@ export default function EditExamPage() {
 
                     {questions.length === 0 ? (
                         <EmptyState
-                            icon="📄"
+                            icon={<div className="text-secondary"><Document set="bold" primaryColor="currentColor" size={48} /></div>}
                             title="Belum Ada Soal"
                             description="Pilih salah satu metode di atas untuk menambahkan soal."
                         />
@@ -663,7 +660,7 @@ export default function EditExamPage() {
                                         {/* Passage text if exists */}
                                         {q.passage_text && (
                                             <div className="mb-3 p-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg overflow-hidden">
-                                                <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1">📖 Bacaan:</p>
+                                                <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1 flex items-center gap-1"><Document set="bold" primaryColor="currentColor" size={12} /> Bacaan:</p>
                                                 <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap break-all" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{q.passage_text}</p>
                                             </div>
                                         )}
@@ -753,9 +750,7 @@ export default function EditExamPage() {
                                             disabled={exam?.is_active}
                                             title="Edit soal"
                                         >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
+                                            <Edit set="bold" primaryColor="currentColor" size={20} />
                                         </button>
 
                                         <button
@@ -763,9 +758,7 @@ export default function EditExamPage() {
                                             className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
                                             disabled={exam?.is_active}
                                         >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
+                                            <Delete set="bold" primaryColor="currentColor" size={20} />
                                         </button>
                                     </div>
                                 </div>
@@ -782,7 +775,7 @@ export default function EditExamPage() {
                     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                         <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
                             <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-xl font-bold text-text-main dark:text-white">✏️ Edit Soal</h2>
+                                <h2 className="text-xl font-bold text-text-main dark:text-white flex items-center gap-2"><Edit set="bold" primaryColor="currentColor" size={24} /> Edit Soal</h2>
                                 <Button
                                     variant="ghost"
                                     icon={<>✕</>}

@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import { Modal, PageHeader, Button, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { useAuth } from '@/contexts/AuthContext'
-import { FileText, Clock, Calendar } from 'lucide-react'
+import { Paper as FileText, TimeCircle as Clock, Calendar, Plus, Lock, ShieldDone, User, Swap, Graph, Edit, Delete, ChevronDown, Document } from 'react-iconly'
+import { Loader2 } from 'lucide-react'
 
 interface Exam {
     id: string
@@ -149,13 +150,11 @@ export default function GuruUlanganPage() {
             <PageHeader
                 title="Ulangan"
                 subtitle="Buat ulangan dengan fitur pengawasan yang aman"
-                icon={<Clock className="w-6 h-6 text-red-500" />}
+                icon={<div className="text-red-500"><Clock set="bold" primaryColor="currentColor" size={24} /></div>}
                 backHref="/dashboard/guru"
                 action={
                     <Button onClick={() => setShowCreate(true)} icon={
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <div className="text-white"><Plus set="bold" primaryColor="currentColor" size={20} /></div>
                     }>
                         Buat Ulangan
                     </Button>
@@ -167,7 +166,7 @@ export default function GuruUlanganPage() {
                 <Card padding="p-4" className="bg-gradient-to-br from-purple-500/5 to-purple-600/5 border-purple-200/50">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400 shadow-sm">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                            <Lock set="bold" primaryColor="currentColor" size={24} />
                         </div>
                         <div>
                             <h3 className="font-bold text-text-main dark:text-white">Tab Lock Mode</h3>
@@ -178,7 +177,7 @@ export default function GuruUlanganPage() {
                 <Card padding="p-4" className="bg-gradient-to-br from-orange-500/5 to-orange-600/5 border-orange-200/50">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400 shadow-sm">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <Clock set="bold" primaryColor="currentColor" size={24} />
                         </div>
                         <div>
                             <h3 className="font-bold text-text-main dark:text-white">Waktu & Durasi</h3>
@@ -189,7 +188,7 @@ export default function GuruUlanganPage() {
                 <Card padding="p-4" className="bg-gradient-to-br from-cyan-500/5 to-cyan-600/5 border-cyan-200/50">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400 shadow-sm">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            <ShieldDone set="bold" primaryColor="currentColor" size={24} />
                         </div>
                         <div>
                             <h3 className="font-bold text-text-main dark:text-white">Violation Limit</h3>
@@ -201,11 +200,11 @@ export default function GuruUlanganPage() {
 
             {loading ? (
                 <div className="flex justify-center py-12">
-                    <div className="animate-spin text-3xl text-primary">⏳</div>
+                    <div className="animate-spin text-primary"><Loader2 className="w-10 h-10" /></div>
                 </div>
             ) : exams.length === 0 ? (
                 <EmptyState
-                    icon="📄"
+                    icon={<div className="text-secondary"><Document set="bold" primaryColor="currentColor" size={48} /></div>}
                     title="Belum Ada Ulangan"
                     description="Buat ulangan baru untuk kelas Anda dengan fitur pengawasan."
                     action={<Button onClick={() => setShowCreate(true)}>Buat Ulangan Sekarang</Button>}
@@ -221,12 +220,12 @@ export default function GuruUlanganPage() {
                                         <div className="flex-1">
                                             <div className="flex flex-wrap items-center gap-2 mb-2">
                                                 <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${status.color}`}>{status.label}</span>
-                                                {exam.is_randomized && <span className="text-xs text-text-secondary flex items-center gap-1 bg-secondary/10 px-2 py-1 rounded-full">🔀 Acak</span>}
+                                                {exam.is_randomized && <span className="text-xs text-text-secondary flex items-center gap-1 bg-secondary/10 px-2 py-1 rounded-full"><Swap set="bold" primaryColor="currentColor" size={12} /> Acak</span>}
                                             </div>
                                             <h3 className="font-bold text-text-main dark:text-white text-lg group-hover:text-primary transition-colors line-clamp-2">{exam.title}</h3>
                                         </div>
                                         <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-text-secondary group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                            <User set="bold" primaryColor="currentColor" size={20} />
                                         </div>
                                     </div>
 
@@ -234,8 +233,8 @@ export default function GuruUlanganPage() {
 
                                     <div className="space-y-3 pt-4 border-t border-secondary/10">
                                         <div className="flex items-center text-xs text-text-secondary dark:text-zinc-500 mb-2">
-                                            <Calendar className="w-3.5 h-3.5 mr-1.5" />
-                                            Dibuat: {new Date(exam.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            <Calendar set="bold" primaryColor="currentColor" size={14} />
+                                            <span className="ml-1.5">Dibuat: {new Date(exam.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-text-secondary">
                                             <span>Kelas & Mapel</span>
@@ -248,15 +247,15 @@ export default function GuruUlanganPage() {
                                             <span>Waktu & Soal</span>
                                             <div className="flex gap-3">
                                                 <span className="flex items-center gap-1 font-medium">
-                                                    ⏰ {exam.duration_minutes}m
+                                                    <Clock set="bold" primaryColor="currentColor" size={14} /> {exam.duration_minutes}m
                                                 </span>
                                                 <span className="flex items-center gap-1 font-medium">
-                                                    📝 {exam.question_count || 0}
+                                                    <Edit set="bold" primaryColor="currentColor" size={14} /> {exam.question_count || 0}
                                                 </span>
                                             </div>
                                         </div>
                                         <div className="text-xs text-text-secondary text-right">
-                                            🗓️ {formatDateTime(exam.start_time)}
+                                            <span className="inline-flex items-center gap-1"><Calendar set="bold" primaryColor="currentColor" size={14} /> {formatDateTime(exam.start_time)}</span>
                                         </div>
                                     </div>
 
@@ -264,19 +263,19 @@ export default function GuruUlanganPage() {
                                         {exam.is_active ? (
                                             <Link href={`/dashboard/guru/ulangan/${exam.id}/hasil`} className="w-full">
                                                 <Button variant="secondary" size="sm" className="w-full justify-center">
-                                                    📊 Hasil
+                                                    <span className="text-secondary"><Graph set="bold" primaryColor="currentColor" size={16} /></span> Hasil
                                                 </Button>
                                             </Link>
                                         ) : (
                                             <Button variant="secondary" size="sm" disabled className="w-full justify-center opacity-50 cursor-not-allowed">
-                                                📊 Hasil
+                                                <span className="text-secondary"><Graph set="bold" primaryColor="currentColor" size={16} /></span> Hasil
                                             </Button>
                                         )}
 
                                         <div className="flex gap-2">
                                             <Link href={`/dashboard/guru/ulangan/${exam.id}`} className="flex-1">
                                                 <Button variant="outline" size="sm" className="w-full justify-center border-primary/20 text-primary hover:bg-primary/5">
-                                                    ✏️
+                                                    <Edit set="bold" primaryColor="currentColor" size={16} />
                                                 </Button>
                                             </Link>
                                             <Button
@@ -285,7 +284,7 @@ export default function GuruUlanganPage() {
                                                 onClick={() => handleDelete(exam.id)}
                                                 className="flex-1 justify-center text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-900/30"
                                             >
-                                                🗑️
+                                                <span className="text-red-500"><Delete set="bold" primaryColor="currentColor" size={16} /></span>
                                             </Button>
                                         </div>
                                     </div>
@@ -300,7 +299,7 @@ export default function GuruUlanganPage() {
             <Modal
                 open={showCreate}
                 onClose={() => setShowCreate(false)}
-                title="📝 Buat Ulangan Baru"
+                title="Buat Ulangan Baru"
             >
                 <div className="space-y-4">
                     <div>
@@ -318,7 +317,7 @@ export default function GuruUlanganPage() {
                                     </option>
                                 ))}
                             </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">▼</div>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary"><ChevronDown set="bold" primaryColor="currentColor" size={20} /></div>
                         </div>
                     </div>
                     <div>
