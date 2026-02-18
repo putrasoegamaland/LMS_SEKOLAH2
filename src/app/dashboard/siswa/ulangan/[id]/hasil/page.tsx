@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { PageHeader } from '@/components/ui'
 import Card from '@/components/ui/Card'
+import { TickSquare, TimeCircle, Danger, Calendar } from 'react-iconly'
 
 interface ExamResult {
     id: string
@@ -115,14 +116,23 @@ export default function ExamResultPage() {
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="text-center">
+                    <div className="flex justify-center mb-2 text-primary">
+                        <TimeCircle set="bold" primaryColor="currentColor" size={24} />
+                    </div>
                     <p className="text-2xl font-bold text-text-main dark:text-white">{formatDuration(result.started_at, result.submitted_at)}</p>
                     <p className="text-sm text-text-secondary">Waktu Pengerjaan</p>
                 </Card>
                 <Card className="text-center">
+                    <div className="flex justify-center mb-2 text-primary">
+                        <Calendar set="bold" primaryColor="currentColor" size={24} />
+                    </div>
                     <p className="text-2xl font-bold text-text-main dark:text-white">{result.exam?.duration_minutes} menit</p>
                     <p className="text-sm text-text-secondary">Batas Waktu</p>
                 </Card>
                 <Card className={`text-center ${result.violation_count > 0 ? 'border-red-500/50 bg-red-50 dark:bg-red-900/10' : ''}`}>
+                    <div className={`flex justify-center mb-2 ${result.violation_count > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                        <Danger set="bold" primaryColor="currentColor" size={24} />
+                    </div>
                     <p className={`text-2xl font-bold ${result.violation_count > 0 ? 'text-red-500' : 'text-green-500'}`}>{result.violation_count}</p>
                     <p className="text-sm text-text-secondary">Pelanggaran</p>
                 </Card>
@@ -130,7 +140,7 @@ export default function ExamResultPage() {
 
             {/* Completion notice */}
             <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-center gap-3">
-                <div className="text-2xl">✅</div>
+                <TickSquare set="bold" primaryColor="currentColor" size={32} className="text-green-500" />
                 <div>
                     <p className="text-green-600 dark:text-green-400 font-bold">Ulangan Selesai</p>
                     <p className="text-sm text-text-secondary">Dikumpulkan pada {new Date(result.submitted_at).toLocaleString('id-ID')}</p>

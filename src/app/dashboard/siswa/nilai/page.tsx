@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
-import { Card, PageHeader, EmptyState } from '@/components/ui'
-import { BarChart3, Brain, ClipboardList, FileText, TrendingUp, Award, BookOpen } from 'lucide-react'
+import { Chart, Game, Edit, TimeCircle, ArrowLeft, Document } from 'react-iconly'
 
 // Interfaces
 interface AssignmentSubmission {
@@ -169,13 +168,11 @@ export default function SiswaNilaiPage() {
             <div className="space-y-6">
                 <div className="flex items-center gap-4">
                     <Link href="/dashboard/siswa" className="p-3 rounded-xl bg-white dark:bg-surface-dark border border-secondary/20 hover:border-primary text-text-secondary hover:text-primary transition-all shadow-sm">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
+                        <ArrowLeft set="bold" primaryColor="currentColor" size={24} />
                     </Link>
                     <div>
                         <div className="flex items-center gap-2">
-                            <BarChart3 className="w-8 h-8 text-primary" />
+                            <Chart set="bold" primaryColor="currentColor" size={32} className="text-primary" />
                             <h1 className="text-2xl font-bold text-text-main dark:text-white">Nilai Saya</h1>
                         </div>
                         <p className="text-text-secondary dark:text-zinc-400">Pilih mata pelajaran untuk lihat detail nilai</p>
@@ -183,8 +180,8 @@ export default function SiswaNilaiPage() {
                 </div>
 
                 {groupedGrades.length === 0 ? (
-                    <div className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-12 text-center text-text-secondary dark:text-zinc-500 shadow-sm">
-                        <span className="text-4xl mb-4 block">📭</span>
+                    <div className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-12 text-center text-text-secondary dark:text-zinc-500 shadow-sm flex flex-col items-center gap-4">
+                        <Chart set="bold" primaryColor="currentColor" size={48} className="text-secondary" />
                         Belum ada nilai yang tercatat.
                     </div>
                 ) : (
@@ -200,7 +197,7 @@ export default function SiswaNilaiPage() {
                                     <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
 
                                     <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary dark:text-primary-light flex items-center justify-center mb-4 group-hover:scale-110 transition-transform relative z-10">
-                                        <span className="text-2xl">📊</span>
+                                        <Chart set="bold" primaryColor="currentColor" size={24} />
                                     </div>
                                     <h3 className="text-lg font-bold text-text-main dark:text-white mb-1 group-hover:text-primary transition-colors relative z-10">
                                         {subject.subjectName}
@@ -224,15 +221,15 @@ export default function SiswaNilaiPage() {
 
     // ==================== VIEW 2: Subject Detail with Tabs ====================
     const tabs: { key: TabType; label: string; icon: any; color: string }[] = [
-        { key: 'kuis', label: 'Kuis', icon: Brain, color: 'purple' },
-        { key: 'tugas', label: 'Tugas', icon: ClipboardList, color: 'amber' },
-        { key: 'ulangan', label: 'Ulangan', icon: FileText, color: 'red' },
+        { key: 'kuis', label: 'Kuis', icon: Game, color: 'purple' },
+        { key: 'tugas', label: 'Tugas', icon: Edit, color: 'amber' },
+        { key: 'ulangan', label: 'Ulangan', icon: TimeCircle, color: 'red' },
     ]
 
     const renderQuizList = () => (
         selectedSubject.kuis.length === 0 ? (
-            <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed">
-                <div className="text-4xl mb-2">📝</div>
+            <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed flex flex-col items-center gap-4">
+                <Game set="bold" primaryColor="currentColor" size={48} className="text-secondary" />
                 Belum ada nilai kuis.
             </div>
         ) : (
@@ -248,7 +245,9 @@ export default function SiswaNilaiPage() {
                                 {qs.total_score ?? 0}/{qs.max_score ?? 0}
                             </span>
                         ) : (
-                            <span className="px-3 py-1 bg-secondary/10 text-text-secondary rounded-full text-sm font-medium">⏳ Menunggu</span>
+                            <span className="px-3 py-1 bg-secondary/10 text-text-secondary rounded-full text-sm font-medium flex items-center gap-1">
+                                <TimeCircle set="bold" primaryColor="currentColor" size={14} /> Menunggu
+                            </span>
                         )}
                     </div>
                 ))}
@@ -258,8 +257,8 @@ export default function SiswaNilaiPage() {
 
     const renderAssignmentList = (items: AssignmentSubmission[]) => (
         items.length === 0 ? (
-            <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed">
-                <div className="text-4xl mb-2">📋</div>
+            <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed flex flex-col items-center gap-4">
+                <Edit set="bold" primaryColor="currentColor" size={48} className="text-secondary" />
                 Belum ada nilai tugas.
             </div>
         ) : (
@@ -278,7 +277,9 @@ export default function SiswaNilaiPage() {
                                 {sub.grade[0].score ?? 0}
                             </span>
                         ) : (
-                            <span className="px-3 py-1 bg-secondary/10 text-text-secondary rounded-full text-sm font-medium ml-4">⏳ Menunggu</span>
+                            <span className="px-3 py-1 bg-secondary/10 text-text-secondary rounded-full text-sm font-medium ml-4 flex items-center gap-1">
+                                <TimeCircle set="bold" primaryColor="currentColor" size={14} /> Menunggu
+                            </span>
                         )}
                     </div>
                 ))}
@@ -293,8 +294,8 @@ export default function SiswaNilaiPage() {
 
     const renderUlanganList = (items: (AssignmentSubmission | ExamSubmission)[]) => (
         items.length === 0 ? (
-            <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed">
-                <div className="text-4xl mb-2">📄</div>
+            <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed flex flex-col items-center gap-4">
+                <TimeCircle set="bold" primaryColor="currentColor" size={48} className="text-secondary" />
                 Belum ada nilai ulangan.
             </div>
         ) : (
@@ -335,7 +336,9 @@ export default function SiswaNilaiPage() {
                                         {item.grade[0].score}
                                     </span>
                                 ) : (
-                                    <span className="px-3 py-1 bg-secondary/10 text-text-secondary rounded-full text-sm font-medium ml-4">⏳ Menunggu</span>
+                                    <span className="px-3 py-1 bg-secondary/10 text-text-secondary rounded-full text-sm font-medium ml-4 flex items-center gap-1">
+                                        <TimeCircle set="bold" primaryColor="currentColor" size={14} /> Menunggu
+                                    </span>
                                 )}
                             </div>
                         )
@@ -353,9 +356,7 @@ export default function SiswaNilaiPage() {
                     onClick={() => setSelectedSubject(null)}
                     className="p-3 rounded-xl bg-white dark:bg-surface-dark border border-secondary/20 hover:border-primary text-text-secondary hover:text-primary transition-all shadow-sm"
                 >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
+                    <ArrowLeft set="bold" primaryColor="currentColor" size={24} />
                 </button>
                 <div>
                     <h1 className="text-2xl font-bold text-text-main dark:text-white">{selectedSubject.subjectName}</h1>
@@ -376,7 +377,7 @@ export default function SiswaNilaiPage() {
                                 : 'text-text-secondary dark:text-zinc-400 hover:text-text-main hover:bg-secondary/5'
                                 }`}
                         >
-                            <IconComponent className="w-4 h-4" strokeWidth={2} />
+                            <IconComponent set="bold" primaryColor="currentColor" size={16} />
                             {tab.label}
                             <span className={`text-xs px-1.5 py-0.5 rounded-full ml-1 ${activeTab === tab.key ? `bg-${tab.color}-100 dark:bg-${tab.color}-900/40` : 'bg-secondary/10'
                                 }`}>

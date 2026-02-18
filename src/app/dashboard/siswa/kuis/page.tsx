@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader, EmptyState } from '@/components/ui'
-import { Brain, Calendar } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { Game, Calendar, TimeCircle, Document, TickSquare } from 'react-iconly'
 
 interface Quiz {
     id: string
@@ -81,17 +82,17 @@ export default function SiswaKuisPage() {
             <PageHeader
                 title="Kuis"
                 subtitle="Kerjakan kuis dari guru"
-                icon={<Brain className="w-6 h-6 text-purple-500" />}
+                icon={<Game set="bold" primaryColor="currentColor" size={24} className="text-purple-500" />}
                 backHref="/dashboard/siswa"
             />
 
             {loading ? (
                 <div className="flex justify-center py-12">
-                    <div className="animate-spin text-3xl text-primary">⏳</div>
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
             ) : quizzes.length === 0 ? (
                 <EmptyState
-                    icon="🎯"
+                    icon={<Game set="bold" primaryColor="currentColor" size={48} className="text-secondary" />}
                     title="Belum Ada Kuis"
                     description="Belum ada kuis aktif untuk kelasmu"
                 />
@@ -113,13 +114,13 @@ export default function SiswaKuisPage() {
                                                     Kuis
                                                 </span>
                                                 {isCompleted && (
-                                                    <span className="px-2.5 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-bold rounded-full">
-                                                        ✓ Selesai
+                                                    <span className="px-2.5 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-bold rounded-full flex items-center gap-1">
+                                                        <TickSquare set="bold" primaryColor="currentColor" size={12} /> Selesai
                                                     </span>
                                                 )}
                                                 {isInProgress && (
-                                                    <span className="px-2.5 py-1 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-xs font-bold rounded-full">
-                                                        ⏳ Sedang Dikerjakan
+                                                    <span className="px-2.5 py-1 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-xs font-bold rounded-full flex items-center gap-1">
+                                                        <TimeCircle set="bold" primaryColor="currentColor" size={12} /> Sedang Dikerjakan
                                                     </span>
                                                 )}
                                             </div>
@@ -131,7 +132,7 @@ export default function SiswaKuisPage() {
 
                                     <div className="space-y-2 pt-3 border-t border-secondary/10">
                                         <div className="flex items-center text-xs text-text-secondary dark:text-zinc-500 mb-2">
-                                            <Calendar className="w-3.5 h-3.5 mr-1.5" />
+                                            <Calendar set="bold" primaryColor="currentColor" size={14} className="mr-1.5" />
                                             Dibuat: {new Date(quiz.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-text-secondary">
@@ -140,11 +141,11 @@ export default function SiswaKuisPage() {
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-text-secondary">
                                             <span>Durasi</span>
-                                            <span className="font-medium">⏱️ {quiz.duration_minutes} menit</span>
+                                            <span className="font-medium flex items-center gap-1"><TimeCircle set="bold" primaryColor="currentColor" size={14} /> {quiz.duration_minutes} menit</span>
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-text-secondary">
                                             <span>Jumlah Soal</span>
-                                            <span className="font-medium">📝 {questionCount} soal</span>
+                                            <span className="font-medium flex items-center gap-1"><Document set="bold" primaryColor="currentColor" size={14} /> {questionCount} soal</span>
                                         </div>
                                     </div>
 

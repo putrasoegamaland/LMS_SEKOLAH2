@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Modal, Button, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
-import { BookOpen, FileText, Video, Type, Link as LinkIcon, Loader2, ArrowLeft } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { Document, Video, Paper, Discovery, ArrowLeft, Search, Delete, Download } from 'react-iconly'
 
 
 interface Material {
@@ -81,11 +82,11 @@ export default function SiswaMateriPage() {
 
     const getTypeIcon = (type: string) => {
         switch (type) {
-            case 'PDF': return FileText
+            case 'PDF': return Document
             case 'VIDEO': return Video
-            case 'TEXT': return Type
-            case 'LINK': return LinkIcon
-            default: return BookOpen
+            case 'TEXT': return Paper
+            case 'LINK': return Discovery
+            default: return Document
         }
     }
 
@@ -118,12 +119,12 @@ export default function SiswaMateriPage() {
             <div className="space-y-6">
                 <div className="flex items-center gap-4">
                     <a href="/dashboard/siswa" className="p-3 rounded-xl bg-white dark:bg-surface-dark border border-secondary/20 hover:border-primary text-text-secondary hover:text-primary transition-all shadow-sm">
-                        <ArrowLeft className="w-5 h-5" strokeWidth={2} />
+                        <ArrowLeft set="bold" primaryColor="currentColor" size={24} />
                     </a>
                     <div>
                         <div className="flex items-center gap-2">
                             <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                                <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2} />
+                                <Document set="bold" primaryColor="currentColor" size={24} className="text-blue-600 dark:text-blue-400" />
                             </div>
                             <h1 className="text-2xl font-bold text-text-main dark:text-white">Materi Pembelajaran</h1>
                         </div>
@@ -142,15 +143,15 @@ export default function SiswaMateriPage() {
                             placeholder="Ketik nama mata pelajaran (contoh: Biologi)..."
                             className="w-full px-5 py-4 pl-12 bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl text-lg text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary shadow-sm"
                         />
-                        <svg className="w-6 h-6 text-text-secondary absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary">
+                            <Search set="light" primaryColor="currentColor" size={24} />
+                        </div>
                     </div>
                 </Card>
 
                 {filteredSubjects.length === 0 ? (
                     <EmptyState
-                        icon="🔍"
+                        icon={<Search set="bold" primaryColor="currentColor" size={48} className="text-secondary" />}
                         title="Tidak Ditemukan"
                         description={searchQuery ? 'Tidak ada mata pelajaran yang cocok dengan pencarian.' : 'Belum ada materi pelajaran yang tersedia untuk kelas Anda.'}
                     />
@@ -163,7 +164,7 @@ export default function SiswaMateriPage() {
                             >
                                 <div onClick={() => { setSelectedSubject(group); setSearchQuery('') }}>
                                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white mb-4 shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform">
-                                        <BookOpen className="w-7 h-7" strokeWidth={2} />
+                                        <Document set="bold" primaryColor="currentColor" size={32} />
                                     </div>
                                     <h3 className="text-xl font-bold text-text-main dark:text-white mb-2 group-hover:text-primary transition-colors">
                                         {group.subjectName}
@@ -218,9 +219,7 @@ export default function SiswaMateriPage() {
                     onClick={() => setSelectedSubject(null)}
                     className="w-10 h-10 rounded-full bg-secondary/10 hover:bg-secondary/20 text-text-secondary dark:text-[#A8BC9F] flex items-center justify-center transition-colors scroll-smooth"
                 >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
+                    <ArrowLeft set="bold" primaryColor="currentColor" size={24} />
                 </button>
                 <div>
                     <h1 className="text-2xl font-bold text-text-main dark:text-white leading-tight">{selectedSubject.subjectName}</h1>
@@ -237,7 +236,7 @@ export default function SiswaMateriPage() {
                                 const colors = getTypeColor(material.type)
                                 return (
                                     <div className={`w-12 h-12 rounded-2xl ${colors.bg} flex items-center justify-center flex-shrink-0`}>
-                                        <IconComponent className={`w-6 h-6 ${colors.text}`} strokeWidth={2} />
+                                        <IconComponent set="bold" primaryColor="currentColor" size={24} className={colors.text} />
                                     </div>
                                 )
                             })()}
@@ -338,15 +337,16 @@ export default function SiswaMateriPage() {
                                     href={previewingPDF}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="px-4 py-2 bg-primary/10 text-primary-dark rounded-full transition-colors text-sm font-bold hover:bg-primary hover:text-white"
+                                    className="px-4 py-2 bg-primary/10 text-primary-dark rounded-full transition-colors text-sm font-bold hover:bg-primary hover:text-white flex items-center gap-2"
                                 >
-                                    📥 Download
+                                    <Download set="bold" primaryColor="currentColor" size={20} />
+                                    Download
                                 </a>
                                 <button
                                     onClick={() => setPreviewingPDF(null)}
                                     className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-text-secondary hover:bg-red-100 hover:text-red-500 transition-colors"
                                 >
-                                    ✕
+                                    <Delete set="bold" primaryColor="currentColor" size={20} />
                                 </button>
                             </div>
                         </div>

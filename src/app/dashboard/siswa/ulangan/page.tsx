@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader, EmptyState } from '@/components/ui'
-import { FileText, Clock, AlertTriangle, Play, CheckCircle, ArrowRight, BarChart3, Loader2, Rocket, Calendar } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { Document, TimeCircle, Danger, Play, TickSquare, Chart, Calendar } from 'react-iconly'
 
 interface Exam {
     id: string
@@ -68,7 +69,7 @@ export default function SiswaUlanganPage() {
         const submission = submissions.find(s => s.exam_id === exam.id)
 
         if (submission?.is_submitted) {
-            return { status: 'submitted', label: 'Sudah Dikumpulkan', icon: CheckCircle, color: 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' }
+            return { status: 'submitted', label: 'Sudah Dikumpulkan', icon: TickSquare, color: 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' }
         }
 
         if (submission && !submission.is_submitted) {
@@ -79,7 +80,7 @@ export default function SiswaUlanganPage() {
             const isExpired = now.getTime() > (subStartedAt + durationMs + 60000)
 
             if (isExpired) {
-                return { status: 'expired_open', label: 'Waktu Habis', icon: Clock, color: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300' }
+                return { status: 'expired_open', label: 'Waktu Habis', icon: TimeCircle, color: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300' }
             }
             return { status: 'in_progress', label: 'Lanjutkan', icon: Play, color: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' }
         }
@@ -88,14 +89,14 @@ export default function SiswaUlanganPage() {
             const diff = startTime.getTime() - now.getTime()
             const hours = Math.floor(diff / 3600000)
             const mins = Math.floor((diff % 3600000) / 60000)
-            return { status: 'scheduled', label: `Mulai dalam ${hours}j ${mins}m`, icon: Clock, color: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' }
+            return { status: 'scheduled', label: `Mulai dalam ${hours}j ${mins}m`, icon: TimeCircle, color: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' }
         }
 
         if (now >= startTime && now <= strictEndTime) {
-            return { status: 'available', label: 'Mulai Sekarang', icon: Rocket, color: 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' }
+            return { status: 'available', label: 'Mulai Sekarang', icon: Play, color: 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' }
         }
 
-        return { status: 'ended', label: 'Waktu Habis', icon: Clock, color: 'bg-slate-100 text-slate-500 dark:bg-slate-500/20 dark:text-slate-400' }
+        return { status: 'ended', label: 'Waktu Habis', icon: TimeCircle, color: 'bg-slate-100 text-slate-500 dark:bg-slate-500/20 dark:text-slate-400' }
     }
 
     const formatDateTime = (dateString: string) => {
@@ -110,7 +111,7 @@ export default function SiswaUlanganPage() {
             <PageHeader
                 title="Ulangan"
                 subtitle="Daftar ulangan yang tersedia"
-                icon={<Clock className="w-6 h-6 text-red-500" />}
+                icon={<TimeCircle set="bold" primaryColor="currentColor" size={24} className="text-red-500" />}
                 backHref="/dashboard/siswa"
             />
 
@@ -118,7 +119,7 @@ export default function SiswaUlanganPage() {
             <div className="bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30 rounded-xl p-4">
                 <div className="flex items-start gap-3">
                     <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                        <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                        <Danger set="bold" primaryColor="currentColor" size={24} className="text-amber-600 dark:text-amber-400" />
                     </div>
                     <div>
                         <h3 className="font-bold text-amber-700 dark:text-amber-400">Perhatian!</h3>
@@ -133,7 +134,7 @@ export default function SiswaUlanganPage() {
                 </div>
             ) : exams.length === 0 ? (
                 <EmptyState
-                    icon={<FileText className="w-12 h-12 text-red-500 dark:text-red-200" />}
+                    icon={<Document set="bold" primaryColor="currentColor" size={48} className="text-red-500 dark:text-red-200" />}
                     title="Belum Ada Ulangan"
                     description="Ulangan akan muncul di sini saat guru mempublishnya"
                 />
@@ -144,12 +145,6 @@ export default function SiswaUlanganPage() {
                         const submission = submissions.find(s => s.exam_id === exam.id)
                         const canStart = status === 'available' || status === 'in_progress'
 
-                        // Adjust color for light mode if it was using hardcoded colors
-                        // We'll rely on the getExamStatus logic but ensure the classes are compatible or tweak getExamStatus if needed.
-                        // Ideally getExamStatus should return semantic variants, but for now we trust the classes returned or override them.
-                        // Actually let's assume getExamStatus returns specific colors that might need tweaking for light mode visibility.
-                        // For safetly, let's map the color classes or just ensure container contrast.
-
                         return (
                             <div key={exam.id} className="bg-white dark:bg-surface-dark border-2 border-primary/30 rounded-xl p-5 hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-[0.98] transition-all cursor-pointer">
                                 <div className="flex flex-col h-full gap-4">
@@ -157,7 +152,7 @@ export default function SiswaUlanganPage() {
                                         <div className="flex-1">
                                             <div className="flex flex-wrap items-center gap-2 mb-2">
                                                 <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${color} flex items-center gap-1.5`}>
-                                                    <StatusIcon className="w-3.5 h-3.5" />
+                                                    <StatusIcon set="bold" primaryColor="currentColor" size={14} />
                                                     {label}
                                                 </span>
                                             </div>
@@ -169,7 +164,7 @@ export default function SiswaUlanganPage() {
 
                                     <div className="space-y-2 pt-3 border-t border-secondary/10">
                                         <div className="flex items-center text-xs text-text-secondary dark:text-zinc-500 mb-2">
-                                            <Calendar className="w-3.5 h-3.5 mr-1.5" />
+                                            <Calendar set="bold" primaryColor="currentColor" size={14} className="mr-1.5" />
                                             Dibuat: {new Date(exam.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-text-secondary">
@@ -183,13 +178,13 @@ export default function SiswaUlanganPage() {
                                         <div className="flex items-center justify-between text-xs text-text-secondary">
                                             <span>Durasi</span>
                                             <span className="font-medium flex items-center gap-1">
-                                                <Clock className="w-3.5 h-3.5" /> {exam.duration_minutes} menit
+                                                <TimeCircle set="bold" primaryColor="currentColor" size={14} /> {exam.duration_minutes} menit
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-text-secondary">
                                             <span>Max Pelanggaran</span>
                                             <span className="font-medium text-red-500 flex items-center gap-1">
-                                                <AlertTriangle className="w-3.5 h-3.5" /> {exam.max_violations}x
+                                                <Danger set="bold" primaryColor="currentColor" size={14} /> {exam.max_violations}x
                                             </span>
                                         </div>
                                     </div>
@@ -210,7 +205,7 @@ export default function SiswaUlanganPage() {
                                             >
 
                                                 <div className="flex items-center justify-center gap-2">
-                                                    {status === 'in_progress' ? <Play className="w-5 h-5" /> : <Rocket className="w-5 h-5" />}
+                                                    <Play set="bold" primaryColor="currentColor" size={20} />
                                                     {status === 'in_progress' ? 'Lanjutkan Ulangan' : 'Mulai Ulangan'}
                                                 </div>
                                             </Link>
@@ -221,7 +216,7 @@ export default function SiswaUlanganPage() {
                                                 className="w-full block text-center px-5 py-3 bg-secondary/80 text-text-main dark:text-white rounded-xl font-bold hover:bg-secondary transition-all"
                                             >
                                                 <div className="flex items-center justify-center gap-2">
-                                                    <BarChart3 className="w-5 h-5" /> Lihat Hasil
+                                                    <Chart set="bold" primaryColor="currentColor" size={20} /> Lihat Hasil
                                                 </div>
                                             </Link>
                                         )}
@@ -231,7 +226,7 @@ export default function SiswaUlanganPage() {
                                                 className="w-full block text-center px-5 py-3 bg-secondary/10 text-primary-dark dark:text-primary rounded-xl font-bold hover:bg-secondary/20 transition-colors"
                                             >
                                                 <div className="flex items-center justify-center gap-2">
-                                                    <BarChart3 className="w-5 h-5" /> Lihat Detail Hasil
+                                                    <Chart set="bold" primaryColor="currentColor" size={20} /> Lihat Detail Hasil
                                                 </div>
                                             </Link>
                                         )}

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Modal, PageHeader, Button, EmptyState } from '@/components/ui'
-import { PenTool, Clock, CheckCircle, AlertCircle, FileText, Link as LinkIcon, Loader2, Calendar, ArrowRight } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { Edit, TimeCircle, TickSquare, Paper, Discovery, Calendar } from 'react-iconly'
 
 interface Assignment {
     id: string
@@ -111,7 +112,7 @@ export default function SiswaTugasPage() {
             <PageHeader
                 title="Tugas Saya"
                 subtitle="Daftar tugas yang harus dikerjakan"
-                icon={<PenTool className="w-6 h-6 text-amber-500" />}
+                icon={<Edit set="bold" primaryColor="currentColor" size={24} className="text-amber-500" />}
                 backHref="/dashboard/siswa"
             />
 
@@ -121,7 +122,7 @@ export default function SiswaTugasPage() {
                 </div>
             ) : assignments.length === 0 ? (
                 <EmptyState
-                    icon={<PenTool className="w-12 h-12 text-pink-500 dark:text-pink-200" />}
+                    icon={<Edit set="bold" primaryColor="currentColor" size={48} className="text-pink-500 dark:text-pink-200" />}
                     title="Belum Ada Tugas"
                     description="Belum ada tugas tersedia untuk kelasmu"
                 />
@@ -154,14 +155,14 @@ export default function SiswaTugasPage() {
 
                                     <div className="pt-4 mt-auto border-t border-secondary/10 space-y-2">
                                         <div className="text-xs font-medium text-text-secondary dark:text-zinc-500 flex items-center gap-1.5">
-                                            <Calendar className="w-3.5 h-3.5" />
+                                            <Calendar set="bold" primaryColor="currentColor" size={14} />
                                             Dibuat: {new Date(assignment.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <div className="text-xs font-medium">
                                                 {assignment.due_date && (
                                                     <span className={`flex items-center gap-1 ${overdue && !submission ? 'text-red-500' : 'text-text-secondary dark:text-zinc-500'}`}>
-                                                        <Clock className="w-3 h-3" />
+                                                        <TimeCircle set="bold" primaryColor="currentColor" size={12} />
                                                         Deadline: {new Date(assignment.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                                         {overdue && !submission && ' (Lewat)'}
                                                     </span>
@@ -171,7 +172,7 @@ export default function SiswaTugasPage() {
                                             <div>
                                                 {submission ? (
                                                     <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 rounded-full text-xs font-bold flex items-center gap-1">
-                                                        <CheckCircle className="w-3 h-3" /> Selesai
+                                                        <TickSquare set="bold" primaryColor="currentColor" size={12} /> Selesai
                                                     </span>
                                                 ) : overdue ? (
                                                     <span className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400 rounded-full text-xs font-bold">
@@ -201,21 +202,21 @@ export default function SiswaTugasPage() {
                                 <div className="flex bg-secondary/10 p-1 rounded-xl">
                                     <button
                                         onClick={() => setSubmitting({ ...submitting, type: 'text' })}
-                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${submitting.type === 'text'
+                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${submitting.type === 'text'
                                             ? 'bg-white dark:bg-surface-dark text-primary shadow-sm'
                                             : 'text-text-secondary hover:text-text-main'
                                             }`}
                                     >
-                                        <FileText className="w-4 h-4" /> Jawaban Teks
+                                        <Paper set="bold" primaryColor="currentColor" size={16} /> Jawaban Teks
                                     </button>
                                     <button
                                         onClick={() => setSubmitting({ ...submitting, type: 'link' })}
-                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${submitting.type === 'link'
+                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${submitting.type === 'link'
                                             ? 'bg-white dark:bg-surface-dark text-primary shadow-sm'
                                             : 'text-text-secondary hover:text-text-main'
                                             }`}
                                     >
-                                        <LinkIcon className="w-4 h-4" /> Lampirkan Link
+                                        <Discovery set="bold" primaryColor="currentColor" size={16} /> Lampirkan Link
                                     </button>
                                 </div>
 

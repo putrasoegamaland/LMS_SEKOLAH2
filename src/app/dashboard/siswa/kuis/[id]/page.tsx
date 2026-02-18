@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import SmartText from '@/components/SmartText'
-import { AlertTriangle, AlarmClock } from 'lucide-react'
+import { Danger, TimeCircle, TickSquare } from 'react-iconly'
 
 interface QuizQuestion {
     id: string
@@ -421,7 +421,7 @@ export default function KerjakanKuisPage() {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-                <AlertTriangle className="w-16 h-16 text-red-500 mb-4" />
+                <Danger set="bold" primaryColor="currentColor" size={64} className="text-red-500 mb-4" />
                 <h2 className="text-xl font-bold text-white">Oops!</h2>
                 <p className="text-slate-400 text-center max-w-md">{error}</p>
                 <Link href="/dashboard/siswa" className="px-6 py-2 bg-slate-800 text-white rounded-xl hover:bg-slate-700 transition-colors">
@@ -502,9 +502,7 @@ export default function KerjakanKuisPage() {
                                                 <div className={`w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-primary bg-primary text-white' : 'border-gray-400 dark:border-slate-500'
                                                     }`}>
                                                     {isSelected && (
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                        </svg>
+                                                        <TickSquare set="bold" primaryColor="currentColor" size={16} />
                                                     )}
                                                 </div>
                                                 <input
@@ -564,9 +562,7 @@ export default function KerjakanKuisPage() {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-6 w-full max-w-sm text-center shadow-xl">
                         <div className="w-16 h-16 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <TickSquare set="bold" primaryColor="currentColor" size={32} />
                         </div>
                         <h3 className="text-xl font-bold text-text-main dark:text-white mb-2">Kumpulkan Kuis?</h3>
                         <p className="text-text-secondary mb-6">
@@ -597,12 +593,10 @@ export default function KerjakanKuisPage() {
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
                         <div className="w-20 h-20 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <TimeCircle set="bold" primaryColor="currentColor" size={40} />
                         </div>
                         <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2 flex items-center justify-center gap-2">
-                            <AlarmClock className="w-8 h-8 text-red-500" /> Waktu Habis!
+                            Waktu Habis!
                         </h3>
                         <p className="text-text-secondary mb-6">
                             Kuis telah otomatis dikumpulkan. Jawabanmu sudah tersimpan.
@@ -622,7 +616,7 @@ export default function KerjakanKuisPage() {
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
                         <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <AlertTriangle className="w-10 h-10" />
+                            <Danger set="bold" primaryColor="currentColor" size={40} />
                         </div>
                         <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
                             Waktu Habis (Offline)
@@ -645,9 +639,7 @@ export default function KerjakanKuisPage() {
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-8 w-full max-w-md text-center shadow-2xl">
                         <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <TimeCircle set="bold" primaryColor="currentColor" size={40} />
                         </div>
                         <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
                             Ada Kuis yang Belum Selesai

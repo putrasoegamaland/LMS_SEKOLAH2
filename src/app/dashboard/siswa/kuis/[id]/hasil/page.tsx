@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import SmartText from '@/components/SmartText'
+import { Star, TickSquare, CloseSquare, Paper } from 'react-iconly'
 
 interface QuizResult {
     total_score: number
@@ -90,7 +91,7 @@ export default function HasilKuisPage() {
 
             <div className="text-center space-y-4">
                 <div className="inline-block p-4 rounded-full bg-primary/10 border border-primary/20 mb-4">
-                    <div className="text-6xl">🏆</div>
+                    <Star set="bold" primaryColor="currentColor" size={60} className="text-primary" />
                 </div>
                 <h2 className="text-2xl font-bold text-text-main dark:text-white">{quiz.title}</h2>
                 <p className="text-text-secondary">Kuis Selesai Dikerjakan</p>
@@ -128,7 +129,11 @@ export default function HasilKuisPage() {
                                         ? (isCorrect ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-red-500/20 text-red-600 dark:text-red-400')
                                         : 'bg-secondary/20 text-text-secondary'
                                         }`}>
-                                        {idx + 1}
+                                        {q.question_type === 'MULTIPLE_CHOICE' ? (
+                                            isCorrect ? <TickSquare set="bold" primaryColor="currentColor" size={16} /> : <CloseSquare set="bold" primaryColor="currentColor" size={16} />
+                                        ) : (
+                                            idx + 1
+                                        )}
                                     </div>
                                     <div className="flex-1">
                                         <SmartText text={q.question_text} className="text-text-main dark:text-white mb-3" />

@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
-import { BookOpen, PenTool, Clock, Brain, BarChart3, School, User, Megaphone, GraduationCap, PartyPopper } from 'lucide-react'
+import { Document, Edit, TimeCircle, Game, Chart, Home, User, Voice, Danger, Calendar, ArrowRight } from 'react-iconly'
+import { PartyPopper, GraduationCap } from 'lucide-react'
 
 interface StudentData {
     id: string
@@ -20,12 +21,25 @@ interface Announcement {
     published_at: string
 }
 
+interface DeadlineItem {
+    id: string
+    type: 'TUGAS' | 'ULANGAN'
+    title: string
+    subject: string
+    deadline: string
+    link: string
+    timeLeft: number // in hours
+}
+
 export default function SiswaDashboard() {
     const { user } = useAuth()
     const router = useRouter()
     const [student, setStudent] = useState<StudentData | null>(null)
     const [announcements, setAnnouncements] = useState<Announcement[]>([])
     const [loading, setLoading] = useState(true)
+
+    // Deadline Warning State
+    const [upcomingDeadlines, setUpcomingDeadlines] = useState<DeadlineItem[]>([])
 
     // Resume Modal State
     const [resumeItem, setResumeItem] = useState<{
@@ -86,7 +100,89 @@ export default function SiswaDashboard() {
                         const data = await announcementsRes.json()
                         setAnnouncements(Array.isArray(data) ? data : [])
                     }
+
+                    // --- Fetch Deadlines (Tugas & Ulangan) ---
+                    const [assignmentsRes, examsRes, submissionsRes, examSubmissionsRes] = await Promise.all([
+                        fetch('/api/assignments'),
+                        fetch('/api/exams'),
+                        fetch(`/api/submissions?student_id=${myStudent.id}`), // Tugas submissions
+                        fetch(`/api/exam-submissions?student_id=${myStudent.id}`) // Ulangan submissions
+                    ])
+
+                    const assignmentsData = await assignmentsRes.json()
+                    const examsData = await examsRes.json()
+                    const submissionsData = await submissionsRes.json()
+                    const examSubmissionsData = await examSubmissionsRes.json()
+
+                    const assignments = Array.isArray(assignmentsData) ? assignmentsData : []
+                    const exams = Array.isArray(examsData) ? examsData : []
+                    const assignmentSubmissions = Array.isArray(submissionsData) ? submissionsData : []
+                    const examSubmissions = Array.isArray(examSubmissionsData) ? examSubmissionsData : []
+
+                    const now = new Date().getTime()
+                    const warningThreshold = 48 * 60 * 60 * 1000 // 48 hours in ms
+                    const newDeadlines: DeadlineItem[] = []
+
+                    // Process Assignments
+                    assignments.forEach((a: any) => {
+                        // Filter by class
+                        if (a.teaching_assignment?.class?.name !== myStudent.class.name) return
+                        // Filter if already submitted
+                        if (assignmentSubmissions.some((s: any) => s.assignment_id === a.id)) return
+                        // Filter if no due date
+                        if (!a.due_date) return
+
+                        const dueDate = new Date(a.due_date).getTime()
+                        const diff = dueDate - now
+
+                        if (diff > 0 && diff <= warningThreshold) {
+                            newDeadlines.push({
+                                id: a.id,
+                                type: 'TUGAS',
+                                title: a.title,
+                                subject: a.teaching_assignment?.subject?.name || 'Mapel',
+                                deadline: a.due_date,
+                                link: '/dashboard/siswa/tugas',
+                                timeLeft: diff / (1000 * 60 * 60)
+                            })
+                        }
+                    })
+
+                    // Process Exams
+                    exams.forEach((e: any) => {
+                        // Filter by class (assuming API returns teaching_assignment with class)
+                        if (e.teaching_assignment?.class?.name !== myStudent.class.name) return
+                        // Filter if already submitted
+                        if (examSubmissions.some((s: any) => s.exam_id === e.id && s.is_submitted)) return
+                        // Active exams only
+                        if (!e.is_active) return
+
+                        const startTime = new Date(e.start_time).getTime()
+                        // Use start_time + duration as rough "due date" window, or just start_time if it's strictly scheduled
+                        // Let's use strict end time logic: start_time + duration
+                        const endTime = startTime + (e.duration_minutes * 60 * 1000)
+                        const diff = endTime - now
+
+                        // Logic: If it's available NOW or starting soon, and ends within 48h
+                        // For exams, "deadline" is the end time.
+                        if (diff > 0 && diff <= warningThreshold) {
+                            newDeadlines.push({
+                                id: e.id,
+                                type: 'ULANGAN',
+                                title: e.title,
+                                subject: e.teaching_assignment?.subject?.name || 'Mapel',
+                                deadline: new Date(endTime).toISOString(),
+                                link: `/dashboard/siswa/ulangan/${e.id}`, // Direct link to start
+                                timeLeft: diff / (1000 * 60 * 60)
+                            })
+                        }
+                    })
+
+                    // Sort by most urgent
+                    newDeadlines.sort((a, b) => a.timeLeft - b.timeLeft)
+                    setUpcomingDeadlines(newDeadlines)
                 }
+
             } catch (error) {
                 console.error('Error:', error)
             } finally {
@@ -102,7 +198,7 @@ export default function SiswaDashboard() {
 
         const checkIncomplete = async () => {
             try {
-                // Fetch student ID first
+                // Fetch student ID first (Already done in fetchData but safe to repeat or optimize later)
                 const studentsRes = await fetch('/api/students')
                 const students = await studentsRes.json()
                 const myStudent = students.find((s: any) => s.user.id === user.id)
@@ -199,11 +295,11 @@ export default function SiswaDashboard() {
     }, [user])
 
     const quickLinks = [
-        { href: '/dashboard/siswa/materi', icon: BookOpen, label: 'Materi', sub: 'Bahan belajar', variant: 'blue' as const },
-        { href: '/dashboard/siswa/tugas', icon: PenTool, label: 'Tugas', sub: 'Kerjakan PR', variant: 'amber' as const },
-        { href: '/dashboard/siswa/ulangan', icon: Clock, label: 'Ulangan', sub: 'Ujian sekolah', variant: 'red' as const },
-        { href: '/dashboard/siswa/kuis', icon: Brain, label: 'Kuis', sub: 'Latihan soal', variant: 'purple' as const },
-        { href: '/dashboard/siswa/nilai', icon: BarChart3, label: 'Nilai', sub: 'Lihat rapor', variant: 'green' as const },
+        { href: '/dashboard/siswa/materi', icon: Document, label: 'Materi', sub: 'Bahan belajar', variant: 'blue' as const },
+        { href: '/dashboard/siswa/tugas', icon: Edit, label: 'Tugas', sub: 'Kerjakan PR', variant: 'amber' as const },
+        { href: '/dashboard/siswa/ulangan', icon: TimeCircle, label: 'Ulangan', sub: 'Ujian sekolah', variant: 'red' as const },
+        { href: '/dashboard/siswa/kuis', icon: Game, label: 'Kuis', sub: 'Latihan soal', variant: 'purple' as const },
+        { href: '/dashboard/siswa/nilai', icon: Chart, label: 'Nilai', sub: 'Lihat rapor', variant: 'green' as const },
     ]
 
     const formatDate = (dateString: string) => {
@@ -211,6 +307,13 @@ export default function SiswaDashboard() {
             day: '2-digit',
             month: 'short',
             year: 'numeric'
+        })
+    }
+
+    const formatHour = (dateString: string) => {
+        return new Date(dateString).toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit'
         })
     }
 
@@ -231,12 +334,76 @@ export default function SiswaDashboard() {
 
                     {!loading && student?.class && (
                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-md rounded-full text-white font-medium text-sm">
-                            <School className="w-5 h-5" strokeWidth={2} />
+                            <Home set="bold" primaryColor="currentColor" size={20} />
                             <span>Kelas: {student.class.name}</span>
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Deadline Warning Section */}
+            {!loading && upcomingDeadlines.length > 0 && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg animate-pulse text-red-500">
+                                <Danger set="bold" primaryColor="currentColor" size={24} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-text-main dark:text-white">Penting: Segera Kerjakan!</h2>
+                                <p className="text-sm text-red-500 dark:text-red-400 font-medium">
+                                    {upcomingDeadlines.length} tugas/ulangan mendekati deadline (&lt; 48 jam)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        {upcomingDeadlines.map((item) => (
+                            <Link key={item.id} href={item.link}>
+                                <div className="group h-full bg-white dark:bg-surface-dark border-l-4 border-red-500 rounded-r-xl rounded-l-md p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden">
+                                    {/* Background gradient/glow on hover */}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+
+                                    <div className="relative">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${item.type === 'ULANGAN'
+                                                ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'
+                                                : 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300'
+                                                }`}>
+                                                {item.type}
+                                            </span>
+                                            <span className="text-xs font-bold text-red-500 flex items-center gap-1">
+                                                <TimeCircle set="bold" primaryColor="currentColor" size={12} />
+                                                {Math.ceil(item.timeLeft)} jam lagi
+                                            </span>
+                                        </div>
+
+                                        <h3 className="font-bold text-text-main dark:text-white mb-1 line-clamp-1 group-hover:text-primary transition-colors">
+                                            {item.title}
+                                        </h3>
+
+                                        <div className="flex items-center justify-between mt-3 text-xs text-text-secondary dark:text-zinc-400">
+                                            <span className="flex items-center gap-1">
+                                                <Document set="bold" primaryColor="currentColor" size={12} />
+                                                {item.subject}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <Calendar set="bold" primaryColor="currentColor" size={12} />
+                                                {formatDate(item.deadline)}, {formatHour(item.deadline)}
+                                            </span>
+                                        </div>
+
+                                        <div className="mt-3 flex items-center justify-end text-primary text-xs font-bold opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all gap-1">
+                                            Kerjakan Sekarang <ArrowRight set="bold" primaryColor="currentColor" size={14} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Quick Actions */}
             <div>
@@ -247,18 +414,13 @@ export default function SiswaDashboard() {
                             <Card className="h-full border-2 border-primary/30 hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-95 transition-all group bg-white dark:bg-surface-dark cursor-pointer p-3 sm:p-4">
                                 <div className="flex flex-col items-center text-center gap-2 sm:gap-3">
                                     {/* Duotone Icon Container */}
-                                    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all duration-300 ${link.href.includes('materi') ? 'bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-600' :
-                                        link.href.includes('tugas') ? 'bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-600' :
-                                            link.href.includes('ulangan') ? 'bg-red-100 dark:bg-red-900/30 group-hover:bg-red-600' :
-                                                link.href.includes('kuis') ? 'bg-purple-100 dark:bg-purple-900/30 group-hover:bg-purple-600' :
-                                                    'bg-green-100 dark:bg-green-900/30 group-hover:bg-green-600'
+                                    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all duration-300 ${link.href.includes('materi') ? 'bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-600 text-blue-600 dark:text-blue-400 group-hover:text-white' :
+                                        link.href.includes('tugas') ? 'bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-600 text-amber-600 dark:text-amber-400 group-hover:text-white' :
+                                            link.href.includes('ulangan') ? 'bg-red-100 dark:bg-red-900/30 group-hover:bg-red-600 text-red-600 dark:text-red-400 group-hover:text-white' :
+                                                link.href.includes('kuis') ? 'bg-purple-100 dark:bg-purple-900/30 group-hover:bg-purple-600 text-purple-600 dark:text-purple-400 group-hover:text-white' :
+                                                    'bg-green-100 dark:bg-green-900/30 group-hover:bg-green-600 text-green-600 dark:text-green-400 group-hover:text-white'
                                         }`}>
-                                        <link.icon className={`w-6 h-6 sm:w-7 sm:h-7 transition-colors ${link.href.includes('materi') ? 'text-blue-600 dark:text-blue-400 group-hover:text-white' :
-                                            link.href.includes('tugas') ? 'text-amber-600 dark:text-amber-400 group-hover:text-white' :
-                                                link.href.includes('ulangan') ? 'text-red-600 dark:text-red-400 group-hover:text-white' :
-                                                    link.href.includes('kuis') ? 'text-purple-600 dark:text-purple-400 group-hover:text-white' :
-                                                        'text-green-600 dark:text-green-400 group-hover:text-white'
-                                            }`} strokeWidth={2} />
+                                        <link.icon set="bold" primaryColor="currentColor" size={24} />
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-text-main dark:text-white group-hover:text-primary transition-colors text-sm sm:text-lg">{link.label}</h3>
@@ -277,7 +439,7 @@ export default function SiswaDashboard() {
                     <Card>
                         <div className="flex items-center gap-4 mb-6">
                             <div className="w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center text-primary">
-                                <User className="w-6 h-6" />
+                                <User set="bold" primaryColor="currentColor" size={24} />
                             </div>
                             <div>
                                 <h3 className="text-lg font-bold text-text-main dark:text-white">Informasi Akun</h3>
@@ -303,8 +465,8 @@ export default function SiswaDashboard() {
 
                     <Card className="bg-gradient-to-br from-secondary/10 to-primary/5 border-none">
                         <div className="flex items-center gap-4 mb-6">
-                            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm">
-                                <Megaphone className="w-6 h-6 text-orange-500" />
+                            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-orange-500">
+                                <Voice set="bold" primaryColor="currentColor" size={24} />
                             </div>
                             <div>
                                 <h3 className="text-lg font-bold text-text-main dark:text-white">Pengumuman</h3>
@@ -343,7 +505,7 @@ export default function SiswaDashboard() {
 
                         <div className="relative">
                             <div className="w-20 h-20 bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner ring-4 ring-white dark:ring-surface-dark">
-                                <Clock className="w-10 h-10" />
+                                <TimeCircle set="bold" primaryColor="currentColor" size={40} />
                             </div>
 
                             <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">

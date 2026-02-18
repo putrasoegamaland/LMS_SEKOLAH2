@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { FileText, AlertTriangle, Maximize, Clock, CheckCircle } from 'lucide-react'
+import { Document, Danger, Scan, TimeCircle, TickSquare } from 'react-iconly'
 import SmartText from '@/components/SmartText'
 
 interface ExamQuestion {
@@ -495,7 +495,7 @@ export default function TakeExamPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark">
                 <div className="text-center">
-                    <FileText className="w-12 h-12 text-primary mb-4 animate-pulse mx-auto" />
+                    <Document set="bold" primaryColor="currentColor" size={48} className="text-primary mb-4 animate-pulse mx-auto" />
                     <p className="text-text-secondary">Mempersiapkan ulangan...</p>
                 </div>
             </div>
@@ -520,7 +520,7 @@ export default function TakeExamPage() {
             {showViolationWarning && (
                 <div className="fixed inset-0 bg-red-600/80 flex items-center justify-center z-50">
                     <div className="text-center text-white p-8">
-                        <AlertTriangle className="w-16 h-16 text-white mb-4 mx-auto" />
+                        <Danger set="bold" primaryColor="currentColor" size={64} className="text-white mb-4 mx-auto" />
                         <h2 className="text-2xl font-bold mb-2">PERINGATAN!</h2>
                         <p>Anda terdeteksi keluar dari halaman ulangan</p>
                         <p className="text-xl mt-4">Pelanggaran: {violationCount} / {maxViolations}</p>
@@ -535,7 +535,7 @@ export default function TakeExamPage() {
             {!isFullscreen && (
                 <div className="border-b border-amber-500/30 p-3 text-center bg-amber-500/20">
                     <button onClick={requestFullscreen} className="text-amber-400 hover:text-amber-300 underline flex items-center justify-center gap-2 mx-auto">
-                        <Maximize className="w-4 h-4" /> Klik untuk mode layar penuh (direkomendasikan)
+                        <Scan set="bold" primaryColor="currentColor" size={16} /> Klik untuk mode layar penuh (direkomendasikan)
                     </button>
                 </div>
             )}
@@ -550,11 +550,11 @@ export default function TakeExamPage() {
                     <div className="flex items-center gap-6">
                         {/* Violation counter */}
                         <div className={`px-3 py-1 rounded-lg flex items-center gap-1.5 ${violationCount > 0 ? 'bg-red-500/20 text-red-500 dark:text-red-400' : 'bg-gray-100 dark:bg-gray-800 text-text-secondary'}`}>
-                            <AlertTriangle className="w-4 h-4" /> {violationCount}/{maxViolations}
+                            <Danger set="bold" primaryColor="currentColor" size={16} /> {violationCount}/{maxViolations}
                         </div>
                         {/* Timer */}
                         <div className={`px-4 py-2 rounded-lg font-mono text-lg font-bold flex items-center gap-2 relative ${timeLeft <= 300 ? 'bg-red-500 text-white animate-pulse' : timeLeft <= 600 ? 'bg-amber-500 text-white' : 'bg-primary/20 text-primary dark:text-primary-light'}`}>
-                            <Clock className="w-5 h-5" /> {formatTime(timeLeft)}
+                            <TimeCircle set="bold" primaryColor="currentColor" size={20} /> {formatTime(timeLeft)}
                         </div>
                     </div>
                 </div>
@@ -657,7 +657,7 @@ export default function TakeExamPage() {
                                 className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
                             >
                                 <span className="flex items-center gap-2">
-                                    <CheckCircle className="w-5 h-5" /> Kumpulkan Ulangan
+                                    <TickSquare set="bold" primaryColor="currentColor" size={20} /> Kumpulkan Ulangan
                                 </span>
                             </button>
                         ) : (
@@ -677,9 +677,7 @@ export default function TakeExamPage() {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-6 w-full max-w-sm text-center">
                         <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <TickSquare set="bold" primaryColor="currentColor" size={32} />
                         </div>
                         <h3 className="text-xl font-bold text-text-main dark:text-white mb-2">Kumpulkan Ulangan?</h3>
                         <p className="text-text-secondary mb-2">
@@ -687,7 +685,7 @@ export default function TakeExamPage() {
                         </p>
                         {answeredCount < questions.length && (
                             <p className="text-amber-500 dark:text-amber-400 text-sm mb-4 flex items-center justify-center gap-1">
-                                <AlertTriangle className="w-4 h-4" /> Masih ada {questions.length - answeredCount} soal yang belum dijawab!
+                                <Danger set="bold" primaryColor="currentColor" size={16} /> Masih ada {questions.length - answeredCount} soal yang belum dijawab!
                             </p>
                         )}
                         <div className="flex gap-3 mt-6">
@@ -715,7 +713,7 @@ export default function TakeExamPage() {
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl">
                         <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <AlertTriangle className="w-10 h-10" />
+                            <Danger set="bold" primaryColor="currentColor" size={40} />
                         </div>
                         <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
                             Waktu Habis (Offline)
@@ -737,7 +735,7 @@ export default function TakeExamPage() {
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-2xl p-8 w-full max-w-md text-center shadow-2xl">
                         <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <Clock className="w-10 h-10" />
+                            <TimeCircle set="bold" primaryColor="currentColor" size={40} />
                         </div>
                         <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
                             Lanjutkan Ulangan
