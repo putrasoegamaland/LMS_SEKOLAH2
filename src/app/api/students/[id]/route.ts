@@ -2,6 +2,43 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateSession, hashPassword } from '@/lib/auth'
 
+// GET student by ID
+export async function GET(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params
+        const token = request.cookies.get('session_token')?.value
+        if (!token) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const user = await validateSession(token)
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const { data: student, error } = await supabase
+            .from('students')
+            .select(`
+                *,
+                user:users(id, username, full_name),
+                class:classes(id, name, school_level)
+            `)
+            .eq('id', id)
+            .single()
+
+        if (error || !student) {
+            return NextResponse.json({ error: 'Siswa tidak ditemukan' }, { status: 404 })
+        }
+
+        return NextResponse.json(student)
+    } catch (error) {
+        console.error('Error fetching student:', error)
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    }
+}
 // PUT update student
 export async function PUT(
     request: NextRequest,

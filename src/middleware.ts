@@ -12,8 +12,8 @@ export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
     const sessionToken = request.cookies.get('session_token')?.value
 
-    // Allow public paths
-    if (PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
+    // Allow public paths and external APIs
+    if (PUBLIC_PATHS.some(path => pathname.startsWith(path)) || pathname.startsWith('/api/external')) {
         // If logged in and trying to access login, redirect to dashboard
         if (pathname === '/login' && sessionToken) {
             return NextResponse.redirect(new URL('/dashboard', request.url))

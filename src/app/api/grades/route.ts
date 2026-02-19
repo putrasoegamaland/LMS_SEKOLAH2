@@ -74,32 +74,6 @@ export async function GET(request: NextRequest) {
                 `)
                 .order('graded_at', { ascending: false })
 
-            const { data: assignmentGrades, error: gradesError } = await assignmentQuery
-
-            if (!gradesError && assignmentGrades) {
-                const mappedAssignments = assignmentGrades
-                    .filter((g: any) => {
-                        if (!taIds) return true // all_years
-                        const taId = g.submission?.assignment?.teaching_assignment_id
-                        return taId && taIds.includes(taId)
-                    })
-                    .map((g: any) => {
-                        const submission = g.submission
-                        const assignment = submission?.assignment
-                        const subject = assignment?.teaching_assignment?.subject
-                        return {
-                            id: g.id,
-                            student_id: submission?.student_id,
-                            subject_id: subject?.id,
-                            grade_type: assignment?.type || 'TUGAS',
-                            score: g.score,
-                            subject: { name: subject?.name || '-' },
-                            graded_at: g.graded_at
-                        }
-                    })
-                allGrades.push(...mappedAssignments)
-            }
-
             // 2. Fetch Quiz Grades (KUIS)
             let quizQuery = supabaseAdmin
                 .from('quiz_submissions')
@@ -120,7 +94,68 @@ export async function GET(request: NextRequest) {
                 `)
                 .not('submitted_at', 'is', null)
 
+            // 3. Fetch Exam Grades (ULANGAN)
+            let examQuery = supabaseAdmin
+                .from('exam_submissions')
+                .select(`
+                    id,
+                    student_id,
+                    total_score,
+                    max_score,
+                    submitted_at,
+                    exam:exams(
+                        id,
+                        title,
+                        teaching_assignment_id,
+                        teaching_assignment:teaching_assignments(
+                            subject:subjects(id, name)
+                        )
+                    )
+                `)
+                .not('submitted_at', 'is', null)
+
+            // Filter by student_id if provided
+            const studentId = request.nextUrl.searchParams.get('student_id')
+            if (studentId) {
+                // For grades (TUGAS), the relation makes it tricky to filter directly in one go efficiently without inner join syntax limitations in raw PostgREST via Supabase JS sometimes.
+                // But we can try !inner if supported or just filter in memory for simplicity if data isn't huge, OR use the 'student_submissions' filter.
+                // Actually 'grades' has 'submission_id'. 'student_submissions' has 'student_id'.
+                // We can't easily filter top-level 'grades' by 'submission.student_id' in simple query builder without complex syntax.
+                // Let's filter in-memory for consistency with existing structure, usually fine for school scale.
+                // OPTIMIZATION: Filter Quiz/Exam directly as they have student_id column.
+
+                quizQuery = quizQuery.eq('student_id', studentId)
+                examQuery = examQuery.eq('student_id', studentId)
+            }
+
+            const { data: assignmentGrades, error: gradesError } = await assignmentQuery
             const { data: quizSubmissions, error: quizzesError } = await quizQuery
+            const { data: examSubmissions, error: examsError } = await examQuery
+
+            if (!gradesError && assignmentGrades) {
+                const mappedAssignments = assignmentGrades
+                    .filter((g: any) => {
+                        if (studentId && g.submission?.student_id !== studentId) return false
+                        if (!taIds) return true // all_years
+                        const taId = g.submission?.assignment?.teaching_assignment_id
+                        return taId && taIds.includes(taId)
+                    })
+                    .map((g: any) => {
+                        const submission = g.submission
+                        const assignment = submission?.assignment
+                        const subject = assignment?.teaching_assignment?.subject
+                        return {
+                            id: g.id,
+                            student_id: submission?.student_id,
+                            subject_id: subject?.id,
+                            grade_type: assignment?.type || 'TUGAS',
+                            score: g.score,
+                            subject: { name: subject?.name || '-' },
+                            graded_at: g.graded_at
+                        }
+                    })
+                allGrades.push(...mappedAssignments)
+            }
 
             if (!quizzesError && quizSubmissions) {
                 const mappedQuizzes = quizSubmissions
@@ -145,28 +180,6 @@ export async function GET(request: NextRequest) {
                     })
                 allGrades.push(...mappedQuizzes)
             }
-
-            // 3. Fetch Exam Grades (ULANGAN)
-            let examQuery = supabaseAdmin
-                .from('exam_submissions')
-                .select(`
-                    id,
-                    student_id,
-                    total_score,
-                    max_score,
-                    submitted_at,
-                    exam:exams(
-                        id,
-                        title,
-                        teaching_assignment_id,
-                        teaching_assignment:teaching_assignments(
-                            subject:subjects(id, name)
-                        )
-                    )
-                `)
-                .not('submitted_at', 'is', null)
-
-            const { data: examSubmissions, error: examsError } = await examQuery
 
             if (!examsError && examSubmissions) {
                 const mappedExams = examSubmissions

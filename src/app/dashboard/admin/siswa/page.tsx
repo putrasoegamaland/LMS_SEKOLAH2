@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
-import { User as Users, AddUser as UserPlus, Edit as Pencil, Delete as Trash2, Show as Eye, Hide as EyeOff, InfoCircle as AlertCircle, Filter, Document as GraduationCap } from 'react-iconly'
+import { User as Users, AddUser as UserPlus, Edit as Pencil, Delete as Trash2, Show as Eye, Hide as EyeOff, InfoCircle as AlertCircle, Filter, Document as GraduationCap, Paper } from 'react-iconly'
+import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import { Class, SchoolLevel } from '@/lib/types'
 
@@ -315,6 +316,9 @@ export default function SiswaPage() {
                                         <td className="px-6 py-4 text-text-secondary dark:text-zinc-300 font-mono text-sm">{student.user.username}</td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
+                                                <Link href={`/dashboard/admin/siswa/${student.id}/rapor`} className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 flex items-center justify-center transition-colors" title="Cetak Rapor">
+                                                    <Paper set="bold" primaryColor="currentColor" size={16} />
+                                                </Link>
                                                 <button onClick={() => openEdit(student)} className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 flex items-center justify-center transition-colors">
                                                     <Pencil set="bold" primaryColor="currentColor" size={16} />
                                                 </button>
