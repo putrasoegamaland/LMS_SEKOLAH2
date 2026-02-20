@@ -3,10 +3,14 @@
 type NotificationType =
     | 'TUGAS_BARU'
     | 'KUIS_BARU'
+    | 'ULANGAN_BARU'
     | 'NILAI_KELUAR'
     | 'SUBMISSION_BARU'
+    | 'SUBMISSION_KUIS'
+    | 'SUBMISSION_ULANGAN'
     | 'DEADLINE_REMINDER'
     | 'PENGUMUMAN'
+    | 'REMEDIAL'
 
 interface CreateNotificationParams {
     userIds: string[]
@@ -44,14 +48,22 @@ export function getNotificationIcon(type: NotificationType): string {
             return '📝'
         case 'KUIS_BARU':
             return '🎯'
+        case 'ULANGAN_BARU':
+            return '📋'
         case 'NILAI_KELUAR':
             return '📊'
         case 'SUBMISSION_BARU':
             return '📨'
+        case 'SUBMISSION_KUIS':
+            return '✅'
+        case 'SUBMISSION_ULANGAN':
+            return '📩'
         case 'DEADLINE_REMINDER':
             return '⏰'
         case 'PENGUMUMAN':
             return '📢'
+        case 'REMEDIAL':
+            return '🔄'
         default:
             return '🔔'
     }

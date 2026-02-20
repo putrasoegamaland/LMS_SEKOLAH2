@@ -68,20 +68,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const user = await validateSession(token)
-        if (!user || user.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        if (!user || user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const { name } = await request.json()
 
-        if (!name) {
-            return NextResponse.json({ error: 'Nama mata pelajaran harus diisi' }, { status: 400 })
-        }
+        if (!name) return NextResponse.json({ error: 'Nama mata pelajaran harus diisi' }, { status: 400 })
 
         const { data, error } = await supabase
             .from('subjects')
@@ -94,6 +88,38 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(data)
     } catch (error) {
         console.error('Error creating subject:', error)
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    }
+}
+
+// PUT update subject (e.g. KKM)
+export async function PUT(request: NextRequest) {
+    try {
+        const token = request.cookies.get('session_token')?.value
+        if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+        const user = await validateSession(token)
+        // Allowing API for GURU or ADMIN to update KKM, though mostly ADMIN handles master data
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+        const { id, name, kkm } = await request.json()
+        if (!id) return NextResponse.json({ error: 'ID mata pelajaran harus diisi' }, { status: 400 })
+
+        const updateData: any = {}
+        if (name !== undefined) updateData.name = name
+        if (kkm !== undefined) updateData.kkm = kkm
+
+        const { data, error } = await supabase
+            .from('subjects')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (error) throw error
+        return NextResponse.json(data)
+    } catch (error) {
+        console.error('Error updating subject:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })
     }
 }

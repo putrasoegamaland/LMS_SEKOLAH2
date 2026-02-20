@@ -112,7 +112,7 @@ export default function SiswaTugasPage() {
             <PageHeader
                 title="Tugas Saya"
                 subtitle="Daftar tugas yang harus dikerjakan"
-                icon={<Edit set="bold" primaryColor="currentColor" size={24} className="text-amber-500" />}
+                icon={<span className="text-amber-500"><Edit set="bold" primaryColor="currentColor" size={24} /></span>}
                 backHref="/dashboard/siswa"
             />
 
@@ -122,7 +122,7 @@ export default function SiswaTugasPage() {
                 </div>
             ) : assignments.length === 0 ? (
                 <EmptyState
-                    icon={<Edit set="bold" primaryColor="currentColor" size={48} className="text-pink-500 dark:text-pink-200" />}
+                    icon={<span className="text-pink-500 dark:text-pink-200"><Edit set="bold" primaryColor="currentColor" size={48} /></span>}
                     title="Belum Ada Tugas"
                     description="Belum ada tugas tersedia untuk kelasmu"
                 />

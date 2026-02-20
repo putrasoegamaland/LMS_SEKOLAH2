@@ -94,6 +94,7 @@ export default function EditQuizPage() {
 
     const [showPublishConfirm, setShowPublishConfirm] = useState(false)
     const [publishing, setPublishing] = useState(false)
+    const [showSuccessModal, setShowSuccessModal] = useState(false)
 
     const fetchQuiz = useCallback(async () => {
         try {
@@ -132,6 +133,7 @@ export default function EditQuizPage() {
             if (res.ok) {
                 setShowPublishConfirm(false)
                 fetchQuiz()
+                setShowSuccessModal(true)
             }
         } catch (error) {
             console.error('Error publishing:', error)
@@ -1314,6 +1316,28 @@ export default function EditQuizPage() {
                             className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600"
                         >
                             Ya, Publish
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Success Publish Modal */}
+            <Modal
+                title="Status Publikasi"
+                open={showSuccessModal}
+                onClose={() => setShowSuccessModal(false)}
+            >
+                <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <TickSquare set="bold" primaryColor="currentColor" size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold text-text-main dark:text-white mb-2">Kuis Berhasil Dipublish!</h3>
+                    <p className="text-sm text-text-secondary dark:text-zinc-400 mb-6">
+                        Siswa sekarang dapat melihat dan mengerjakan kuis ini melalui dashboard mereka.
+                    </p>
+                    <div className="flex gap-3">
+                        <Button variant="secondary" onClick={() => setShowSuccessModal(false)} className="flex-1 justify-center">
+                            Tutup
                         </Button>
                     </div>
                 </div>

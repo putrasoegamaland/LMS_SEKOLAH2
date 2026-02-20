@@ -421,7 +421,9 @@ export default function KerjakanKuisPage() {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-                <Danger set="bold" primaryColor="currentColor" size={64} className="text-red-500 mb-4" />
+                <div className="text-red-500 mb-4">
+                    <Danger set="bold" primaryColor="currentColor" size={64} />
+                </div>
                 <h2 className="text-xl font-bold text-white">Oops!</h2>
                 <p className="text-slate-400 text-center max-w-md">{error}</p>
                 <Link href="/dashboard/siswa" className="px-6 py-2 bg-slate-800 text-white rounded-xl hover:bg-slate-700 transition-colors">

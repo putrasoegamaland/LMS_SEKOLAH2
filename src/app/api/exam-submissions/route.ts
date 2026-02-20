@@ -171,7 +171,66 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
-        return NextResponse.json(data)
+        let finalData = data || []
+
+        // If filtering by examId and the user is a teacher, fetch remedial submissions and merge by highest score
+        if (examId && user.role === 'GURU') {
+            const { data: remedials } = await supabase
+                .from('exams')
+                .select('id')
+                .eq('remedial_for_id', examId)
+
+            if (remedials && remedials.length > 0) {
+                const remedialIds = remedials.map(r => r.id)
+                const { data: remedialSubmissions } = await supabase
+                    .from('exam_submissions')
+                    .select(`
+                        *,
+                        student:students(id, nis, user:users(full_name)),
+                        exam:exams(
+                            id, 
+                            title, 
+                            duration_minutes,
+                            teaching_assignment:teaching_assignments(
+                                academic_year_id,
+                                subject:subjects(id, name),
+                                class:classes(id, name)
+                            )
+                        )
+                    `)
+                    .in('exam_id', remedialIds)
+
+                if (remedialSubmissions && remedialSubmissions.length > 0) {
+                    const studentHighestSubmissions = new Map<string, any>()
+
+                    // Add all original submissions first
+                    finalData.forEach((sub: any) => {
+                        studentHighestSubmissions.set(sub.student.id, sub)
+                    })
+
+                    // Overwrite if remedial score is higher or equal
+                    remedialSubmissions.forEach((sub: any) => {
+                        const existing = studentHighestSubmissions.get(sub.student.id)
+                        const currentScore = ((sub.total_score || 0) / (sub.max_score || 1))
+                        const existingScore = existing ? ((existing.total_score || 0) / (existing.max_score || 1)) : -1
+
+                        if (currentScore >= existingScore) {
+                            studentHighestSubmissions.set(sub.student.id, sub)
+                        }
+                    })
+
+                    finalData = Array.from(studentHighestSubmissions.values())
+                    // Sort by submitted_at again just in case (using created_at as backup if needed)
+                    finalData.sort((a: any, b: any) => {
+                        const dateA = a.submitted_at ? new Date(a.submitted_at).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+                        const dateB = b.submitted_at ? new Date(b.submitted_at).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+                        return dateB - dateA;
+                    });
+                }
+            }
+        }
+
+        return NextResponse.json(finalData)
     } catch (error) {
         console.error('Error fetching exam submissions:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })

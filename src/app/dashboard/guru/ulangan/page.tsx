@@ -7,7 +7,7 @@ import { Modal, PageHeader, Button, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { useAuth } from '@/contexts/AuthContext'
 import { Paper as FileText, TimeCircle as Clock, Calendar, Plus, Lock, ShieldDone, User, Swap, Graph, Edit, Delete, ChevronDown, Document } from 'react-iconly'
-import { Loader2 } from 'lucide-react'
+import { Loader2, CheckSquare, Square, RefreshCw } from 'lucide-react'
 
 interface Exam {
     id: string
@@ -22,8 +22,8 @@ interface Exam {
     created_at: string
     teaching_assignment: {
         id: string
-        subject: { name: string }
-        class: { id: string; name: string }
+        subject: { name: string, kkm: number }
+        class: { id: string, name: string }
     }
 }
 
@@ -50,6 +50,15 @@ export default function GuruUlanganPage() {
         is_randomized: true,
         max_violations: 3
     })
+
+    // Remedial States
+    const [showRemedial, setShowRemedial] = useState(false)
+    const [remedialExam, setRemedialExam] = useState<Exam | null>(null)
+    const [remedialStudents, setRemedialStudents] = useState<any[]>([])
+    const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
+    const [remedialMethod, setRemedialMethod] = useState<'ASLI' | 'BARU'>('ASLI')
+    const [remedialLoading, setRemedialLoading] = useState(false)
+    const [remedialStartTime, setRemedialStartTime] = useState('')
 
     useEffect(() => {
         fetchData()
@@ -122,6 +131,96 @@ export default function GuruUlanganPage() {
         if (!confirm('Hapus ulangan ini?')) return
         await fetch(`/api/exams/${id}`, { method: 'DELETE' })
         fetchData()
+    }
+
+    const handleOpenRemedial = async (exam: Exam) => {
+        setRemedialExam(exam)
+        setShowRemedial(true)
+        setRemedialLoading(true)
+        setSelectedStudentIds([])
+        setRemedialMethod('ASLI')
+        setRemedialStartTime('') // Need new start time for exam
+
+        try {
+            const classId = exam.teaching_assignment?.class?.id
+            const kkm = exam.teaching_assignment?.subject?.kkm || 75
+
+            if (!classId) throw new Error('Class ID missing')
+
+            const [studentsRes, subsRes] = await Promise.all([
+                fetch(`/api/students?class_id=${classId}`),
+                fetch(`/api/exam-submissions?exam_id=${exam.id}&teacher_view=true`)
+            ])
+            const studentsData = await studentsRes.json()
+            const subsData = await subsRes.json()
+
+            const studentsWithScores = (Array.isArray(studentsData) ? studentsData : []).map((s: any) => {
+                const sub = (Array.isArray(subsData) ? subsData : []).find((sub: any) => sub.student_id === s.id)
+                let score = 0
+                if (sub && sub.max_score > 0) {
+                    score = (sub.total_score / sub.max_score) * 100
+                }
+                const isBelowKKM = score < kkm
+                return {
+                    ...s,
+                    score: Math.round(score),
+                    isBelowKKM
+                }
+            })
+
+            // Sort by score
+            studentsWithScores.sort((a, b) => a.score - b.score)
+
+            setRemedialStudents(studentsWithScores)
+            // Pre-select those below KKM
+            setSelectedStudentIds(studentsWithScores.filter((s: any) => s.isBelowKKM).map((s: any) => s.user.id))
+        } catch (error) {
+            console.error('Error fetching remedial data:', error)
+            alert('Gagal memuat data siswa untuk remedial')
+        } finally {
+            setRemedialLoading(false)
+        }
+    }
+
+    const handleCreateRemedial = async () => {
+        if (!remedialExam || selectedStudentIds.length === 0 || !remedialStartTime) return
+        setCreating(true)
+        try {
+            const payload = {
+                teaching_assignment_id: remedialExam.teaching_assignment.id,
+                title: `[Remedial] ${remedialExam.title}`,
+                description: `Remedial untuk ulangan: ${remedialExam.title}`,
+                start_time: remedialStartTime,
+                duration_minutes: remedialExam.duration_minutes,
+                is_randomized: remedialExam.is_randomized,
+                max_violations: remedialExam.max_violations,
+                is_remedial: true,
+                remedial_for_id: remedialExam.id,
+                allowed_student_ids: selectedStudentIds,
+                duplicate_questions: remedialMethod === 'ASLI'
+            }
+
+            const res = await fetch('/api/exams', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+
+            if (res.ok) {
+                const newExam = await res.json()
+                setShowRemedial(false)
+                fetchData() // Refresh list
+
+                // If they require new questions, redirect to exam editor
+                if (remedialMethod === 'BARU') {
+                    router.push(`/dashboard/guru/ulangan/${newExam.id}`)
+                }
+            } else {
+                alert('Gagal membuat ulangan remedial')
+            }
+        } finally {
+            setCreating(false)
+        }
     }
 
     const formatDateTime = (dateString: string) => {
@@ -220,6 +319,11 @@ export default function GuruUlanganPage() {
                                         <div className="flex-1">
                                             <div className="flex flex-wrap items-center gap-2 mb-2">
                                                 <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${status.color}`}>{status.label}</span>
+                                                {(exam as any).is_remedial && (
+                                                    <span className="px-2 py-0.5 bg-gradient-to-r from-orange-400 to-red-500 text-white text-[10px] font-bold rounded-full shadow-sm animate-pulse-slow">
+                                                        REMEDIAL
+                                                    </span>
+                                                )}
                                                 {exam.is_randomized && <span className="text-xs text-text-secondary flex items-center gap-1 bg-secondary/10 px-2 py-1 rounded-full"><Swap set="bold" primaryColor="currentColor" size={12} /> Acak</span>}
                                             </div>
                                             <h3 className="font-bold text-text-main dark:text-white text-lg group-hover:text-primary transition-colors line-clamp-2">{exam.title}</h3>
@@ -261,11 +365,23 @@ export default function GuruUlanganPage() {
 
                                     <div className="grid grid-cols-2 gap-2 mt-auto pt-2">
                                         {exam.is_active ? (
-                                            <Link href={`/dashboard/guru/ulangan/${exam.id}/hasil`} className="w-full">
-                                                <Button variant="secondary" size="sm" className="w-full justify-center">
-                                                    <span className="text-secondary"><Graph set="bold" primaryColor="currentColor" size={16} /></span> Hasil
-                                                </Button>
-                                            </Link>
+                                            <div className="flex gap-2">
+                                                <Link href={`/dashboard/guru/ulangan/${exam.id}/hasil`} className="flex-1">
+                                                    <Button variant="secondary" size="sm" className="w-full justify-center">
+                                                        <span className="text-secondary"><Graph set="bold" primaryColor="currentColor" size={16} /></span> Hasil
+                                                    </Button>
+                                                </Link>
+                                                {!(exam as any).is_remedial && status.label === 'Selesai' && (
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() => handleOpenRemedial(exam)}
+                                                        className="flex-1 justify-center bg-orange-100 dark:bg-orange-900/30 text-orange-600 hover:bg-orange-200 dark:hover:bg-orange-800/50 border-orange-200 dark:border-orange-800/50"
+                                                    >
+                                                        <RefreshCw className="w-4 h-4 mr-1" /> Remedial
+                                                    </Button>
+                                                )}
+                                            </div>
                                         ) : (
                                             <Button variant="secondary" size="sm" disabled className="w-full justify-center opacity-50 cursor-not-allowed">
                                                 <span className="text-secondary"><Graph set="bold" primaryColor="currentColor" size={16} /></span> Hasil
@@ -399,6 +515,122 @@ export default function GuruUlanganPage() {
                         </Button>
                     </div>
                 </div>
+            </Modal>
+
+            {/* Remedial Modal */}
+            <Modal
+                open={showRemedial}
+                onClose={() => setShowRemedial(false)}
+                title="Tugaskan Remedial Ulangan"
+            >
+                {remedialLoading ? (
+                    <div className="flex justify-center py-10">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    </div>
+                ) : remedialExam ? (
+                    <div className="space-y-6">
+                        {/* Info Ulangan & KKM */}
+                        <div className="bg-secondary/10 p-4 rounded-xl">
+                            <h4 className="font-bold text-text-main dark:text-white mb-1">{remedialExam.title}</h4>
+                            <div className="flex gap-4 text-sm text-text-secondary dark:text-zinc-400">
+                                <span>Kls: <strong>{remedialExam.teaching_assignment?.class?.name}</strong></span>
+                                <span>Mata Pelajaran: <strong>{remedialExam.teaching_assignment?.subject?.name}</strong></span>
+                                <span>KKM: <strong className="text-red-500">{remedialExam.teaching_assignment?.subject?.kkm || 75}</strong></span>
+                            </div>
+                        </div>
+
+                        {/* Waktu Mulai */}
+                        <div>
+                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Waktu Mulai Ulangan Remedial</label>
+                            <input
+                                type="datetime-local"
+                                value={remedialStartTime}
+                                onChange={(e) => setRemedialStartTime(e.target.value)}
+                                className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                        </div>
+
+                        {/* Metode Soal */}
+                        <div className="space-y-3">
+                            <label className="block text-sm font-bold text-text-main dark:text-white">Metode Soal Remedial</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${remedialMethod === 'ASLI' ? 'border-primary bg-primary/5' : 'border-secondary/20 hover:border-primary/50'}`}>
+                                    <input type="radio" name="method" checked={remedialMethod === 'ASLI'} onChange={() => setRemedialMethod('ASLI')} className="hidden" />
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${remedialMethod === 'ASLI' ? 'border-primary' : 'border-secondary/50'}`}>
+                                        {remedialMethod === 'ASLI' && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                                    </div>
+                                    <span className="font-medium text-text-main dark:text-white">Gunakan Soal Asli</span>
+                                </label>
+                                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${remedialMethod === 'BARU' ? 'border-primary bg-primary/5' : 'border-secondary/20 hover:border-primary/50'}`}>
+                                    <input type="radio" name="method" checked={remedialMethod === 'BARU'} onChange={() => setRemedialMethod('BARU')} className="hidden" />
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${remedialMethod === 'BARU' ? 'border-primary' : 'border-secondary/50'}`}>
+                                        {remedialMethod === 'BARU' && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                                    </div>
+                                    <span className="font-medium text-text-main dark:text-white">Buat Soal Baru</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Pemilihan Siswa */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="block text-sm font-bold text-text-main dark:text-white">
+                                    Pilih Siswa ({selectedStudentIds.length} terpilih)
+                                </label>
+                                <button
+                                    onClick={() => setSelectedStudentIds(remedialStudents.map(s => s.user.id))}
+                                    className="text-xs text-primary font-bold hover:underline"
+                                >
+                                    Pilih Semua
+                                </button>
+                            </div>
+                            <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                {remedialStudents.length === 0 ? (
+                                    <p className="text-sm text-text-secondary text-center py-4">Tidak ada siswa di kelas ini</p>
+                                ) : (
+                                    remedialStudents.map((student) => {
+                                        const isSelected = selectedStudentIds.includes(student.user.id)
+                                        return (
+                                            <div
+                                                key={student.id}
+                                                onClick={() => {
+                                                    if (isSelected) {
+                                                        setSelectedStudentIds(prev => prev.filter(id => id !== student.user.id))
+                                                    } else {
+                                                        setSelectedStudentIds(prev => [...prev, student.user.id])
+                                                    }
+                                                }}
+                                                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5 dark:bg-primary/20' : 'border-secondary/20 bg-white dark:bg-surface-dark hover:bg-secondary/5'}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {isSelected ? <CheckSquare className="text-primary w-5 h-5" /> : <Square className="text-secondary/50 w-5 h-5" />}
+                                                    <span className="font-medium text-text-main dark:text-white">{student.user.full_name}</span>
+                                                </div>
+                                                <div className={`px-2 py-1 rounded text-xs font-bold ${student.isBelowKKM ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'}`}>
+                                                    Nilai: {student.score}
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                            <Button variant="secondary" onClick={() => setShowRemedial(false)} className="flex-1">
+                                Batal
+                            </Button>
+                            <Button
+                                onClick={handleCreateRemedial}
+                                disabled={creating || selectedStudentIds.length === 0 || !remedialStartTime}
+                                loading={creating}
+                                className="flex-1"
+                            >
+                                Proses Remedial
+                            </Button>
+                        </div>
+                    </div>
+                ) : null}
             </Modal>
         </div>
     )

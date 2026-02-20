@@ -124,9 +124,9 @@ export default function SiswaMateriPage() {
                     <div>
                         <div className="flex items-center gap-2">
                             <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                                <Document set="bold" primaryColor="currentColor" size={24} className="text-blue-600 dark:text-blue-400" />
+                                <span className="text-blue-600 dark:text-blue-400"><Document set="bold" primaryColor="currentColor" size={24} /></span>
                             </div>
-                            <h1 className="text-2xl font-bold text-text-main dark:text-white">Materi Pembelajaran</h1>
+                            <h3 className="text-lg font-bold text-text-main dark:text-white">📄 Preview Document</h3>
                         </div>
                         <p className="text-text-secondary dark:text-[#A8BC9F] ml-12">Pilih mata pelajaran untuk melihat materi</p>
                     </div>
@@ -151,7 +151,7 @@ export default function SiswaMateriPage() {
 
                 {filteredSubjects.length === 0 ? (
                     <EmptyState
-                        icon={<Search set="bold" primaryColor="currentColor" size={48} className="text-secondary" />}
+                        icon={<span className="text-secondary"><Search set="bold" primaryColor="currentColor" size={48} /></span>}
                         title="Tidak Ditemukan"
                         description={searchQuery ? 'Tidak ada mata pelajaran yang cocok dengan pencarian.' : 'Belum ada materi pelajaran yang tersedia untuk kelas Anda.'}
                     />
@@ -236,7 +236,7 @@ export default function SiswaMateriPage() {
                                 const colors = getTypeColor(material.type)
                                 return (
                                     <div className={`w-12 h-12 rounded-2xl ${colors.bg} flex items-center justify-center flex-shrink-0`}>
-                                        <IconComponent set="bold" primaryColor="currentColor" size={24} className={colors.text} />
+                                        <span className={colors.text}><IconComponent set="bold" primaryColor="currentColor" size={24} /></span>
                                     </div>
                                 )
                             })()}

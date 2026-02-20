@@ -22,16 +22,51 @@ interface QuizResult {
     }[]
 }
 
+interface QuizQuestion {
+    id: string
+    question_text: string
+    points: number
+    question_type: string
+    correct_answer?: string
+    options?: string[]
+    passage_text?: string | null
+}
+
 interface Quiz {
     title: string
-    questions: {
-        id: string
-        question_text: string
-        points: number
-        question_type: string
-        correct_answer?: string
-        options?: string[]
-    }[]
+    questions: QuizQuestion[]
+}
+
+// Group questions by passage
+interface QuestionGroup {
+    passage_text: string | null
+    questions: { question: QuizQuestion; index: number }[]
+}
+
+function groupByPassage(questions: QuizQuestion[]): QuestionGroup[] {
+    const groups: QuestionGroup[] = []
+    let currentGroup: QuestionGroup | null = null
+
+    questions.forEach((q, idx) => {
+        const passage = q.passage_text || null
+
+        if (passage) {
+            // If same passage as current group, add to it
+            if (currentGroup && currentGroup.passage_text === passage) {
+                currentGroup.questions.push({ question: q, index: idx })
+            } else {
+                // Start a new passage group
+                currentGroup = { passage_text: passage, questions: [{ question: q, index: idx }] }
+                groups.push(currentGroup)
+            }
+        } else {
+            // No passage — standalone question
+            currentGroup = null
+            groups.push({ passage_text: null, questions: [{ question: q, index: idx }] })
+        }
+    })
+
+    return groups
 }
 
 export default function HasilKuisPage() {
@@ -81,6 +116,70 @@ export default function HasilKuisPage() {
         return result.answers.find(a => a.question_id === qId)
     }
 
+    const questionGroups = groupByPassage(quiz.questions)
+
+    const renderQuestion = (q: QuizQuestion, idx: number) => {
+        const userAnswer = getAnswerForQuestion(q.id)
+        const isCorrect = q.question_type === 'MULTIPLE_CHOICE'
+            ? userAnswer?.answer === q.correct_answer
+            : (userAnswer?.score === q.points)
+
+        return (
+            <div key={q.id} className="flex items-start gap-4">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${q.question_type === 'MULTIPLE_CHOICE'
+                    ? (isCorrect ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-red-500/20 text-red-600 dark:text-red-400')
+                    : 'bg-secondary/20 text-text-secondary'
+                    }`}>
+                    {q.question_type === 'MULTIPLE_CHOICE' ? (
+                        isCorrect ? <TickSquare set="bold" primaryColor="currentColor" size={16} /> : <CloseSquare set="bold" primaryColor="currentColor" size={16} />
+                    ) : (
+                        idx + 1
+                    )}
+                </div>
+                <div className="flex-1">
+                    <SmartText text={q.question_text} className="text-text-main dark:text-white mb-3" />
+
+                    <div className="bg-secondary/10 rounded-lg p-4 text-sm space-y-2">
+                        <div>
+                            <p className="text-text-secondary text-xs mb-1">Jawaban Kamu:</p>
+                            <p className="text-text-main dark:text-white font-medium">
+                                {q.question_type === 'MULTIPLE_CHOICE' && q.options && userAnswer?.answer
+                                    ? `${userAnswer.answer}. ${q.options[(userAnswer.answer.charCodeAt(0) - 65)] || ''}`
+                                    : userAnswer?.answer || '-'}
+                            </p>
+                        </div>
+
+                        {/* Show correct answer for Multiple Choice only if graded */}
+                        {result.is_graded && q.question_type === 'MULTIPLE_CHOICE' && !isCorrect && (
+                            <div className="pt-2 border-t border-secondary/20">
+                                <p className="text-green-600 dark:text-green-400 text-xs mb-1">Kunci Jawaban:</p>
+                                <p className="text-green-700 dark:text-green-300">
+                                    {q.correct_answer}. {q.options?.[(q.correct_answer?.charCodeAt(0) || 65) - 65]}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Feedback for Essay */}
+                        {q.question_type === 'ESSAY' && userAnswer?.feedback && (
+                            <div className="pt-2 border-t border-secondary/20">
+                                <p className="text-primary text-xs mb-1">Feedback Guru:</p>
+                                <p className="text-text-main dark:text-white">{userAnswer.feedback}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <div className="text-right">
+                    <span className={`text-sm font-bold ${q.question_type !== 'MULTIPLE_CHOICE' && !result.is_graded
+                        ? 'text-text-secondary'
+                        : (userAnswer?.score || 0) === q.points ? 'text-green-600 dark:text-green-400' : 'text-text-secondary'
+                        }`}>
+                        {userAnswer?.score || 0}/{q.points}
+                    </span>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6 max-w-3xl mx-auto">
             <PageHeader
@@ -90,8 +189,8 @@ export default function HasilKuisPage() {
             />
 
             <div className="text-center space-y-4">
-                <div className="inline-block p-4 rounded-full bg-primary/10 border border-primary/20 mb-4">
-                    <Star set="bold" primaryColor="currentColor" size={60} className="text-primary" />
+                <div className="inline-block p-4 rounded-full bg-primary/10 border border-primary/20 mb-4 text-primary">
+                    <Star set="bold" primaryColor="currentColor" size={60} />
                 </div>
                 <h2 className="text-2xl font-bold text-text-main dark:text-white">{quiz.title}</h2>
                 <p className="text-text-secondary">Kuis Selesai Dikerjakan</p>
@@ -116,68 +215,36 @@ export default function HasilKuisPage() {
             <div className="border-t border-secondary/20 pt-8 mt-8">
                 <h3 className="text-xl font-bold text-text-main dark:text-white mb-6">Review Jawaban</h3>
                 <div className="space-y-4">
-                    {quiz.questions.map((q, idx) => {
-                        const userAnswer = getAnswerForQuestion(q.id)
-                        const isCorrect = q.question_type === 'MULTIPLE_CHOICE'
-                            ? userAnswer?.answer === q.correct_answer
-                            : (userAnswer?.score === q.points)
-
-                        return (
-                            <Card key={q.id}>
-                                <div className="flex items-start gap-4">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${q.question_type === 'MULTIPLE_CHOICE'
-                                        ? (isCorrect ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-red-500/20 text-red-600 dark:text-red-400')
-                                        : 'bg-secondary/20 text-text-secondary'
-                                        }`}>
-                                        {q.question_type === 'MULTIPLE_CHOICE' ? (
-                                            isCorrect ? <TickSquare set="bold" primaryColor="currentColor" size={16} /> : <CloseSquare set="bold" primaryColor="currentColor" size={16} />
-                                        ) : (
-                                            idx + 1
-                                        )}
-                                    </div>
-                                    <div className="flex-1">
-                                        <SmartText text={q.question_text} className="text-text-main dark:text-white mb-3" />
-
-                                        <div className="bg-secondary/10 rounded-lg p-4 text-sm space-y-2">
-                                            <div>
-                                                <p className="text-text-secondary text-xs mb-1">Jawaban Kamu:</p>
-                                                <p className="text-text-main dark:text-white font-medium">
-                                                    {q.question_type === 'MULTIPLE_CHOICE' && q.options && userAnswer?.answer
-                                                        ? `${userAnswer.answer}. ${q.options[(userAnswer.answer.charCodeAt(0) - 65)] || ''}`
-                                                        : userAnswer?.answer || '-'}
-                                                </p>
-                                            </div>
-
-                                            {/* Show correct answer for Multiple Choice only if graded */}
-                                            {result.is_graded && q.question_type === 'MULTIPLE_CHOICE' && !isCorrect && (
-                                                <div className="pt-2 border-t border-secondary/20">
-                                                    <p className="text-green-600 dark:text-green-400 text-xs mb-1">Kunci Jawaban:</p>
-                                                    <p className="text-green-700 dark:text-green-300">
-                                                        {q.correct_answer}. {q.options?.[(q.correct_answer?.charCodeAt(0) || 65) - 65]}
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                            {/* Feedback for Essay */}
-                                            {q.question_type === 'ESSAY' && userAnswer?.feedback && (
-                                                <div className="pt-2 border-t border-secondary/20">
-                                                    <p className="text-primary text-xs mb-1">Feedback Guru:</p>
-                                                    <p className="text-text-main dark:text-white">{userAnswer.feedback}</p>
-                                                </div>
-                                            )}
+                    {questionGroups.map((group, groupIdx) => {
+                        if (group.passage_text) {
+                            // Passage group
+                            return (
+                                <Card key={`passage-${groupIdx}`} className="overflow-hidden">
+                                    <div className="bg-indigo-50 dark:bg-indigo-500/10 border-b border-indigo-200 dark:border-indigo-500/20 p-5 -m-6 mb-6 rounded-t-2xl">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-indigo-600 dark:text-indigo-400">
+                                                <Paper set="bold" primaryColor="currentColor" size={18} />
+                                            </span>
+                                            <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">Bacaan / Passage</span>
+                                        </div>
+                                        <div className="text-sm text-text-main dark:text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto pr-2">
+                                            <SmartText text={group.passage_text} />
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className={`text-sm font-bold ${q.question_type !== 'MULTIPLE_CHOICE' && !result.is_graded
-                                            ? 'text-text-secondary'
-                                            : (userAnswer?.score || 0) === q.points ? 'text-green-600 dark:text-green-400' : 'text-text-secondary'
-                                            }`}>
-                                            {userAnswer?.score || 0}/{q.points}
-                                        </span>
+                                    <div className="space-y-6 pt-2">
+                                        {group.questions.map(({ question, index }) => renderQuestion(question, index))}
                                     </div>
-                                </div>
-                            </Card>
-                        )
+                                </Card>
+                            )
+                        } else {
+                            // Standalone question
+                            const { question, index } = group.questions[0]
+                            return (
+                                <Card key={question.id}>
+                                    {renderQuestion(question, index)}
+                                </Card>
+                            )
+                        }
                     })}
                 </div>
             </div>

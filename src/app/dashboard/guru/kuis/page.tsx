@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { TimeCircle as Clock, Document as FileText, Graph as BarChart3, Game as Brain, Calendar, Plus, Game, Graph, Edit, Swap } from 'react-iconly'
-import { Loader2 } from 'lucide-react'
+import { Loader2, CheckSquare, Square, RefreshCw } from 'lucide-react'
 
 interface Quiz {
     id: string
@@ -19,8 +19,8 @@ interface Quiz {
     created_at: string
     teaching_assignment: {
         id: string
-        subject: { name: string }
-        class: { name: string }
+        subject: { name: string, kkm: number }
+        class: { id: string, name: string }
     }
     questions: { count: number }[]
 }
@@ -46,6 +46,14 @@ export default function GuruKuisPage() {
         duration_minutes: 30,
         is_randomized: true
     })
+
+    // Remedial States
+    const [showRemedial, setShowRemedial] = useState(false)
+    const [remedialQuiz, setRemedialQuiz] = useState<Quiz | null>(null)
+    const [remedialStudents, setRemedialStudents] = useState<any[]>([])
+    const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
+    const [remedialMethod, setRemedialMethod] = useState<'ASLI' | 'BARU'>('ASLI')
+    const [remedialLoading, setRemedialLoading] = useState(false)
 
     useEffect(() => {
         fetchData()
@@ -117,6 +125,93 @@ export default function GuruKuisPage() {
         fetchData()
     }
 
+    const handleOpenRemedial = async (quiz: Quiz) => {
+        setRemedialQuiz(quiz)
+        setShowRemedial(true)
+        setRemedialLoading(true)
+        setSelectedStudentIds([])
+        setRemedialMethod('ASLI')
+
+        try {
+            const classId = quiz.teaching_assignment?.class?.id
+            const kkm = quiz.teaching_assignment?.subject?.kkm || 75
+
+            if (!classId) throw new Error('Class ID missing')
+
+            const [studentsRes, subsRes] = await Promise.all([
+                fetch(`/api/students?class_id=${classId}`),
+                fetch(`/api/quiz-submissions?quiz_id=${quiz.id}`)
+            ])
+            const studentsData = await studentsRes.json()
+            const subsData = await subsRes.json()
+
+            const studentsWithScores = (Array.isArray(studentsData) ? studentsData : []).map((s: any) => {
+                const sub = (Array.isArray(subsData) ? subsData : []).find((sub: any) => sub.student_id === s.id)
+                let score = 0
+                if (sub && sub.max_score > 0) {
+                    score = (sub.total_score / sub.max_score) * 100
+                }
+                const isBelowKKM = score < kkm
+                return {
+                    ...s,
+                    score: Math.round(score),
+                    isBelowKKM
+                }
+            })
+
+            // Sort by score
+            studentsWithScores.sort((a, b) => a.score - b.score)
+
+            setRemedialStudents(studentsWithScores)
+            // Pre-select those below KKM
+            setSelectedStudentIds(studentsWithScores.filter((s: any) => s.isBelowKKM).map((s: any) => s.user.id))
+        } catch (error) {
+            console.error('Error fetching remedial data:', error)
+            alert('Gagal memuat data siswa untuk remedial')
+        } finally {
+            setRemedialLoading(false)
+        }
+    }
+
+    const handleCreateRemedial = async () => {
+        if (!remedialQuiz || selectedStudentIds.length === 0) return
+        setCreating(true)
+        try {
+            const payload = {
+                teaching_assignment_id: remedialQuiz.teaching_assignment.id,
+                title: `[Remedial] ${remedialQuiz.title}`,
+                description: `Remedial untuk kuis: ${remedialQuiz.title}`,
+                duration_minutes: remedialQuiz.duration_minutes,
+                is_randomized: remedialQuiz.is_randomized,
+                is_remedial: true,
+                remedial_for_id: remedialQuiz.id,
+                allowed_student_ids: selectedStudentIds,
+                duplicate_questions: remedialMethod === 'ASLI' // Custom flag to trigger backend duplication API
+            }
+
+            const res = await fetch('/api/quizzes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+
+            if (res.ok) {
+                const newQuiz = await res.json()
+                setShowRemedial(false)
+                fetchData() // Refresh list
+
+                // If they require new questions, redirect to quiz editor
+                if (remedialMethod === 'BARU') {
+                    router.push(`/dashboard/guru/kuis/${newQuiz.id}`)
+                }
+            } else {
+                alert('Gagal membuat quiz remedial')
+            }
+        } finally {
+            setCreating(false)
+        }
+    }
+
     return (
         <div className="space-y-6">
             <PageHeader
@@ -154,6 +249,11 @@ export default function GuruKuisPage() {
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1">
                                         <h3 className="font-bold text-text-main dark:text-white text-lg">{quiz.title}</h3>
+                                        {(quiz as any).is_remedial && (
+                                            <span className="px-2 py-0.5 bg-gradient-to-r from-orange-400 to-red-500 text-white text-[10px] font-bold rounded-full shadow-sm animate-pulse-slow">
+                                                REMEDIAL
+                                            </span>
+                                        )}
                                         {quiz.is_active ? (
                                             <span className="px-2 py-0.5 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 text-xs rounded-full">Aktif</span>
                                         ) : (
@@ -177,16 +277,24 @@ export default function GuruKuisPage() {
                                     {quiz.is_active && (
                                         <Link
                                             href={`/dashboard/guru/kuis/${quiz.id}/hasil`}
-                                            className="px-3 py-1.5 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full hover:bg-green-200 dark:hover:bg-green-500/30 transition-colors text-sm font-medium"
+                                            className="px-3 py-1.5 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full hover:bg-green-200 dark:hover:bg-green-500/30 transition-colors text-sm font-medium flex items-center gap-1"
                                         >
-                                            <span className="flex items-center gap-1"><Graph set="bold" primaryColor="currentColor" size={16} /> Hasil</span>
+                                            <Graph set="bold" primaryColor="currentColor" size={16} /> Hasil
                                         </Link>
+                                    )}
+                                    {quiz.is_active && !(quiz as any).is_remedial && (
+                                        <button
+                                            onClick={() => handleOpenRemedial(quiz)}
+                                            className="px-3 py-1.5 bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400 rounded-full hover:bg-orange-200 dark:hover:bg-orange-500/30 transition-colors text-sm font-medium flex items-center gap-1"
+                                        >
+                                            <RefreshCw className="w-4 h-4" /> Remedial
+                                        </button>
                                     )}
                                     <Link
                                         href={`/dashboard/guru/kuis/${quiz.id}`}
-                                        className="px-3 py-1.5 bg-primary/10 text-primary rounded-full hover:bg-primary/20 transition-colors text-sm font-medium"
+                                        className="px-3 py-1.5 bg-primary/10 text-primary rounded-full hover:bg-primary/20 transition-colors text-sm font-medium flex items-center gap-1"
                                     >
-                                        Edit Soal
+                                        <Edit set="bold" primaryColor="currentColor" size={16} /> Edit Soal
                                     </Link>
                                     <button
                                         onClick={() => handleDelete(quiz.id)}
@@ -287,6 +395,109 @@ export default function GuruKuisPage() {
                         </Button>
                     </div>
                 </div>
+            </Modal>
+
+            <Modal
+                open={showRemedial}
+                onClose={() => setShowRemedial(false)}
+                title="Tugaskan Remedial"
+            >
+                {remedialLoading ? (
+                    <div className="flex justify-center py-10">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    </div>
+                ) : remedialQuiz ? (
+                    <div className="space-y-6">
+                        {/* Info Kuis & KKM */}
+                        <div className="bg-secondary/10 p-4 rounded-xl">
+                            <h4 className="font-bold text-text-main dark:text-white mb-1">{remedialQuiz.title}</h4>
+                            <div className="flex gap-4 text-sm text-text-secondary dark:text-zinc-400">
+                                <span>Mata Pelajaran: <strong>{remedialQuiz.teaching_assignment?.subject?.name}</strong></span>
+                                <span>KKM: <strong className="text-red-500">{remedialQuiz.teaching_assignment?.subject?.kkm || 75}</strong></span>
+                            </div>
+                        </div>
+
+                        {/* Metode Soal */}
+                        <div className="space-y-3">
+                            <label className="block text-sm font-bold text-text-main dark:text-white">Metode Soal Remedial</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${remedialMethod === 'ASLI' ? 'border-primary bg-primary/5' : 'border-secondary/20 hover:border-primary/50'}`}>
+                                    <input type="radio" name="method" checked={remedialMethod === 'ASLI'} onChange={() => setRemedialMethod('ASLI')} className="hidden" />
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${remedialMethod === 'ASLI' ? 'border-primary' : 'border-secondary/50'}`}>
+                                        {remedialMethod === 'ASLI' && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                                    </div>
+                                    <span className="font-medium text-text-main dark:text-white">Gunakan Soal Asli</span>
+                                </label>
+                                <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${remedialMethod === 'BARU' ? 'border-primary bg-primary/5' : 'border-secondary/20 hover:border-primary/50'}`}>
+                                    <input type="radio" name="method" checked={remedialMethod === 'BARU'} onChange={() => setRemedialMethod('BARU')} className="hidden" />
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${remedialMethod === 'BARU' ? 'border-primary' : 'border-secondary/50'}`}>
+                                        {remedialMethod === 'BARU' && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                                    </div>
+                                    <span className="font-medium text-text-main dark:text-white">Buat Soal Baru</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Pemilihan Siswa */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="block text-sm font-bold text-text-main dark:text-white">
+                                    Pilih Siswa ({selectedStudentIds.length} terpilih)
+                                </label>
+                                <button
+                                    onClick={() => setSelectedStudentIds(remedialStudents.map(s => s.user.id))}
+                                    className="text-xs text-primary font-bold hover:underline"
+                                >
+                                    Pilih Semua
+                                </button>
+                            </div>
+                            <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                {remedialStudents.length === 0 ? (
+                                    <p className="text-sm text-text-secondary text-center py-4">Tidak ada siswa di kelas ini</p>
+                                ) : (
+                                    remedialStudents.map((student) => {
+                                        const isSelected = selectedStudentIds.includes(student.user.id)
+                                        return (
+                                            <div
+                                                key={student.id}
+                                                onClick={() => {
+                                                    if (isSelected) {
+                                                        setSelectedStudentIds(prev => prev.filter(id => id !== student.user.id))
+                                                    } else {
+                                                        setSelectedStudentIds(prev => [...prev, student.user.id])
+                                                    }
+                                                }}
+                                                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5 dark:bg-primary/20' : 'border-secondary/20 bg-white dark:bg-surface-dark hover:bg-secondary/5'}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {isSelected ? <CheckSquare className="text-primary w-5 h-5" /> : <Square className="text-secondary/50 w-5 h-5" />}
+                                                    <span className="font-medium text-text-main dark:text-white">{student.user.full_name}</span>
+                                                </div>
+                                                <div className={`px-2 py-1 rounded text-xs font-bold ${student.isBelowKKM ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'}`}>
+                                                    Nilai: {student.score}
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                            <Button variant="secondary" onClick={() => setShowRemedial(false)} className="flex-1">
+                                Batal
+                            </Button>
+                            <Button
+                                onClick={handleCreateRemedial}
+                                disabled={creating || selectedStudentIds.length === 0}
+                                loading={creating}
+                                className="flex-1"
+                            >
+                                Proses Remedial
+                            </Button>
+                        </div>
+                    </div>
+                ) : null}
             </Modal>
         </div>
     )

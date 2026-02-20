@@ -160,7 +160,69 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
-        return NextResponse.json(data)
+        let finalData = data || []
+
+        // If filtering by quizId and the user is a teacher, fetch remedial submissions and merge by highest score
+        if (quizId && user.role === 'GURU') {
+            const { data: remedials } = await supabase
+                .from('quizzes')
+                .select('id')
+                .eq('remedial_for_id', quizId)
+
+            if (remedials && remedials.length > 0) {
+                const remedialIds = remedials.map(r => r.id)
+                const { data: remedialSubmissions } = await supabase
+                    .from('quiz_submissions')
+                    .select(`
+                        *,
+                        quiz:quizzes(
+                            id,
+                            title,
+                            teaching_assignment:teaching_assignments(
+                                academic_year_id,
+                                subject:subjects(name)
+                            )
+                        ),
+                        student:students(
+                            id,
+                            nis,
+                            user:users(full_name)
+                        )
+                    `)
+                    .in('quiz_id', remedialIds)
+
+                if (remedialSubmissions && remedialSubmissions.length > 0) {
+                    // Merge based on student.id
+                    const studentHighestSubmissions = new Map<string, any>()
+
+                    // Add all original submissions first
+                    finalData.forEach((sub: any) => {
+                        studentHighestSubmissions.set(sub.student.id, sub)
+                    })
+
+                    // Overwrite if remedial score is higher or equal
+                    remedialSubmissions.forEach((sub: any) => {
+                        const existing = studentHighestSubmissions.get(sub.student.id)
+                        const currentScore = ((sub.total_score || 0) / (sub.max_score || 1))
+                        const existingScore = existing ? ((existing.total_score || 0) / (existing.max_score || 1)) : -1
+
+                        if (currentScore >= existingScore) {
+                            studentHighestSubmissions.set(sub.student.id, sub)
+                        }
+                    })
+
+                    finalData = Array.from(studentHighestSubmissions.values())
+                    // Sort by submitted_at again just in case
+                    finalData.sort((a: any, b: any) => {
+                        const dateA = a.submitted_at ? new Date(a.submitted_at).getTime() : 0;
+                        const dateB = b.submitted_at ? new Date(b.submitted_at).getTime() : 0;
+                        return dateB - dateA;
+                    });
+                }
+            }
+        }
+
+        return NextResponse.json(finalData)
     } catch (error) {
         console.error('Error fetching quiz submissions:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })

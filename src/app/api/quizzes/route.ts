@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
                 teaching_assignment:teaching_assignments(
                     id,
                     academic_year_id,
-                    subject:subjects(id, name),
+                    subject:subjects(id, name, kkm),
                     class:classes(id, name, school_level, grade_level),
                     teacher:teachers(id, user:users(full_name)),
                     academic_year:academic_years(id, name, is_active)
@@ -83,27 +83,31 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { teaching_assignment_id, title, description, duration_minutes, is_randomized, questions } = body
+        const { title, description, start_time, duration_minutes, teaching_assignment_id, is_randomized, max_violations, is_remedial, remedial_for_id, allowed_student_ids, duplicate_questions, questions } = body
 
-        if (!teaching_assignment_id || !title) {
-            return NextResponse.json({ error: 'Teaching assignment dan judul diperlukan' }, { status: 400 })
+        if (!title || duration_minutes === undefined || !teaching_assignment_id) {
+            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
         }
 
         // Create quiz (default: draft/inactive until published)
-        const { data: quiz, error: quizError } = await supabase
+        const { data: quiz, error } = await supabase
             .from('quizzes')
             .insert({
-                teaching_assignment_id,
                 title,
                 description,
-                duration_minutes: duration_minutes || 30,
+                start_time,
+                duration_minutes,
+                teaching_assignment_id,
+                is_active: false,
                 is_randomized: is_randomized ?? true,
-                is_active: false  // Draft by default
+                is_remedial: is_remedial || false,
+                remedial_for_id: remedial_for_id || null,
+                allowed_student_ids: allowed_student_ids || null
             })
             .select()
             .single()
 
-        if (quizError) throw quizError
+        if (error) throw error
 
         // Add questions if provided
         if (questions && questions.length > 0) {
@@ -122,6 +126,51 @@ export async function POST(request: NextRequest) {
                 .insert(questionsWithQuizId)
 
             if (questionsError) throw questionsError
+        }
+
+        // Handle question duplication if requested for Remedial
+        if (is_remedial && remedial_for_id && duplicate_questions) {
+            const { data: originalQuestions, error: fetchError } = await supabase
+                .from('quiz_questions')
+                .select('*')
+                .eq('quiz_id', remedial_for_id)
+
+            if (!fetchError && originalQuestions && originalQuestions.length > 0) {
+                const newQuestions = originalQuestions.map((q: any) => ({
+                    quiz_id: quiz.id,
+                    question_text: q.question_text,
+                    question_type: q.question_type,
+                    options: q.options,
+                    correct_answer: q.correct_answer,
+                    points: q.points,
+                    order_index: q.order_index
+                }))
+                const { error: duplicateError } = await supabase.from('quiz_questions').insert(newQuestions)
+                if (duplicateError) throw duplicateError
+            }
+        }
+        // Send notifications to remedial students
+        if (is_remedial && allowed_student_ids && allowed_student_ids.length > 0) {
+            try {
+                const { data: students } = await supabase
+                    .from('students')
+                    .select('user_id')
+                    .in('id', allowed_student_ids)
+
+                if (students && students.length > 0) {
+                    await supabase.from('notifications').insert(
+                        students.map((s: any) => ({
+                            user_id: s.user_id,
+                            type: 'REMEDIAL',
+                            title: `Remedial Kuis: ${title}`,
+                            message: 'Guru telah membuat kuis remedial untuk Anda. Segera kerjakan!',
+                            link: '/dashboard/siswa/kuis'
+                        }))
+                    )
+                }
+            } catch (notifError) {
+                console.error('Error sending remedial notification:', notifError)
+            }
         }
 
         return NextResponse.json(quiz)

@@ -18,6 +18,91 @@ export async function GET(request: NextRequest) {
         const unreadOnly = request.nextUrl.searchParams.get('unread') === 'true'
         const limit = parseInt(request.nextUrl.searchParams.get('limit') || '20')
 
+        // Fix #4: Auto-cleanup — delete notifications older than 30 days (lazy cleanup)
+        try {
+            const thirtyDaysAgo = new Date()
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+            await supabase
+                .from('notifications')
+                .delete()
+                .eq('user_id', user.id)
+                .eq('is_read', true)
+                .lt('created_at', thirtyDaysAgo.toISOString())
+        } catch (cleanupError) {
+            console.error('Notification cleanup error:', cleanupError)
+        }
+
+        // Fix #5: Deadline reminder — check for assignments due within 24 hours
+        if (user.role === 'SISWA') {
+            try {
+                // Get student's class
+                const { data: student } = await supabase
+                    .from('students')
+                    .select('class_id')
+                    .eq('user_id', user.id)
+                    .single()
+
+                if (student) {
+                    // Get teaching assignments for student's class
+                    const { data: tas } = await supabase
+                        .from('teaching_assignments')
+                        .select('id')
+                        .eq('class_id', student.class_id)
+
+                    if (tas && tas.length > 0) {
+                        const taIds = tas.map(t => t.id)
+                        const now = new Date()
+                        const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+                        // Find assignments with deadline within 24 hours
+                        const { data: urgentAssignments } = await supabase
+                            .from('assignments')
+                            .select('id, title, deadline, teaching_assignment_id')
+                            .in('teaching_assignment_id', taIds)
+                            .gt('deadline', now.toISOString())
+                            .lte('deadline', in24h.toISOString())
+
+                        if (urgentAssignments && urgentAssignments.length > 0) {
+                            for (const assignment of urgentAssignments) {
+                                // Check if student already submitted
+                                const { data: existingSub } = await supabase
+                                    .from('submissions')
+                                    .select('id')
+                                    .eq('assignment_id', assignment.id)
+                                    .eq('student_id', student.class_id) // just need to check by user
+                                    .limit(1)
+
+                                // Check if reminder already sent (within last 24h)
+                                const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+                                const { data: existingReminder } = await supabase
+                                    .from('notifications')
+                                    .select('id')
+                                    .eq('user_id', user.id)
+                                    .eq('type', 'DEADLINE_REMINDER')
+                                    .ilike('title', `%${assignment.title}%`)
+                                    .gt('created_at', twentyFourHoursAgo.toISOString())
+                                    .limit(1)
+
+                                if ((!existingSub || existingSub.length === 0) && (!existingReminder || existingReminder.length === 0)) {
+                                    const deadlineStr = new Date(assignment.deadline).toLocaleString('id-ID')
+                                    await supabase.from('notifications').insert({
+                                        user_id: user.id,
+                                        type: 'DEADLINE_REMINDER',
+                                        title: `⏰ Deadline Segera: ${assignment.title}`,
+                                        message: `Tugas ini harus dikumpulkan sebelum ${deadlineStr}`,
+                                        link: '/dashboard/siswa/tugas'
+                                    })
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (deadlineError) {
+                console.error('Deadline reminder error:', deadlineError)
+                // Don't block the main notification fetch
+            }
+        }
+
         let query = supabase
             .from('notifications')
             .select('*')

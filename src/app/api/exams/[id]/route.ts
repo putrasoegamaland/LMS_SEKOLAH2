@@ -101,7 +101,7 @@ export async function PUT(
                     await supabase.from('notifications').insert(
                         students.map(s => ({
                             user_id: s.user_id,
-                            type: 'TUGAS_BARU',
+                            type: 'ULANGAN_BARU',
                             title: `Ulangan Baru: ${data.title}`,
                             message: `${subjectName} - Mulai: ${startDate}`,
                             link: '/dashboard/siswa/ulangan'
