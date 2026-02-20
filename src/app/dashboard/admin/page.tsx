@@ -134,6 +134,12 @@ export default function AdminDashboard() {
             description: 'Kelola pengumuman',
             icon: Notification,
             href: '/dashboard/admin/pengumuman',
+        },
+        {
+            title: 'School Observer',
+            description: 'Monitor KPI Guru (14 Indikator)',
+            icon: Graph,
+            href: '/dashboard/admin/school-observer',
         }
     ]
 
