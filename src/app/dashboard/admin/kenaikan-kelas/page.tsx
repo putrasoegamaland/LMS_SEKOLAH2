@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { PageHeader, Modal, Button, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { AcademicYear, Class, SchoolLevel } from '@/lib/types'
@@ -133,7 +134,22 @@ export default function KenaikanKelasPage() {
                 // Final year
                 if (schoolLevel === 'SMP') {
                     action = 'TRANSITION'
-                    targetClassName = 'Transisi ke SMA'
+                    const classSection = cls.name.replace(/[^A-Za-z]/g, '').slice(-1) || 'A'
+                    const nextClass = classList.find(c =>
+                        c.grade_level === 1 &&
+                        c.school_level === 'SMA' &&
+                        c.name.includes(classSection)
+                    ) || classList.find(c =>
+                        c.grade_level === 1 &&
+                        c.school_level === 'SMA'
+                    )
+
+                    if (nextClass) {
+                        targetClassId = nextClass.id
+                        targetClassName = nextClass.name
+                    } else {
+                        targetClassName = `Kelas SMA 1 (belum ada)`
+                    }
                 } else {
                     action = 'GRADUATE'
                     targetClassName = 'Lulus (Alumni)'
@@ -190,12 +206,19 @@ export default function KenaikanKelasPage() {
 
     // Get possible target classes for a group (for dropdown)
     const getTargetOptions = (group: ClassGroup): Class[] => {
-        if (group.action !== 'PROMOTE') return []
-        const nextGrade = (group.sourceClass.grade_level || 0) + 1
-        return classes.filter(c =>
-            c.school_level === group.sourceClass.school_level &&
-            c.grade_level === nextGrade
-        )
+        if (group.action === 'PROMOTE') {
+            const nextGrade = (group.sourceClass.grade_level || 0) + 1
+            return classes.filter(c =>
+                c.school_level === group.sourceClass.school_level &&
+                c.grade_level === nextGrade
+            )
+        } else if (group.action === 'TRANSITION') {
+            return classes.filter(c =>
+                c.school_level === 'SMA' &&
+                c.grade_level === 1
+            )
+        }
+        return []
     }
 
     const toggleGroup = (classId: string) => {
@@ -269,7 +292,7 @@ export default function KenaikanKelasPage() {
         // Calculate total students to process
         const toProcess = classGroups
             .filter(g => selectedGroups.has(g.sourceClass.id))
-            .flatMap(g => g.students.filter(s => !g.excludedStudents.has(s.id)))
+            .flatMap(g => g.students)
 
         setProcessProgress({ current: 0, total: toProcess.length })
 
@@ -279,11 +302,30 @@ export default function KenaikanKelasPage() {
             for (const group of classGroups) {
                 if (!selectedGroups.has(group.sourceClass.id)) continue
 
-                const studentsToProcess = group.students.filter(s => !group.excludedStudents.has(s.id))
+                const studentsToProcess = group.students
 
                 for (const student of studentsToProcess) {
+                    const isExcluded = group.excludedStudents.has(student.id)
                     try {
-                        if (group.action === 'GRADUATE') {
+                        if (isExcluded) {
+                            // "Tinggal Kelas"
+                            const res = await fetch(`/api/students/${student.id}/promote`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    to_class_id: group.sourceClass.id,
+                                    to_academic_year_id: targetYear?.id || activeYear?.id,
+                                    notes: `Tinggal di kelas ${group.sourceClass.name} - ${activeYear?.name}`,
+                                    enrollment_status: 'RETAINED'
+                                })
+                            })
+                            if (res.ok) {
+                                successIds.push(student.id)
+                            } else {
+                                const errData = await res.json()
+                                errors.push(`Gagal memproses (Tinggal) ${student.user.full_name}: ${errData.error}`)
+                            }
+                        } else if (group.action === 'GRADUATE') {
                             // Use proper graduate endpoint
                             const res = await fetch(`/api/students/${student.id}/graduate`, {
                                 method: 'PUT',
@@ -298,49 +340,28 @@ export default function KenaikanKelasPage() {
                                 const errData = await res.json()
                                 errors.push(`Gagal memproses ${student.user.full_name}: ${errData.error}`)
                             }
-                        } else if (group.action === 'TRANSITION') {
-                            // Transition SMP → SMA: graduate from SMP first, then they'll be reassigned
-                            const res = await fetch(`/api/students/${student.id}/graduate`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    notes: `Transisi SMP → SMA dari ${group.sourceClass.name} - ${activeYear?.name}`
-                                })
-                            })
-                            if (res.ok) {
-                                // After graduating from SMP, update school_level to SMA
-                                await fetch(`/api/students/${student.id}`, {
+                        } else if (group.action === 'TRANSITION' || group.action === 'PROMOTE') {
+                            if (group.targetClassId) {
+                                // Use proper promote endpoint
+                                const actionName = group.action === 'TRANSITION' ? 'Transisi SMA' : 'Naik kelas'
+                                const res = await fetch(`/api/students/${student.id}/promote`, {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
-                                        school_level: 'SMA',
-                                        status: 'ACTIVE'
+                                        to_class_id: group.targetClassId,
+                                        to_academic_year_id: targetYear?.id || activeYear?.id,
+                                        notes: `${actionName} dari ${group.sourceClass.name} ke ${group.targetClassName} - ${activeYear?.name}`
                                     })
                                 })
-                                successIds.push(student.id)
+                                if (res.ok) {
+                                    successIds.push(student.id)
+                                } else {
+                                    const errData = await res.json()
+                                    errors.push(`Gagal memproses ${student.user.full_name}: ${errData.error}`)
+                                }
                             } else {
-                                const errData = await res.json()
-                                errors.push(`Gagal memproses ${student.user.full_name}: ${errData.error}`)
+                                errors.push(`${student.user.full_name}: Target kelas belum tersedia`)
                             }
-                        } else if (group.targetClassId) {
-                            // Use proper promote endpoint
-                            const res = await fetch(`/api/students/${student.id}/promote`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    to_class_id: group.targetClassId,
-                                    to_academic_year_id: targetYear?.id || activeYear?.id,
-                                    notes: `Naik kelas dari ${group.sourceClass.name} ke ${group.targetClassName} - ${activeYear?.name}`
-                                })
-                            })
-                            if (res.ok) {
-                                successIds.push(student.id)
-                            } else {
-                                const errData = await res.json()
-                                errors.push(`Gagal memproses ${student.user.full_name}: ${errData.error}`)
-                            }
-                        } else {
-                            errors.push(`${student.user.full_name}: Target kelas belum tersedia`)
                         }
                     } catch (err) {
                         errors.push(`${student.user.full_name}: Error tidak terduga`)
@@ -525,20 +546,29 @@ export default function KenaikanKelasPage() {
 
                         {/* Target class (dropdown for PROMOTE, static for others) */}
                         <div className="md:col-span-4">
-                            {group.action === 'PROMOTE' && targetOptions.length > 0 ? (
-                                <div className="relative">
-                                    <select
-                                        value={group.targetClassId}
-                                        onChange={(e) => updateTargetClass(group.sourceClass.id, e.target.value)}
-                                        disabled={group.isCompleted}
-                                        className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 appearance-none disabled:opacity-50"
-                                    >
-                                        {targetOptions.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name}</option>
-                                        ))}
-                                    </select>
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary text-xs">▼</div>
-                                </div>
+                            {(group.action === 'PROMOTE' || group.action === 'TRANSITION') ? (
+                                targetOptions.length > 0 ? (
+                                    <div className="relative">
+                                        <select
+                                            value={group.targetClassId}
+                                            onChange={(e) => updateTargetClass(group.sourceClass.id, e.target.value)}
+                                            disabled={group.isCompleted}
+                                            className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 appearance-none disabled:opacity-50"
+                                        >
+                                            {targetOptions.map(c => (
+                                                <option key={c.id} value={c.id}>{c.name}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary text-xs">▼</div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col">
+                                        <p className="font-medium text-amber-500 text-sm mb-1">{group.targetClassName}</p>
+                                        <Link href="/dashboard/admin/kelas" className="text-xs text-primary hover:underline group-hover:block transition-all">
+                                            + Buat Kelas Baru
+                                        </Link>
+                                    </div>
+                                )
                             ) : (
                                 <p className="font-medium text-text-main dark:text-white">{group.targetClassName}</p>
                             )}

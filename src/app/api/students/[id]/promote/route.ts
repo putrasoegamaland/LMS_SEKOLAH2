@@ -29,7 +29,7 @@ export async function PUT(
             return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
         }
 
-        const { to_class_id, to_academic_year_id, notes } = await request.json()
+        const { to_class_id, to_academic_year_id, notes, enrollment_status = 'PROMOTED' } = await request.json()
 
         // Validation
         if (!to_class_id || !to_academic_year_id) {
@@ -69,7 +69,7 @@ export async function PUT(
         // Verify target class exists
         const { data: targetClass, error: classError } = await supabase
             .from('classes')
-            .select('id, name, academic_year_id')
+            .select('id, name, academic_year_id, school_level')
             .eq('id', to_class_id)
             .single()
 
@@ -91,14 +91,13 @@ export async function PUT(
         // Transaction: End current enrollment and create new one
         const now = new Date().toISOString()
 
-        // 1. End current enrollment
         const { error: endEnrollmentError } = await supabase
             .from('student_enrollments')
             .update({
-                status: 'PROMOTED',
+                status: enrollment_status,
                 ended_at: now,
                 updated_at: now,
-                notes: notes || 'Promoted to next grade'
+                notes: notes || (enrollment_status === 'RETAINED' ? 'Tinggal di kelas yang sama' : 'Promoted to next grade')
             })
             .eq('id', activeEnrollment.id)
 
@@ -135,10 +134,13 @@ export async function PUT(
             }, { status: 500 })
         }
 
-        // 3. Update student's current class
+        // 3. Update student's current class and school level
         const { error: updateStudentError } = await supabase
             .from('students')
-            .update({ class_id: to_class_id })
+            .update({ 
+                class_id: to_class_id,
+                school_level: targetClass.school_level
+            })
             .eq('id', id)
 
         if (updateStudentError) {
