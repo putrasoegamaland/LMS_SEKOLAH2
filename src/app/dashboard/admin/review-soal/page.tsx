@@ -45,7 +45,7 @@ export default function ReviewSoalPage() {
     const [items, setItems] = useState<QueueItem[]>([])
     const [loading, setLoading] = useState(true)
     const [sourceFilter, setSourceFilter] = useState<string>('')
-    const [statusFilter, setStatusFilter] = useState<string>('')
+    const [statusFilter, setStatusFilter] = useState<string>('admin_review')
     const [search, setSearch] = useState('')
     const [expandedTeacher, setExpandedTeacher] = useState<string | null>(null)
     const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null)
@@ -87,6 +87,18 @@ export default function ReviewSoalPage() {
 
     const handleAction = async (item: QueueItem, decision: 'approve' | 'return' | 'archive') => {
         setActionLoading(item.id)
+
+        // Optimistic UI updates
+        const statusMap: Record<string, string> = {
+            approve: 'approved',
+            return: 'returned',
+            archive: 'archived'
+        }
+        const newStatus = statusMap[decision]
+        const oldStatus = item.status
+
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: newStatus } : i))
+
         try {
             const res = await fetch('/api/admin/review-queue', {
                 method: 'POST',
@@ -99,17 +111,62 @@ export default function ReviewSoalPage() {
                 })
             })
 
-            if (res.ok) {
-                fetchQueue()
-            } else {
+            if (!res.ok) {
+                // Revert locally
+                setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: oldStatus } : i))
                 alert('Gagal memproses review')
             }
         } catch (error) {
             console.error('Error processing review:', error)
+            setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: oldStatus } : i))
             alert('Terjadi kesalahan')
         } finally {
             setActionLoading(null)
         }
+    }
+
+    const handleBulkApprove = async (teacherId: string, questions: QueueItem[]) => {
+        const toApprove = questions.filter(q => q.status === 'admin_review' || q.status === 'ai_reviewing')
+        if (toApprove.length === 0) return
+
+        if (!confirm(`Apakah Anda yakin ingin menyetujui sekaligus ${toApprove.length} soal terpilih?`)) {
+            return
+        }
+
+        setActionLoading(`bulk-${teacherId}`)
+
+        // Optimistic UI
+        const toApproveIds = new Set(toApprove.map(q => q.id))
+        setItems(prev => prev.map(i => toApproveIds.has(i.id) ? { ...i, status: 'approved' } : i))
+
+        const failedIds: string[] = []
+
+        try {
+            await Promise.all(toApprove.map(async (item) => {
+                const res = await fetch('/api/admin/review-queue', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question_id: item.id,
+                        question_source: item.question_source,
+                        decision: 'approve',
+                        notes: notes[item.id] || ''
+                    })
+                })
+                if (!res.ok) failedIds.push(item.id)
+            }))
+        } catch (error) {
+            console.error('Bulk approve error', error)
+            alert('Kesalahan tak terduga saat memproses bulk approve.')
+        }
+
+        if (failedIds.length > 0) {
+            alert(`Berhasil menyetujui sebagian. Gagal menyetujui ${failedIds.length} soal.`)
+            // Revert failed items
+            setItems(prev => prev.map(i => failedIds.includes(i.id) ? { ...i, status: 'admin_review' } : i))
+        }
+
+        setActionLoading(null)
     }
 
     // ---- Helpers ----
@@ -338,7 +395,7 @@ export default function ReviewSoalPage() {
                         <Card key={group.teacherId} className="overflow-hidden" padding="">
                             {/* Teacher Header */}
                             <div
-                                className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors"
+                                className={`p-4 cursor-pointer transition-colors z-10 ${expandedTeacher === group.teacherId ? 'sticky top-0 bg-white dark:bg-zinc-900 border-b dark:border-zinc-800 shadow-sm' : 'hover:bg-gray-50 dark:hover:bg-zinc-800/50'}`}
                                 onClick={() => setExpandedTeacher(expandedTeacher === group.teacherId ? null : group.teacherId)}
                             >
                                 <div className="flex items-center gap-4">
@@ -396,6 +453,22 @@ export default function ReviewSoalPage() {
                             {/* Expanded: Question list */}
                             {expandedTeacher === group.teacherId && (
                                 <div className="border-t dark:border-zinc-700">
+                                    {(group.questions.some(q => q.status === 'admin_review' || q.status === 'ai_reviewing')) && (
+                                        <div className="px-4 py-3 bg-slate-50 dark:bg-zinc-800/50 border-b dark:border-zinc-700 flex justify-between items-center sm:sticky sm:top-[88px] z-10">
+                                            <span className="text-sm font-medium text-text-secondary dark:text-zinc-400">
+                                                Terdapat {group.questions.filter(q => q.status === 'admin_review' || q.status === 'ai_reviewing').length} soal yang perlu direview.
+                                            </span>
+                                            <Button
+                                                size="sm"
+                                                onClick={() => handleBulkApprove(group.teacherId, group.questions)}
+                                                disabled={actionLoading === `bulk-${group.teacherId}`}
+                                                className="!bg-emerald-600 hover:!bg-emerald-700 !text-white text-xs whitespace-nowrap"
+                                            >
+                                                <span className="mr-1 inline-flex"><CheckCircle set="bold" primaryColor="currentColor" size={14} /></span>
+                                                {actionLoading === `bulk-${group.teacherId}` ? 'Memproses...' : 'Setujui Semua'}
+                                            </Button>
+                                        </div>
+                                    )}
                                     {group.questions.map((item, idx) => (
                                         <div key={item.id} className={`${idx > 0 ? 'border-t dark:border-zinc-700/50' : ''}`}>
                                             {/* Question Row */}
@@ -489,19 +562,19 @@ export default function ReviewSoalPage() {
 
                                                     {/* Admin Actions */}
                                                     <div className="border-t dark:border-zinc-700 pt-3">
-                                                        <div className="flex flex-col sm:flex-row gap-2">
+                                                        <div className="flex flex-col md:flex-row gap-3">
                                                             <textarea
                                                                 placeholder="Catatan admin (opsional)..."
                                                                 value={notes[item.id] || ''}
                                                                 onChange={e => setNotes(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                                                className="flex-1 p-2 text-sm border rounded-lg bg-white dark:bg-zinc-800 dark:border-zinc-700 dark:text-white resize-none"
+                                                                className="flex-1 p-2 text-sm border rounded-lg bg-white dark:bg-zinc-800 dark:border-zinc-700 dark:text-white transition-colors focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none resize-none"
                                                                 rows={2}
                                                             />
-                                                            <div className="flex gap-2 sm:flex-col">
+                                                            <div className="flex flex-wrap md:flex-col gap-2 justify-center md:w-32 flex-shrink-0">
                                                                 <Button
                                                                     onClick={() => handleAction(item, 'approve')}
                                                                     disabled={actionLoading === item.id || item.status === 'approved'}
-                                                                    className="!bg-green-600 hover:!bg-green-700 !text-white text-xs flex-1"
+                                                                    className="!bg-emerald-600 hover:!bg-emerald-700 !text-white text-xs flex-1 md:flex-none justify-center transition-all shadow-sm"
                                                                 >
                                                                     <CheckCircle set="bold" primaryColor="currentColor" size={14} />
                                                                     Approve
@@ -510,7 +583,7 @@ export default function ReviewSoalPage() {
                                                                     variant="secondary"
                                                                     onClick={() => handleAction(item, 'return')}
                                                                     disabled={actionLoading === item.id}
-                                                                    className="!bg-amber-500 hover:!bg-amber-600 !text-white text-xs flex-1"
+                                                                    className="!bg-amber-500 hover:!bg-amber-600 !text-white text-xs flex-1 md:flex-none justify-center transition-all shadow-sm"
                                                                 >
                                                                     <RotateCcw set="bold" primaryColor="currentColor" size={14} />
                                                                     Return
@@ -519,7 +592,7 @@ export default function ReviewSoalPage() {
                                                                     variant="ghost"
                                                                     onClick={() => handleAction(item, 'archive')}
                                                                     disabled={actionLoading === item.id}
-                                                                    className="text-gray-500 text-xs flex-1"
+                                                                    className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xs flex-1 md:flex-none justify-center transition-all"
                                                                 >
                                                                     <Archive set="bold" primaryColor="currentColor" size={14} />
                                                                     Arsip

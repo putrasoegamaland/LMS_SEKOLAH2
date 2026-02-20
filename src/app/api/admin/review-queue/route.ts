@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
 
         // Build results from all 3 question tables
         const results: any[] = []
+        let totalCount = 0
 
         // Helper: fetch questions by source with their AI reviews
         async function fetchBySource(
@@ -43,20 +44,23 @@ export async function GET(request: NextRequest) {
         ) {
             let query = supabase
                 .from(tableName)
-                .select(`*, ${extraSelect}`)
+                .select(`*, ${extraSelect}`, { count: 'exact' })
 
             // Apply status filter if provided, otherwise show all
             if (statusFilter) {
                 query = query.eq('status', statusFilter)
             }
 
-            const { data, error } = await query
+            const { data, count, error } = await query
                 .order('created_at', { ascending: false })
+                .limit(1000)
 
             if (error) {
                 console.error(`Error fetching ${sourceType} questions:`, error)
                 return []
             }
+
+            if (count) totalCount += count
 
             if (!data) return []
 
@@ -112,8 +116,8 @@ export async function GET(request: NextRequest) {
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         })
 
-        // Paginate
-        const total = results.length
+        // Paginate using the true database count
+        const total = totalCount || results.length
         const paginated = results.slice(offset, offset + limit)
 
         return NextResponse.json({
