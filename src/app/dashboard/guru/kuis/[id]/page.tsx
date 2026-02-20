@@ -7,7 +7,8 @@ import SmartText from '@/components/SmartText'
 import MathTextarea from '@/components/MathTextarea'
 // import { PenLine, WandSparkles, FolderOpen, Plus } from 'lucide-react'
 import { Edit, Discovery, Folder, Plus, Upload, Danger, InfoCircle, TickSquare, CloseSquare, Delete, Document, Search } from 'react-iconly'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Eye } from 'lucide-react'
+import PreviewModal from '@/components/PreviewModal'
 import RapihAIModal from '@/components/RapihAIModal'
 import QuestionImageUpload from '@/components/QuestionImageUpload'
 import { PageHeader, Button, Modal, EmptyState } from '@/components/ui'
@@ -93,6 +94,7 @@ export default function EditQuizPage() {
     const [isBulkSelectMode, setIsBulkSelectMode] = useState(false)
 
     const [showPublishConfirm, setShowPublishConfirm] = useState(false)
+    const [showPreview, setShowPreview] = useState(false)
     const [publishing, setPublishing] = useState(false)
     const [showSuccessModal, setShowSuccessModal] = useState(false)
 
@@ -362,6 +364,14 @@ export default function EditQuizPage() {
                 )}
                 action={
                     <div className="flex items-center gap-4">
+                        <Button
+                            variant="secondary"
+                            onClick={() => setShowPreview(true)}
+                            disabled={questions.length === 0}
+                        >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Preview
+                        </Button>
                         {!quiz.is_active && (
                             <Button
                                 onClick={handlePublishClick}
@@ -1342,6 +1352,17 @@ export default function EditQuizPage() {
                     </div>
                 </div>
             </Modal>
+
+            {/* Preview Modal */}
+            <PreviewModal
+                open={showPreview}
+                onClose={() => setShowPreview(false)}
+                title={quiz.title}
+                description={quiz.description}
+                durationMinutes={30}
+                questions={questions}
+                type="kuis"
+            />
         </div >
     )
 }

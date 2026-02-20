@@ -42,6 +42,7 @@ const adminNav: NavItem[] = [
     { icon: Chart, label: 'Analitik', path: '/dashboard/admin/analitik' },
     { icon: Ticket, label: 'Penugasan', path: '/dashboard/admin/penugasan' },
     { icon: Notification, label: 'Info', path: '/dashboard/admin/pengumuman' },
+    { icon: Calendar, label: 'Jadwal', path: '/dashboard/admin/jadwal' },
 ]
 
 export default function BottomNavigation() {

@@ -6,7 +6,8 @@ import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import SmartText from '@/components/SmartText'
 import Card from '@/components/ui/Card'
 import RapihAIModal from '@/components/RapihAIModal'
-import { Folder, Plus, Document, Delete, Edit, Discovery, Paper, ShieldDone, TickSquare, InfoCircle, CloseSquare, Download } from 'react-iconly'
+import { Folder, Plus, Document, Delete, Edit, Discovery, Paper, ShieldDone, TickSquare, InfoCircle, CloseSquare, Download, Search, Danger } from 'react-iconly'
+import { Copy, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link' // Keep this import as it's used later
 import AIReviewPanel from '@/components/AIReviewPanel'
 
@@ -62,10 +63,25 @@ export default function BankSoalPage() {
     const [loading, setLoading] = useState(true)
     const [selectedSubject, setSelectedSubject] = useState('')
     const [selectedDifficulty, setSelectedDifficulty] = useState('')
+    const [searchQuery, setSearchQuery] = useState('')
+    const [selectedType, setSelectedType] = useState('')
+    const [currentPage, setCurrentPage] = useState(1)
+    const ITEMS_PER_PAGE = 20
 
     // Selection state for export
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [selectedPassageIds, setSelectedPassageIds] = useState<Set<string>>(new Set())
     const [showExportConfirm, setShowExportConfirm] = useState(false)
+
+    // Delete modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false)
+    const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+    const [deleteTargetType, setDeleteTargetType] = useState<'question' | 'passage'>('question')
+    const [deleteTargetLabel, setDeleteTargetLabel] = useState('')
+    const [deleting, setDeleting] = useState(false)
+
+    // Duplicate state
+    const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
 
     // Modal & Form Control
     const [showAddModal, setShowAddModal] = useState(false)
@@ -160,10 +176,56 @@ export default function BankSoalPage() {
         }
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Hapus soal dari bank soal?')) return
-        await fetch(`/api/question-bank?id=${id}`, { method: 'DELETE' })
-        fetchData()
+    const openDeleteModal = (id: string, type: 'question' | 'passage', label: string) => {
+        setDeleteTargetId(id)
+        setDeleteTargetType(type)
+        setDeleteTargetLabel(label)
+        setShowDeleteModal(true)
+    }
+
+    const executeDelete = async () => {
+        if (!deleteTargetId) return
+        setDeleting(true)
+        try {
+            if (deleteTargetType === 'question') {
+                await fetch(`/api/question-bank?id=${deleteTargetId}`, { method: 'DELETE' })
+            } else {
+                await fetch(`/api/passages?id=${deleteTargetId}`, { method: 'DELETE' })
+            }
+            await fetchData()
+            setShowDeleteModal(false)
+            setDeleteTargetId(null)
+        } catch (error) {
+            console.error('Error:', error)
+            alert('Gagal menghapus')
+        } finally {
+            setDeleting(false)
+        }
+    }
+
+    const handleDuplicate = async (q: QuestionBankItem) => {
+        setDuplicatingId(q.id)
+        try {
+            await fetch('/api/question-bank', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify([{
+                    question_text: q.question_text,
+                    question_type: q.question_type,
+                    options: q.options,
+                    correct_answer: q.correct_answer,
+                    difficulty: q.difficulty,
+                    subject_id: q.subject?.id || null,
+                    image_url: q.image_url || null
+                }])
+            })
+            await fetchData()
+        } catch (error) {
+            console.error('Error:', error)
+            alert('Gagal menduplikat soal')
+        } finally {
+            setDuplicatingId(null)
+        }
     }
 
     const handleSubmitStandalone = async () => {
@@ -291,16 +353,7 @@ export default function BankSoalPage() {
         }
     }
 
-    const handleDeletePassage = async (id: string) => {
-        if (!confirm('Hapus passage ini beserta semua soalnya?')) return
-        try {
-            await fetch(`/api/passages?id=${id}`, { method: 'DELETE' })
-            await fetchData()
-        } catch (error) {
-            console.error('Error:', error)
-            alert('Gagal menghapus passage')
-        }
-    }
+    // handleDeletePassage is now handled by openDeleteModal + executeDelete
 
     const handleAddEditPassageQuestion = () => {
         setEditPassageForm({
@@ -374,8 +427,30 @@ export default function BankSoalPage() {
     const filteredQuestions = questions.filter((q) => {
         if (selectedSubject && q.subject?.id !== selectedSubject) return false
         if (selectedDifficulty && q.difficulty !== selectedDifficulty) return false
+        if (selectedType && q.question_type !== selectedType) return false
+        if (searchQuery && !q.question_text.toLowerCase().includes(searchQuery.toLowerCase())) return false
         return true
     })
+
+    const filteredPassages = passages.filter((p) => {
+        if (selectedSubject && p.subject?.id !== selectedSubject) return false
+        if (selectedDifficulty && !p.questions?.some(q => q.difficulty === selectedDifficulty)) return false
+        if (selectedType && !p.questions?.some(q => q.question_type === selectedType)) return false
+        if (searchQuery) {
+            const passageMatch = p.passage_text.toLowerCase().includes(searchQuery.toLowerCase())
+            const titleMatch = p.title?.toLowerCase().includes(searchQuery.toLowerCase())
+            const questionMatch = p.questions?.some(q => q.question_text.toLowerCase().includes(searchQuery.toLowerCase()))
+            if (!passageMatch && !titleMatch && !questionMatch) return false
+        }
+        return true
+    })
+
+    // Pagination
+    const totalPages = Math.ceil(filteredQuestions.length / ITEMS_PER_PAGE)
+    const paginatedQuestions = filteredQuestions.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    )
 
     const getDifficultyBadge = (difficulty: string) => {
         switch (difficulty) {
@@ -418,28 +493,56 @@ export default function BankSoalPage() {
 
     const handleExport = () => {
         const questionsToExport = filteredQuestions.filter(q => selectedIds.has(q.id))
+        const passagesToExport = filteredPassages.filter(p => selectedPassageIds.has(p.id))
+        let questionNumber = 0
+
+        const passageHtml = passagesToExport.map(p => `
+            <div style="margin-bottom: 32px; page-break-inside: avoid; border: 1px solid #ddd; padding: 16px; border-radius: 8px;">
+                <h3 style="margin-bottom: 8px;">${p.title || 'Bacaan'}</h3>
+                <p style="margin-bottom: 16px; color:#444; white-space: pre-wrap;">${p.passage_text}</p>
+                ${(p.questions || []).map(q => {
+            questionNumber++
+            return `<div style="margin-bottom: 12px;">
+                        <p style="margin-bottom: 4px;"><strong>${questionNumber}. ${q.question_text}</strong></p>
+                        ${q.question_type === 'MULTIPLE_CHOICE' && q.options ? `
+                            <ul style="list-style:none; padding-left:20px; margin:0;">
+                                ${q.options.map((opt, optIdx) => `
+                                    <li style="margin-bottom: 4px; ${q.correct_answer === String.fromCharCode(65 + optIdx) ? 'font-weight:bold; color:green;' : ''}">
+                                        ${String.fromCharCode(65 + optIdx)}. ${opt}
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        ` : ''}
+                    </div>`
+        }).join('')}
+            </div>
+        `).join('')
+
+        const standaloneHtml = questionsToExport.map(q => {
+            questionNumber++
+            return `<div style="margin-bottom: 24px; page-break-inside: avoid;">
+                <p style="margin-bottom: 8px;"><strong>${questionNumber}. ${q.question_text}</strong></p>
+                ${q.question_type === 'MULTIPLE_CHOICE' && q.options ? `
+                    <ul style="list-style:none; padding-left:20px; margin:0;">
+                        ${q.options.map((opt, optIdx) => `
+                            <li style="margin-bottom: 4px; ${q.correct_answer === String.fromCharCode(65 + optIdx) ? 'font-weight:bold; color:green;' : ''}">
+                                ${String.fromCharCode(65 + optIdx)}. ${opt}
+                            </li>
+                        `).join('')}
+                    </ul>
+                ` : ''}
+            </div>`
+        }).join('')
 
         const htmlContent = `
             <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
             <head><meta charset='utf-8'><title>Bank Soal</title></head>
             <body style="font-family: Arial, sans-serif;">
             <h1 style="text-align:center;">Bank Soal</h1>
-            <p style="text-align:center; color:#666;">Total: ${questionsToExport.length} Soal</p>
+            <p style="text-align:center; color:#666;">Total: ${questionNumber} Soal</p>
             <hr/>
-            ${questionsToExport.map((q, idx) => `
-                <div style="margin-bottom: 24px; page-break-inside: avoid;">
-                    <p style="margin-bottom: 8px;"><strong>${idx + 1}. ${q.question_text}</strong></p>
-                    ${q.question_type === 'MULTIPLE_CHOICE' && q.options ? `
-                        <ul style="list-style:none; padding-left:20px; margin:0;">
-                            ${q.options.map((opt, optIdx) => `
-                                <li style="margin-bottom: 4px; ${q.correct_answer === String.fromCharCode(65 + optIdx) ? 'font-weight:bold; color:green;' : ''}">
-                                    ${String.fromCharCode(65 + optIdx)}. ${opt}
-                                </li>
-                            `).join('')}
-                        </ul>
-                    ` : ''}
-                </div>
-            `).join('')}
+            ${passageHtml}
+            ${standaloneHtml}
             </body>
             </html>
         `
@@ -454,13 +557,20 @@ export default function BankSoalPage() {
         URL.revokeObjectURL(url)
         setShowExportConfirm(false)
         setSelectedIds(new Set())
+        setSelectedPassageIds(new Set())
     }
 
+    const totalSelected = selectedIds.size + selectedPassageIds.size
+
     const toggleSelectAll = () => {
-        if (selectedIds.size === filteredQuestions.length && filteredQuestions.length > 0) {
+        const allQSelected = selectedIds.size === filteredQuestions.length && filteredQuestions.length > 0
+        const allPSelected = selectedPassageIds.size === filteredPassages.length && filteredPassages.length > 0
+        if (allQSelected && allPSelected) {
             setSelectedIds(new Set())
+            setSelectedPassageIds(new Set())
         } else {
             setSelectedIds(new Set(filteredQuestions.map(q => q.id)))
+            setSelectedPassageIds(new Set(filteredPassages.map(p => p.id)))
         }
     }
 
@@ -591,55 +701,81 @@ export default function BankSoalPage() {
                         </div>
                         <Button
                             onClick={() => setShowExportConfirm(true)}
-                            disabled={selectedIds.size === 0}
+                            disabled={totalSelected === 0}
                             className="disabled:opacity-50 disabled:cursor-not-allowed"
                             icon={<Download set="bold" primaryColor="currentColor" size={20} />}
                         >
-                            Export ({selectedIds.size})
+                            Export ({totalSelected})
                         </Button>
                     </div>
                 }
             />
 
-            {/* Filters & Select All */}
-            <div className="flex flex-col sm:flex-row gap-4 items-center bg-white dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-secondary/10">
-                <select
-                    value={selectedSubject}
-                    onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="w-full sm:w-auto px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer hover:bg-secondary/10 transition-colors"
-                >
-                    <option value="">Semua Mata Pelajaran</option>
-                    {subjects.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                </select>
-                <select
-                    value={selectedDifficulty}
-                    onChange={(e) => setSelectedDifficulty(e.target.value)}
-                    className="w-full sm:w-auto px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer hover:bg-secondary/10 transition-colors"
-                >
-                    <option value="">Semua Kesulitan</option>
-                    <option value="EASY">Mudah</option>
-                    <option value="MEDIUM">Sedang</option>
-                    <option value="HARD">Sulit</option>
-                </select>
-                {filteredQuestions.length > 0 && (
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={toggleSelectAll}
-                        className="w-full sm:w-auto"
+            {/* Search & Filters */}
+            <div className="space-y-3">
+                <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">
+                        <Search set="light" primaryColor="currentColor" size={20} />
+                    </div>
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
+                        placeholder="Cari soal berdasarkan kata kunci..."
+                        className="w-full pl-10 pr-4 py-3 bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary placeholder-text-secondary"
+                    />
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 items-center">
+                    <select
+                        value={selectedSubject}
+                        onChange={(e) => { setSelectedSubject(e.target.value); setCurrentPage(1) }}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer hover:bg-secondary/10 transition-colors"
                     >
-                        {selectedIds.size === filteredQuestions.length && filteredQuestions.length > 0 ? 'Batal Pilih Semua' : 'Pilih Semua'}
-                    </Button>
-                )}
+                        <option value="">Semua Mata Pelajaran</option>
+                        {subjects.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={selectedDifficulty}
+                        onChange={(e) => { setSelectedDifficulty(e.target.value); setCurrentPage(1) }}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer hover:bg-secondary/10 transition-colors"
+                    >
+                        <option value="">Semua Kesulitan</option>
+                        <option value="EASY">Mudah</option>
+                        <option value="MEDIUM">Sedang</option>
+                        <option value="HARD">Sulit</option>
+                    </select>
+                    <select
+                        value={selectedType}
+                        onChange={(e) => { setSelectedType(e.target.value); setCurrentPage(1) }}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer hover:bg-secondary/10 transition-colors"
+                    >
+                        <option value="">Semua Tipe</option>
+                        <option value="MULTIPLE_CHOICE">Pilihan Ganda</option>
+                        <option value="ESSAY">Essay</option>
+                    </select>
+                    {(filteredQuestions.length > 0 || filteredPassages.length > 0) && (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={toggleSelectAll}
+                            className="w-full sm:w-auto"
+                        >
+                            {selectedIds.size === filteredQuestions.length && selectedPassageIds.size === filteredPassages.length && (filteredQuestions.length + filteredPassages.length) > 0 ? 'Batal Pilih Semua' : 'Pilih Semua'}
+                        </Button>
+                    )}
+                    {(searchQuery || selectedSubject || selectedDifficulty || selectedType) && (
+                        <span className="text-xs text-text-secondary">Ditemukan: {filteredQuestions.length} soal, {filteredPassages.length} passage</span>
+                    )}
+                </div>
             </div>
 
             {loading ? (
                 <div className="flex justify-center py-12">
                     <div className="animate-spin text-3xl text-primary"><Discovery set="bold" primaryColor="currentColor" size={40} /></div>
                 </div>
-            ) : filteredQuestions.length === 0 && passages.length === 0 ? (
+            ) : filteredQuestions.length === 0 && filteredPassages.length === 0 ? (
                 <EmptyState
                     icon={<div className="text-secondary"><Folder set="bold" primaryColor="currentColor" size={48} /></div>}
                     title="Bank Soal Kosong"
@@ -653,21 +789,34 @@ export default function BankSoalPage() {
             ) : (
                 <div className="space-y-6">
                     {/* Passages Section */}
-                    {passages.length > 0 && (
+                    {filteredPassages.length > 0 && (
                         <div className="space-y-4">
                             <h3 className="text-lg font-bold text-text-main dark:text-white flex items-center gap-2">
                                 <Document set="bold" primaryColor="currentColor" size={20} />
-                                Soal dengan Bacaan ({passages.length})
+                                Soal dengan Bacaan ({filteredPassages.length})
                             </h3>
-                            {passages.map((p) => (
-                                <div key={p.id} className="border-2 border-teal-200 dark:border-teal-700 rounded-2xl overflow-hidden bg-teal-50/50 dark:bg-teal-900/20">
+                            {filteredPassages.map((p) => (
+                                <label key={p.id} className={`block border-2 rounded-2xl overflow-hidden cursor-pointer transition-all ${selectedPassageIds.has(p.id) ? 'border-primary bg-primary/5' : 'border-teal-200 dark:border-teal-700 bg-teal-50/50 dark:bg-teal-900/20'}`}>
                                     <div className="p-4 bg-teal-100/50 dark:bg-teal-800/30 border-b border-teal-200 dark:border-teal-700">
                                         <div className="flex items-center justify-between">
-                                            <div>
-                                                <h4 className="font-bold text-text-main dark:text-white flex items-center gap-2">
-                                                    <Document set="bold" primaryColor="currentColor" size={16} /> {p.title || 'Bacaan Tanpa Judul'}
-                                                </h4>
-                                                <span className="text-xs text-teal-600 dark:text-teal-400">{p.questions?.length || 0} soal terkait</span>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPassageIds.has(p.id)}
+                                                    onChange={(e) => {
+                                                        const newSet = new Set(selectedPassageIds)
+                                                        if (e.target.checked) newSet.add(p.id)
+                                                        else newSet.delete(p.id)
+                                                        setSelectedPassageIds(newSet)
+                                                    }}
+                                                    className="w-5 h-5 rounded-md border-secondary/30 text-primary focus:ring-primary bg-secondary/10"
+                                                />
+                                                <div>
+                                                    <h4 className="font-bold text-text-main dark:text-white flex items-center gap-2">
+                                                        <Document set="bold" primaryColor="currentColor" size={16} /> {p.title || 'Bacaan Tanpa Judul'}
+                                                    </h4>
+                                                    <span className="text-xs text-teal-600 dark:text-teal-400">{p.questions?.length || 0} soal terkait</span>
+                                                </div>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 {p.subject && (
@@ -676,14 +825,14 @@ export default function BankSoalPage() {
                                                     </span>
                                                 )}
                                                 <button
-                                                    onClick={() => handleEditPassage(p)}
+                                                    onClick={(e) => { e.preventDefault(); handleEditPassage(p) }}
                                                     className="p-2 hover:bg-teal-200 dark:hover:bg-teal-700 rounded-lg transition-colors"
                                                     title="Edit passage"
                                                 >
                                                     <Edit set="bold" primaryColor="currentColor" size={16} />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDeletePassage(p.id)}
+                                                    onClick={(e) => { e.preventDefault(); openDeleteModal(p.id, 'passage', p.title || 'Bacaan') }}
                                                     className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                                                     title="Hapus passage"
                                                 >
@@ -727,21 +876,21 @@ export default function BankSoalPage() {
                                             ))}
                                         </div>
                                     )}
-                                </div>
+                                </label>
                             ))}
                         </div>
                     )}
 
                     {/* Standalone Questions Section */}
-                    {filteredQuestions.length > 0 && (
+                    {paginatedQuestions.length > 0 && (
                         <div className="space-y-4">
-                            {passages.length > 0 && (
+                            {filteredPassages.length > 0 && (
                                 <h3 className="text-lg font-bold text-text-main dark:text-white flex items-center gap-2">
                                     <Paper set="bold" primaryColor="currentColor" size={20} /> Soal Biasa ({filteredQuestions.length})
                                 </h3>
                             )}
                             <div className="grid grid-cols-1 gap-4">
-                                {filteredQuestions.map((q, idx) => (
+                                {paginatedQuestions.map((q, idx) => (
                                     <label
                                         key={q.id}
                                         className={`block bg-white dark:bg-surface-dark border rounded-2xl p-5 cursor-pointer transition-all hover:shadow-md ${selectedIds.has(q.id)
@@ -767,7 +916,7 @@ export default function BankSoalPage() {
                                                 />
                                             </div>
                                             <div className="w-8 h-8 rounded-lg bg-secondary/10 text-primary flex items-center justify-center font-bold text-sm flex-shrink-0">
-                                                {idx + 1}
+                                                {(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -798,20 +947,32 @@ export default function BankSoalPage() {
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex flex-col items-center gap-1">
                                                 <Button
                                                     variant="secondary"
                                                     size="sm"
                                                     onClick={(e: any) => { e.preventDefault(); handleEditQuestion(q) }}
                                                     className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                                                    title="Edit"
                                                 >
                                                     <Edit set="bold" primaryColor="currentColor" size={16} />
                                                 </Button>
                                                 <Button
                                                     variant="secondary"
                                                     size="sm"
-                                                    onClick={(e: any) => { e.preventDefault(); handleDelete(q.id) }}
+                                                    onClick={(e: any) => { e.preventDefault(); handleDuplicate(q) }}
+                                                    disabled={duplicatingId === q.id}
+                                                    className="text-teal-500 hover:text-teal-600 hover:bg-teal-50"
+                                                    title="Duplikat"
+                                                >
+                                                    {duplicatingId === q.id ? <span className="animate-spin">⏳</span> : <Copy className="w-4 h-4" />}
+                                                </Button>
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    onClick={(e: any) => { e.preventDefault(); openDeleteModal(q.id, 'question', q.question_text.substring(0, 50)) }}
                                                     className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                    title="Hapus"
                                                 >
                                                     <Delete set="bold" primaryColor="currentColor" size={20} />
                                                 </Button>
@@ -820,6 +981,29 @@ export default function BankSoalPage() {
                                     </label>
                                 ))}
                             </div>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-center gap-4 py-4">
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="p-2 rounded-lg hover:bg-secondary/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <ChevronLeft className="w-5 h-5" />
+                                    </button>
+                                    <span className="text-sm text-text-secondary">
+                                        Halaman <span className="font-bold text-text-main dark:text-white">{currentPage}</span> dari <span className="font-bold text-text-main dark:text-white">{totalPages}</span>
+                                    </span>
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="p-2 rounded-lg hover:bg-secondary/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -1447,6 +1631,52 @@ export default function BankSoalPage() {
                         <Button variant="secondary" onClick={() => setShowEditPassageModal(false)} className="flex-1">Batal</Button>
                         <Button onClick={handleSaveEditPassage} disabled={saving} className="flex-1">
                             {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                open={showDeleteModal}
+                onClose={() => { setShowDeleteModal(false); setDeleteTargetId(null) }}
+                title="Konfirmasi Hapus"
+            >
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                        <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                            <Danger set="bold" primaryColor="currentColor" size={24} />
+                        </div>
+                        <div>
+                            <p className="font-bold text-red-700 dark:text-red-400">
+                                {deleteTargetType === 'passage' ? 'Hapus Passage?' : 'Hapus Soal?'}
+                            </p>
+                            <p className="text-sm text-red-600/80 dark:text-red-300/80">
+                                {deleteTargetType === 'passage'
+                                    ? 'Passage beserta semua soal di dalamnya akan dihapus permanen.'
+                                    : 'Soal ini akan dihapus permanen dari Bank Soal.'}
+                            </p>
+                        </div>
+                    </div>
+                    {deleteTargetLabel && (
+                        <p className="text-sm text-text-secondary px-1 line-clamp-2">
+                            &quot;{deleteTargetLabel}...&quot;
+                        </p>
+                    )}
+                    <div className="flex gap-3">
+                        <Button
+                            variant="secondary"
+                            onClick={() => { setShowDeleteModal(false); setDeleteTargetId(null) }}
+                            className="flex-1 justify-center"
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            onClick={executeDelete}
+                            disabled={deleting}
+                            className="flex-1 justify-center bg-red-500 hover:bg-red-600 text-white"
+                        >
+                            {deleting ? 'Menghapus...' : 'Ya, Hapus'}
                         </Button>
                     </div>
                 </div>

@@ -8,7 +8,7 @@ import Card from '@/components/ui/Card'
 import StatsCard from '@/components/ui/StatsCard'
 import {
     Calendar, Category, Document, Work, User, AddUser, Chart, Graph,
-    Ticket, Notification, ShieldDone, Bookmark, Swap
+    Ticket, Notification, ShieldDone, Bookmark
 } from 'react-iconly'
 
 interface StatsData {
@@ -82,12 +82,6 @@ export default function AdminDashboard() {
             href: '/dashboard/admin/kenaikan-kelas',
         },
         {
-            title: 'Pergantian Tahun',
-            description: 'Wizard pergantian tahun ajaran',
-            icon: Swap,
-            href: '/dashboard/admin/pergantian-tahun',
-        },
-        {
             title: 'Mata Pelajaran',
             description: 'Kelola daftar mapel',
             icon: Bookmark,
@@ -134,6 +128,12 @@ export default function AdminDashboard() {
             description: 'Kelola pengumuman',
             icon: Notification,
             href: '/dashboard/admin/pengumuman',
+        },
+        {
+            title: 'Jadwal',
+            description: 'Kelola jadwal pelajaran',
+            icon: Calendar,
+            href: '/dashboard/admin/jadwal',
         }
     ]
 

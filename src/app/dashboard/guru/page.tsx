@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
-import { Document as BookOpen, Edit as PenTool, TimeCircle as Clock, Discovery as Brain, Folder as Archive, Graph as BarChart3, ArrowRight, Home as School } from 'react-iconly'
+import { Document as BookOpen, Edit as PenTool, TimeCircle as Clock, Discovery as Brain, Folder as Archive, Graph as BarChart3, ArrowRight, Home as School, Calendar } from 'react-iconly'
 import { Loader2 } from 'lucide-react'
 
 interface TeachingAssignment {
@@ -15,11 +15,35 @@ interface TeachingAssignment {
     academic_year: { name: string; is_active: boolean }
 }
 
+interface ScheduleEntry {
+    id: string
+    day_of_week: number
+    period: number
+    time_start: string
+    time_end: string
+    subject: { id: string; name: string } | null
+    teacher: { id: string; user: { full_name: string } } | null
+    room: string | null
+    schedule: {
+        id: string
+        class: { id: string; name: string; grade_level: number }
+    }
+}
+
+const DAYS = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
+const DAYS_SHORT = ['', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
+
 export default function GuruDashboard() {
     const { user } = useAuth()
     const router = useRouter()
     const [assignments, setAssignments] = useState<TeachingAssignment[]>([])
     const [loading, setLoading] = useState(true)
+
+    // Schedule state
+    const [todaySchedule, setTodaySchedule] = useState<ScheduleEntry[]>([])
+    const [fullSchedule, setFullSchedule] = useState<ScheduleEntry[]>([])
+    const [scheduleLoading, setScheduleLoading] = useState(true)
+    const [showFullSchedule, setShowFullSchedule] = useState(false)
 
     useEffect(() => {
         if (user && user.role !== 'GURU') {
@@ -46,6 +70,26 @@ export default function GuruDashboard() {
         if (user) fetchAssignments()
     }, [user])
 
+    // Fetch schedule
+    useEffect(() => {
+        const fetchSchedule = async () => {
+            try {
+                const [todayRes, fullRes] = await Promise.all([
+                    fetch('/api/schedules/my-schedule?today=true'),
+                    fetch('/api/schedules/my-schedule')
+                ])
+                const [todayData, fullData] = await Promise.all([todayRes.json(), fullRes.json()])
+                setTodaySchedule(Array.isArray(todayData) ? todayData : [])
+                setFullSchedule(Array.isArray(fullData) ? fullData : [])
+            } catch (error) {
+                console.error('Error fetching schedule:', error)
+            } finally {
+                setScheduleLoading(false)
+            }
+        }
+        if (user) fetchSchedule()
+    }, [user])
+
     const quickLinks = [
         { href: '/dashboard/guru/materi', icon: BookOpen, label: 'Materi', sub: 'Upload bahan ajar' },
         { href: '/dashboard/guru/tugas', icon: PenTool, label: 'Tugas', sub: 'Buat tugas siswa' },
@@ -55,6 +99,29 @@ export default function GuruDashboard() {
         { href: '/dashboard/guru/nilai', icon: BarChart3, label: 'Nilai', sub: 'Rekap penilaian' },
         { href: '/dashboard/guru/wali-kelas', icon: School, label: 'Wali Kelas', sub: 'Data siswa perwalian' },
     ]
+
+    // Get current time for highlighting
+    const now = new Date()
+    const currentHour = now.getHours()
+    const currentMinute = now.getMinutes()
+    const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`
+
+    const isCurrentPeriod = (startTime: string, endTime: string) => {
+        return currentTimeStr >= startTime.slice(0, 5) && currentTimeStr < endTime.slice(0, 5)
+    }
+
+    // Get today's day number (1=Monday)
+    const jsDay = now.getDay()
+    const todayDayNum = jsDay === 0 ? 7 : jsDay
+
+    // Group full schedule by day for the expanded view
+    const scheduleByDay: Record<number, ScheduleEntry[]> = {}
+    fullSchedule.forEach(entry => {
+        if (!scheduleByDay[entry.day_of_week]) scheduleByDay[entry.day_of_week] = []
+        scheduleByDay[entry.day_of_week].push(entry)
+    })
+    // Sort each day by period
+    Object.values(scheduleByDay).forEach(arr => arr.sort((a, b) => a.period - b.period))
 
     return (
         <div className="space-y-8">
@@ -162,6 +229,153 @@ export default function GuruDashboard() {
                                 </Card>
                             </Link>
                         ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Jadwal Hari Ini */}
+            <div>
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                        <div className="text-primary"><Calendar set="bold" primaryColor="currentColor" size={22} /></div>
+                        <h2 className="text-xl font-bold text-text-main dark:text-white">
+                            Jadwal {showFullSchedule ? 'Minggu Ini' : 'Hari Ini'}
+                        </h2>
+                        <span className="text-sm text-text-secondary">({DAYS[todayDayNum]})</span>
+                    </div>
+                    {fullSchedule.length > 0 && (
+                        <button
+                            onClick={() => setShowFullSchedule(!showFullSchedule)}
+                            className="text-primary text-sm font-semibold hover:text-primary-dark transition-colors flex items-center gap-1"
+                        >
+                            {showFullSchedule ? 'Hari Ini Saja' : 'Lihat Seminggu'}
+                            <ArrowRight set="bold" primaryColor="currentColor" size={14} />
+                        </button>
+                    )}
+                </div>
+
+                {scheduleLoading ? (
+                    <div className="flex items-center justify-center h-20">
+                        <div className="animate-spin text-primary"><Loader2 className="w-6 h-6" /></div>
+                    </div>
+                ) : !showFullSchedule ? (
+                    /* Today's Schedule */
+                    todaySchedule.length === 0 ? (
+                        <Card className="text-center py-8 border-dashed">
+                            <div className="text-4xl mb-2">🎉</div>
+                            <h3 className="text-base font-bold text-text-main dark:text-white">Tidak Ada Jadwal Hari Ini</h3>
+                            <p className="text-sm text-text-secondary mt-1">Anda tidak memiliki jadwal mengajar hari ini.</p>
+                        </Card>
+                    ) : (
+                        <div className="space-y-2">
+                            {todaySchedule.map((entry) => {
+                                const isCurrent = isCurrentPeriod(entry.time_start, entry.time_end)
+                                return (
+                                    <Card
+                                        key={entry.id}
+                                        className={`transition-all ${isCurrent
+                                            ? 'border-2 border-primary bg-primary/5 dark:bg-primary/10 shadow-md shadow-primary/10'
+                                            : 'border border-secondary/20'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            {/* Time */}
+                                            <div className={`text-center min-w-[60px] ${isCurrent ? 'text-primary' : 'text-text-secondary'}`}>
+                                                <div className="text-sm font-bold">{entry.time_start.slice(0, 5)}</div>
+                                                <div className="text-[10px]">{entry.time_end.slice(0, 5)}</div>
+                                            </div>
+
+                                            {/* Divider */}
+                                            <div className={`w-1 h-10 rounded-full ${isCurrent ? 'bg-primary' : 'bg-secondary/20'}`}></div>
+
+                                            {/* Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className={`text-sm font-bold truncate ${isCurrent ? 'text-primary' : 'text-text-main dark:text-white'}`}>
+                                                        {entry.subject?.name || 'Tidak ada mapel'}
+                                                    </h4>
+                                                    {isCurrent && (
+                                                        <span className="flex-shrink-0 px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded-full animate-pulse">
+                                                            SEKARANG
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-3 mt-0.5">
+                                                    <span className="text-xs text-text-secondary">
+                                                        {entry.schedule?.class?.name || ''}
+                                                    </span>
+                                                    {entry.room && (
+                                                        <span className="text-xs text-text-secondary/70">📍 {entry.room}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Period badge */}
+                                            <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${isCurrent
+                                                ? 'bg-primary text-white'
+                                                : 'bg-secondary/10 text-text-secondary'
+                                                }`}>
+                                                {entry.period}
+                                            </div>
+                                        </div>
+                                    </Card>
+                                )
+                            })}
+                        </div>
+                    )
+                ) : (
+                    /* Full Week Schedule */
+                    <div className="space-y-4">
+                        {[1, 2, 3, 4, 5, 6].map(dayNum => {
+                            const dayEntries = scheduleByDay[dayNum] || []
+                            if (dayEntries.length === 0) return null
+                            const isToday = dayNum === todayDayNum
+
+                            return (
+                                <Card key={dayNum} className={isToday ? 'border-2 border-primary/50' : ''}>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <h4 className={`text-sm font-bold ${isToday ? 'text-primary' : 'text-text-main dark:text-white'}`}>
+                                            {DAYS[dayNum]}
+                                        </h4>
+                                        {isToday && (
+                                            <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded-full">
+                                                Hari Ini
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        {dayEntries.map(entry => {
+                                            const isCurrent = isToday && isCurrentPeriod(entry.time_start, entry.time_end)
+                                            return (
+                                                <div
+                                                    key={entry.id}
+                                                    className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all ${isCurrent
+                                                        ? 'bg-primary/10 border border-primary/30'
+                                                        : 'bg-secondary/5 dark:bg-white/5'
+                                                        }`}
+                                                >
+                                                    <div className={`text-xs font-mono min-w-[90px] ${isCurrent ? 'text-primary font-bold' : 'text-text-secondary'}`}>
+                                                        {entry.time_start.slice(0, 5)}–{entry.time_end.slice(0, 5)}
+                                                    </div>
+                                                    <div className={`w-0.5 h-5 rounded-full ${isCurrent ? 'bg-primary' : 'bg-secondary/20'}`}></div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <span className={`text-sm font-semibold truncate ${isCurrent ? 'text-primary' : 'text-text-main dark:text-white'}`}>
+                                                            {entry.subject?.name}
+                                                        </span>
+                                                        <span className="text-xs text-text-secondary ml-2">
+                                                            {entry.schedule?.class?.name}
+                                                        </span>
+                                                    </div>
+                                                    {isCurrent && (
+                                                        <span className="flex-shrink-0 w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </Card>
+                            )
+                        })}
                     </div>
                 )}
             </div>

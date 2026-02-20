@@ -7,7 +7,8 @@ import SmartText from '@/components/SmartText'
 import MathTextarea from '@/components/MathTextarea'
 // import { PenLine, WandSparkles, FolderOpen, Plus } from 'lucide-react'
 import { Edit, Discovery, Folder, Plus, Setting, Upload, Danger, InfoCircle, Document, TickSquare, CloseSquare, Delete } from 'react-iconly'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Eye } from 'lucide-react'
+import PreviewModal from '@/components/PreviewModal'
 import RapihAIModal from '@/components/RapihAIModal'
 import QuestionImageUpload from '@/components/QuestionImageUpload'
 import { Modal, PageHeader, Button, EmptyState } from '@/components/ui'
@@ -95,6 +96,7 @@ export default function EditExamPage() {
     const [isBulkSelectMode, setIsBulkSelectMode] = useState(false)
 
     const [showPublishConfirm, setShowPublishConfirm] = useState(false)
+    const [showPreview, setShowPreview] = useState(false)
     const [publishing, setPublishing] = useState(false)
     const [showSuccessModal, setShowSuccessModal] = useState(false)
 
@@ -412,6 +414,14 @@ export default function EditExamPage() {
                 backHref="/dashboard/guru/ulangan"
                 action={
                     <div className="flex items-center gap-3">
+                        <Button
+                            variant="secondary"
+                            onClick={() => setShowPreview(true)}
+                            disabled={questions.length === 0}
+                        >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Preview
+                        </Button>
                         <Button variant="secondary" onClick={openEditSettings} icon={
                             <Setting set="bold" primaryColor="currentColor" size={20} />
                         }>
@@ -1427,6 +1437,17 @@ export default function EditExamPage() {
                     </div>
                 </div>
             </Modal>
+
+            {/* Preview Modal */}
+            <PreviewModal
+                open={showPreview}
+                onClose={() => setShowPreview(false)}
+                title={exam.title}
+                description={exam.description}
+                durationMinutes={exam.duration_minutes}
+                questions={questions}
+                type="ulangan"
+            />
         </div >
     )
 }
