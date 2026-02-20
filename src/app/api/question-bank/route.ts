@@ -73,7 +73,8 @@ export async function PUT(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { id, question_text, question_type, options, correct_answer, difficulty, subject_id } = body
+        const { question_text, question_type, options, correct_answer, difficulty, subject_id } = body
+        const id = request.nextUrl.searchParams.get('id') || body.id
 
         if (!id) {
             return NextResponse.json({ error: 'ID diperlukan' }, { status: 400 })
@@ -85,7 +86,7 @@ export async function PUT(request: NextRequest) {
         if (options !== undefined) updateData.options = options
         if (correct_answer !== undefined) updateData.correct_answer = correct_answer
         if (difficulty !== undefined) updateData.difficulty = difficulty
-        if (subject_id !== undefined) updateData.subject_id = subject_id
+        if (subject_id !== undefined) updateData.subject_id = subject_id || null
 
         const { data, error } = await supabase
             .from('question_bank')

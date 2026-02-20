@@ -545,6 +545,7 @@ export default function BankSoalPage() {
                         </div>
                         <div className="relative inline-block">
                             <button
+                                onClick={() => setShowAddDropdown(!showAddDropdown)}
                                 className="flex items-center gap-2 px-5 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 active:scale-95 transition-all shadow-md shadow-primary/20 cursor-pointer"
                             >
                                 <Plus set="bold" primaryColor="currentColor" size={20} />
@@ -1452,14 +1453,20 @@ export default function BankSoalPage() {
             </Modal>
 
             {/* Rapih AI Modal */}
-            <RapihAIModal
-                visible={showRapihAI}
-                onClose={() => setShowRapihAI(false)}
-                onSaveResults={handleSaveAIToBank}
-                onSaveToBank={handleSaveAIToBank}
-                saving={saving}
-                targetLabel="Bank Soal"
-            />
+            {showRapihAI && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                        <RapihAIModal
+                            visible={showRapihAI}
+                            onClose={() => setShowRapihAI(false)}
+                            onSaveResults={handleSaveAIToBank}
+                            onSaveToBank={handleSaveAIToBank}
+                            saving={saving}
+                            targetLabel="Bank Soal"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
