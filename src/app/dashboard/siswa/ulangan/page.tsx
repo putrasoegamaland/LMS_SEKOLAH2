@@ -50,16 +50,7 @@ export default function SiswaUlanganPage() {
             const examsData = await examsRes.json()
             const submissionsData = await submissionsRes.json()
 
-            // Get student's class
-            const studentsRes = await fetch('/api/students')
-            const students = await studentsRes.json()
-            const myStudent = students.find((s: any) => s.user.id === user?.id)
-
-            const activeExams = (Array.isArray(examsData) ? examsData : []).filter((e: any) => {
-                const isForMyClass = myStudent && e.teaching_assignment?.class?.name === myStudent.class?.name
-                const isAllowed = !e.allowed_student_ids || e.allowed_student_ids.length === 0 || e.allowed_student_ids.includes(myStudent?.user?.id)
-                return e.is_active && isForMyClass && isAllowed
-            })
+            const activeExams = (Array.isArray(examsData) ? examsData : []).filter((e: Exam) => e.is_active)
             setExams(activeExams)
             setSubmissions(Array.isArray(submissionsData) ? submissionsData : [])
         } catch (error) {
@@ -69,7 +60,7 @@ export default function SiswaUlanganPage() {
         }
     }
 
-    const getExamStatus = (exam: any) => {
+    const getExamStatus = (exam: Exam) => {
         const now = new Date()
         const startTime = new Date(exam.start_time)
         // Default strict end time (if no submission)
@@ -120,7 +111,7 @@ export default function SiswaUlanganPage() {
             <PageHeader
                 title="Ulangan"
                 subtitle="Daftar ulangan yang tersedia"
-                icon={<span className="text-red-500"><TimeCircle set="bold" primaryColor="currentColor" size={24} /></span>}
+                icon={<div className="text-red-500 flex"><TimeCircle set="bold" primaryColor="currentColor" size="small" /></div>}
                 backHref="/dashboard/siswa"
             />
 
@@ -128,7 +119,7 @@ export default function SiswaUlanganPage() {
             <div className="bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30 rounded-xl p-4">
                 <div className="flex items-start gap-3">
                     <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                        <span className="text-amber-600 dark:text-amber-400"><Danger set="bold" primaryColor="currentColor" size={24} /></span>
+                        <div className="text-amber-600 dark:text-amber-400 flex"><Danger set="bold" primaryColor="currentColor" size="small" /></div>
                     </div>
                     <div>
                         <h3 className="font-bold text-amber-700 dark:text-amber-400">Perhatian!</h3>
@@ -143,19 +134,19 @@ export default function SiswaUlanganPage() {
                 </div>
             ) : exams.length === 0 ? (
                 <EmptyState
-                    icon={<span className="text-red-500 dark:text-red-200"><Document set="bold" primaryColor="currentColor" size={48} /></span>}
+                    icon={<div className="text-red-500 dark:text-red-200 flex"><Document set="bold" primaryColor="currentColor" size="xlarge" /></div>}
                     title="Belum Ada Ulangan"
                     description="Ulangan akan muncul di sini saat guru mempublishnya"
                 />
             ) : (
                 <div className="grid gap-4 md:grid-cols-2">
-                    {exams.map((exam: any) => {
+                    {exams.map((exam) => {
                         const { status, label, color, icon: StatusIcon } = getExamStatus(exam)
                         const submission = submissions.find(s => s.exam_id === exam.id)
                         const canStart = status === 'available' || status === 'in_progress'
 
                         return (
-                            <div key={exam.id} className={`bg-white dark:bg-surface-dark border-2 border-primary/30 rounded-xl p-5 hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-[0.98] transition-all cursor-pointer ${exam.is_remedial ? 'border-orange-500/50 dark:border-orange-600/50' : ''}`}>
+                            <div key={exam.id} className="bg-white dark:bg-surface-dark border-2 border-primary/30 rounded-xl p-5 hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-[0.98] transition-all cursor-pointer">
                                 <div className="flex flex-col h-full gap-4">
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
@@ -164,11 +155,6 @@ export default function SiswaUlanganPage() {
                                                     <StatusIcon set="bold" primaryColor="currentColor" size={14} />
                                                     {label}
                                                 </span>
-                                                {exam.is_remedial && (
-                                                    <span className="px-2.5 py-1 bg-gradient-to-r from-orange-400 to-red-500 text-white text-xs font-bold rounded-full ring-2 ring-orange-200 dark:ring-orange-900/50 shadow-sm animate-pulse-slow">
-                                                        REMEDIAL
-                                                    </span>
-                                                )}
                                             </div>
                                             <h3 className="font-bold text-text-main dark:text-white text-lg">{exam.title}</h3>
                                         </div>
@@ -178,7 +164,7 @@ export default function SiswaUlanganPage() {
 
                                     <div className="space-y-2 pt-3 border-t border-secondary/10">
                                         <div className="flex items-center text-xs text-text-secondary dark:text-zinc-500 mb-2">
-                                            <span className="mr-1.5"><Calendar set="bold" primaryColor="currentColor" size={14} /></span>
+                                            <span className="mr-1.5 flex"><Calendar set="bold" primaryColor="currentColor" size="small" /></span>
                                             Dibuat: {new Date(exam.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-text-secondary">

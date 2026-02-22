@@ -495,7 +495,7 @@ export default function TakeExamPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark">
                 <div className="text-center">
-                    <div className="text-primary mb-4 animate-pulse mx-auto"><Document set="bold" primaryColor="currentColor" size={48} /></div>
+                    <div className="text-primary mb-4 animate-pulse mx-auto flex justify-center"><Document set="bold" primaryColor="currentColor" size="xlarge" /></div>
                     <p className="text-text-secondary">Mempersiapkan ulangan...</p>
                 </div>
             </div>
@@ -520,7 +520,7 @@ export default function TakeExamPage() {
             {showViolationWarning && (
                 <div className="fixed inset-0 bg-red-600/80 flex items-center justify-center z-50">
                     <div className="text-center text-white p-8">
-                        <div className="text-white mb-4 mx-auto"><Danger set="bold" primaryColor="currentColor" size={64} /></div>
+                        <div className="text-white mb-4 mx-auto flex justify-center"><Danger set="bold" primaryColor="currentColor" size="xlarge" /></div>
                         <h2 className="text-2xl font-bold mb-2">PERINGATAN!</h2>
                         <p>Anda terdeteksi keluar dari halaman ulangan</p>
                         <p className="text-xl mt-4">Pelanggaran: {violationCount} / {maxViolations}</p>

@@ -59,11 +59,9 @@ export default function SiswaKuisPage() {
                 ])
 
                 const quizzesArray = Array.isArray(quizzesData) ? quizzesData : []
-                const myQuizzes = quizzesArray.filter((q: any) => {
-                    const isForMyClass = q.teaching_assignment?.class?.name === myStudent.class.name
-                    const isAllowed = !q.allowed_student_ids || q.allowed_student_ids.length === 0 || q.allowed_student_ids.includes(myStudent.user.id)
-                    return q.is_active && isForMyClass && isAllowed
-                })
+                const myQuizzes = quizzesArray.filter((q: Quiz) =>
+                    q.is_active && q.teaching_assignment?.class?.name === myStudent.class.name
+                )
                 setQuizzes(myQuizzes)
                 setSubmissions(Array.isArray(subsData) ? subsData : [])
             } catch (error) {
@@ -84,7 +82,7 @@ export default function SiswaKuisPage() {
             <PageHeader
                 title="Kuis"
                 subtitle="Kerjakan kuis dari guru"
-                icon={<span className="text-purple-500"><Game set="bold" primaryColor="currentColor" size={24} /></span>}
+                icon={<div className="text-purple-500 flex"><Game set="bold" primaryColor="currentColor" size="small" /></div>}
                 backHref="/dashboard/siswa"
             />
 
@@ -94,20 +92,20 @@ export default function SiswaKuisPage() {
                 </div>
             ) : quizzes.length === 0 ? (
                 <EmptyState
-                    icon={<span className="text-secondary"><Game set="bold" primaryColor="currentColor" size={48} /></span>}
+                    icon={<div className="text-secondary flex"><Game set="bold" primaryColor="currentColor" size="xlarge" /></div>}
                     title="Belum Ada Kuis"
                     description="Belum ada kuis aktif untuk kelasmu"
                 />
             ) : (
                 <div className="grid gap-4 md:grid-cols-2">
-                    {quizzes.map((quiz: any) => {
+                    {quizzes.map((quiz) => {
                         const submission = getSubmission(quiz.id)
                         const isCompleted = !!submission?.submitted_at
                         const isInProgress = submission && !submission.submitted_at
                         const questionCount = quiz.questions?.[0]?.count || 0
 
                         return (
-                            <div key={quiz.id} className={`bg-white dark:bg-surface-dark border-2 border-primary/30 rounded-xl p-5 hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-[0.98] transition-all group cursor-pointer ${quiz.is_remedial ? 'border-orange-500/50 dark:border-orange-600/50' : ''}`}>
+                            <div key={quiz.id} className="bg-white dark:bg-surface-dark border-2 border-primary/30 rounded-xl p-5 hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-[0.98] transition-all group cursor-pointer">
                                 <div className="flex flex-col h-full gap-4">
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
@@ -115,11 +113,6 @@ export default function SiswaKuisPage() {
                                                 <span className="px-2.5 py-1 bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 text-xs font-bold rounded-full">
                                                     Kuis
                                                 </span>
-                                                {quiz.is_remedial && (
-                                                    <span className="px-2.5 py-1 bg-gradient-to-r from-orange-400 to-red-500 text-white text-xs font-bold rounded-full ring-2 ring-orange-200 dark:ring-orange-900/50 shadow-sm animate-pulse-slow">
-                                                        REMEDIAL
-                                                    </span>
-                                                )}
                                                 {isCompleted && (
                                                     <span className="px-2.5 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-bold rounded-full flex items-center gap-1">
                                                         <TickSquare set="bold" primaryColor="currentColor" size={12} /> Selesai
@@ -139,7 +132,7 @@ export default function SiswaKuisPage() {
 
                                     <div className="space-y-2 pt-3 border-t border-secondary/10">
                                         <div className="flex items-center text-xs text-text-secondary dark:text-zinc-500 mb-2">
-                                            <span className="mr-1.5"><Calendar set="bold" primaryColor="currentColor" size={14} /></span>
+                                            <span className="mr-1.5 flex"><Calendar set="bold" primaryColor="currentColor" size="small" /></span>
                                             Dibuat: {new Date(quiz.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-text-secondary">

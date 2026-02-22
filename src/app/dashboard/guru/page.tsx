@@ -15,6 +15,21 @@ interface TeachingAssignment {
     academic_year: { name: string; is_active: boolean }
 }
 
+interface WarningItem {
+    student_id: string
+    student_name: string
+    class_name: string
+    subject_name: string
+    avg_score: number
+    score_count: number
+}
+
+interface WarningsData {
+    kkm: number
+    teachingWarnings: WarningItem[]
+    homeroomWarnings: WarningItem[]
+}
+
 interface ScheduleEntry {
     id: string
     day_of_week: number
@@ -37,6 +52,7 @@ export default function GuruDashboard() {
     const { user } = useAuth()
     const router = useRouter()
     const [assignments, setAssignments] = useState<TeachingAssignment[]>([])
+    const [warnings, setWarnings] = useState<WarningsData | null>(null)
     const [loading, setLoading] = useState(true)
 
     // Schedule state
@@ -52,14 +68,21 @@ export default function GuruDashboard() {
     }, [user, router])
 
     useEffect(() => {
-        const fetchAssignments = async () => {
+        const fetchDashboardData = async () => {
             try {
-                const res = await fetch('/api/my-teaching-assignments')
-                const data = await res.json()
-                if (Array.isArray(data)) {
-                    setAssignments(data)
+                const [assignRes, warnRes] = await Promise.all([
+                    fetch('/api/my-teaching-assignments'),
+                    fetch('/api/dashboard/guru/warnings')
+                ])
+                const assignData = await assignRes.json()
+                const warnData = await warnRes.json()
+                if (Array.isArray(assignData)) {
+                    setAssignments(assignData)
                 } else {
                     setAssignments([])
+                }
+                if (!warnData.error) {
+                    setWarnings(warnData)
                 }
             } catch (error) {
                 console.error('Error:', error)
@@ -67,7 +90,7 @@ export default function GuruDashboard() {
                 setLoading(false)
             }
         }
-        if (user) fetchAssignments()
+        if (user) fetchDashboardData()
     }, [user])
 
     // Fetch schedule
@@ -165,6 +188,83 @@ export default function GuruDashboard() {
                     </Link>
                 ))}
             </div>
+
+            {/* Academic Warnings */}
+            {!loading && warnings && (warnings.teachingWarnings.length > 0 || warnings.homeroomWarnings.length > 0) && (
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                            <Clock set="bold" size={16} />
+                        </div>
+                        <h2 className="text-xl font-bold text-text-main dark:text-white">Peringatan Akademik</h2>
+                        <span className="text-sm font-medium text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full ml-2">Nilai Rata-Rata {'<'} {warnings.kkm}</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {warnings.teachingWarnings.length > 0 && (
+                            <Card className="border-l-4 border-l-orange-500 hover:border-l-orange-500 hover:shadow-md transition-all">
+                                <div className="p-1">
+                                    <h3 className="font-bold text-text-main dark:text-white mb-3 text-sm flex items-center gap-2">
+                                        <div className="text-orange-500 flex"><BookOpen set="bold" size="small" primaryColor="currentColor" /></div>
+                                        Mata Pelajaran Anda ({warnings.teachingWarnings.length})
+                                    </h3>
+                                    <div className="max-h-48 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                                        {warnings.teachingWarnings.map((warn, i) => (
+                                            <div key={i} className="flex flex-col p-2.5 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="font-bold text-sm text-text-main dark:text-gray-100 line-clamp-1">{warn.student_name}</span>
+                                                    <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold text-xs flex-shrink-0">
+                                                        {warn.avg_score}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs text-text-secondary dark:text-gray-400">
+                                                    <span>{warn.class_name} • {warn.subject_name}</span>
+                                                    <span>{warn.score_count} Nilai Masuk</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-3 pt-3 border-t border-orange-100 dark:border-orange-900/30 text-right">
+                                        <Link href="/dashboard/guru/nilai" className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline">
+                                            Kelola Nilai &rarr;
+                                        </Link>
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
+                        {warnings.homeroomWarnings.length > 0 && (
+                            <Card className="border-l-4 border-l-red-500 hover:border-l-red-500 hover:shadow-md transition-all">
+                                <div className="p-1">
+                                    <h3 className="font-bold text-text-main dark:text-white mb-3 text-sm flex items-center gap-2">
+                                        <div className="text-red-500 flex"><School set="bold" size="small" primaryColor="currentColor" /></div>
+                                        Kelas Perwalian ({warnings.homeroomWarnings.length})
+                                    </h3>
+                                    <div className="max-h-48 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                                        {warnings.homeroomWarnings.map((warn, i) => (
+                                            <div key={i} className="flex flex-col p-2.5 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="font-bold text-sm text-text-main dark:text-gray-100 line-clamp-1">{warn.student_name}</span>
+                                                    <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold text-xs flex-shrink-0">
+                                                        {warn.avg_score}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs text-text-secondary dark:text-gray-400">
+                                                    <span>{warn.class_name} • {warn.subject_name}</span>
+                                                    <span>{warn.score_count} Nilai Masuk</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-3 pt-3 border-t border-red-100 dark:border-red-900/30 text-right">
+                                        <Link href="/dashboard/guru/wali-kelas" className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline">
+                                            Lihat Rekap Wali Kelas &rarr;
+                                        </Link>
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Teaching Assignments */}
             <div>

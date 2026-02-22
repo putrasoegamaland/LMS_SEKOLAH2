@@ -172,7 +172,7 @@ export default function SiswaNilaiPage() {
                     </Link>
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="text-primary"><Chart set="bold" primaryColor="currentColor" size={32} /></span>
+                            <div className="text-primary flex"><Chart set="bold" primaryColor="currentColor" size="large" /></div>
                             <h1 className="text-2xl font-bold text-text-main dark:text-white">Nilai Saya</h1>
                         </div>
                         <p className="text-text-secondary dark:text-zinc-400">Pilih mata pelajaran untuk lihat detail nilai</p>
@@ -181,7 +181,7 @@ export default function SiswaNilaiPage() {
 
                 {groupedGrades.length === 0 ? (
                     <div className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-12 text-center text-text-secondary dark:text-zinc-500 shadow-sm flex flex-col items-center gap-4">
-                        <span className="text-secondary"><Chart set="bold" primaryColor="currentColor" size={48} /></span>
+                        <div className="text-secondary flex"><Chart set="bold" primaryColor="currentColor" size="xlarge" /></div>
                         Belum ada nilai yang tercatat.
                     </div>
                 ) : (
@@ -229,7 +229,7 @@ export default function SiswaNilaiPage() {
     const renderQuizList = () => (
         selectedSubject.kuis.length === 0 ? (
             <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed flex flex-col items-center gap-4">
-                <span className="text-secondary"><Game set="bold" primaryColor="currentColor" size={48} /></span>
+                <div className="text-secondary flex"><Game set="bold" primaryColor="currentColor" size="xlarge" /></div>
                 Belum ada nilai kuis.
             </div>
         ) : (
@@ -258,7 +258,7 @@ export default function SiswaNilaiPage() {
     const renderAssignmentList = (items: AssignmentSubmission[]) => (
         items.length === 0 ? (
             <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed flex flex-col items-center gap-4">
-                <span className="text-secondary"><Edit set="bold" primaryColor="currentColor" size={48} /></span>
+                <div className="text-secondary flex"><Edit set="bold" primaryColor="currentColor" size="xlarge" /></div>
                 Belum ada nilai tugas.
             </div>
         ) : (
@@ -295,7 +295,7 @@ export default function SiswaNilaiPage() {
     const renderUlanganList = (items: (AssignmentSubmission | ExamSubmission)[]) => (
         items.length === 0 ? (
             <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed flex flex-col items-center gap-4">
-                <span className="text-secondary"><TimeCircle set="bold" primaryColor="currentColor" size={48} /></span>
+                <div className="text-secondary flex"><TimeCircle set="bold" primaryColor="currentColor" size="xlarge" /></div>
                 Belum ada nilai ulangan.
             </div>
         ) : (

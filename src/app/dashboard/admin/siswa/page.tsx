@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { User as Users, AddUser as UserPlus, Edit as Pencil, Delete as Trash2, Show as Eye, Hide as EyeOff, InfoCircle as AlertCircle, Filter, Document as GraduationCap, Paper } from 'react-iconly'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Upload, FileDown, CheckCircle2, XCircle } from 'lucide-react'
+import Papa from 'papaparse'
 import { Class, SchoolLevel } from '@/lib/types'
 
 interface Student {
@@ -64,6 +65,12 @@ export default function SiswaPage() {
     const [showPassword, setShowPassword] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
+
+    // Bulk Upload States
+    const [showBulkModal, setShowBulkModal] = useState(false)
+    const [bulkSaving, setBulkSaving] = useState(false)
+    const [bulkResults, setBulkResults] = useState<{ success: number, failed: number, errors: any[] } | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     // Filter states
     const [filterAngkatan, setFilterAngkatan] = useState('')
@@ -176,6 +183,83 @@ export default function SiswaPage() {
         setFilterSchoolLevel('')
     }
 
+    const downloadTemplate = () => {
+        const headers = ['Nama Lengkap', 'L/P', 'NIS', 'Angkatan', 'Kelas', 'Username', 'Password']
+        const csvContent = headers.join(',') + '\n' +
+            'Muhammad Rizki,L,221001,2022,X IPA 1,rizki_siswa,pass123\n' +
+            'Siti Hawa,P,221002,2022,X IPS 1,siti_siswa,pass123'
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+        const link = document.createElement('a')
+        const url = URL.createObjectURL(blob)
+        link.setAttribute('href', url)
+        link.setAttribute('download', 'Template_Upload_Siswa.csv')
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+    }
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setBulkSaving(true)
+        setBulkResults(null)
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: async (results) => {
+                try {
+                    const payload = results.data.map((row: any) => ({
+                        full_name: row['Nama Lengkap'] || row['nama lengkap'] || '',
+                        gender: row['L/P']?.toUpperCase() === 'L' || row['L/P']?.toUpperCase() === 'P' ? row['L/P'].toUpperCase() : null,
+                        nis: row['NIS'] || row['nis'] || '',
+                        angkatan: row['Angkatan'] || row['angkatan'] || '',
+                        kelas: row['Kelas'] || row['kelas'] || '',
+                        username: row['Username'] || row['username'] || '',
+                        password: row['Password'] || row['password'] || ''
+                    }))
+
+                    const res = await fetch('/api/students/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    })
+
+                    const data = await res.json()
+
+                    if (!res.ok) throw new Error(data.error || 'Server error')
+
+                    let successCount = 0
+                    let failedCount = 0
+                    const errors: any[] = []
+
+                    data.results.forEach((r: any) => {
+                        if (r.success) successCount++
+                        else {
+                            failedCount++
+                            errors.push({ name: r.item.full_name || r.item.username, error: r.error })
+                        }
+                    })
+
+                    setBulkResults({ success: successCount, failed: failedCount, errors })
+                    fetchData()
+                } catch (err: any) {
+                    console.error(err)
+                    setError(err.message || 'Gagal memproses file')
+                } finally {
+                    setBulkSaving(false)
+                    if (fileInputRef.current) fileInputRef.current.value = ''
+                }
+            },
+            error: (err) => {
+                setError('Format file tidak valid')
+                setBulkSaving(false)
+            }
+        })
+    }
+
     // Get unique angkatan values from students
     const uniqueAngkatan = [...new Set(students.map(s => s.angkatan).filter(Boolean))].sort().reverse()
 
@@ -190,6 +274,9 @@ export default function SiswaPage() {
                     <div className="flex gap-2">
                         <Button variant="secondary" onClick={() => setShowFilters(!showFilters)} icon={<Filter set="bold" primaryColor="currentColor" size={20} />}>
                             Filter
+                        </Button>
+                        <Button variant="secondary" onClick={() => { setBulkResults(null); setShowBulkModal(true); }} icon={<Upload className="w-5 h-5" />}>
+                            Upload Massal
                         </Button>
                         <Button onClick={openAdd} icon={<UserPlus set="bold" primaryColor="currentColor" size={20} />}>
                             Tambah Siswa
@@ -493,6 +580,103 @@ export default function SiswaPage() {
                         </Button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* Bulk Upload Modal */}
+            <Modal
+                open={showBulkModal}
+                onClose={() => setShowBulkModal(false)}
+                title="Upload Massal Siswa"
+            >
+                {!bulkResults ? (
+                    <div className="space-y-6">
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl text-sm">
+                            <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2">Petunjuk Upload</h4>
+                            <ul className="list-disc pl-5 space-y-1 text-blue-700 dark:text-blue-400">
+                                <li>File harus berupa format <b>.csv</b></li>
+                                <li>Pastikan menggunakan template yang telah disediakan</li>
+                                <li>Nama Kelas harus <b>sama persis</b> dengan nama kelas di sistem (tidak case-sensitive)</li>
+                                <li>Kolom <b>Nama Lengkap</b>, <b>Username</b>, dan <b>Password</b> wajib diisi</li>
+                            </ul>
+                            <div className="mt-4">
+                                <Button variant="secondary" onClick={downloadTemplate} size="sm" icon={<FileDown className="w-4 h-4" />}>
+                                    Download Template CSV
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-secondary/30 rounded-xl hover:bg-secondary/5 transition-colors cursor-pointer">
+                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                    <Upload className="w-8 h-8 text-secondary mb-2" />
+                                    <p className="mb-2 text-sm text-text-secondary">
+                                        <span className="font-bold text-primary">Klik untuk upload</span> atau drag and drop
+                                    </p>
+                                    <p className="text-xs text-text-secondary/70">CSV (Max. 5MB)</p>
+                                </div>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    className="hidden"
+                                    accept=".csv"
+                                    onChange={handleFileUpload}
+                                    disabled={bulkSaving}
+                                />
+                            </label>
+                            {bulkSaving && (
+                                <p className="text-center text-sm text-text-secondary mt-3 animate-pulse">
+                                    Sedang memproses data, mohon tunggu...
+                                </p>
+                            )}
+                            {error && (
+                                <p className="text-center text-sm text-red-500 mt-3">{error}</p>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        <div className="flex gap-4 p-4 bg-secondary/5 rounded-xl border border-secondary/10">
+                            <div className="flex-1 text-center">
+                                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                                <div className="text-2xl font-bold text-text-main dark:text-white">{bulkResults.success}</div>
+                                <div className="text-sm text-text-secondary">Berhasil</div>
+                            </div>
+                            <div className="w-px bg-secondary/20 my-2"></div>
+                            <div className="flex-1 text-center">
+                                <XCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                                <div className="text-2xl font-bold text-text-main dark:text-white">{bulkResults.failed}</div>
+                                <div className="text-sm text-text-secondary">Gagal</div>
+                            </div>
+                        </div>
+
+                        {bulkResults.errors.length > 0 && (
+                            <div className="max-h-48 overflow-y-auto border border-red-200 dark:border-red-900/30 rounded-lg">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-red-50 dark:bg-red-900/10 sticky top-0">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left text-red-800 dark:text-red-400 font-medium">Nama/Username</th>
+                                            <th className="px-3 py-2 text-left text-red-800 dark:text-red-400 font-medium">Keterangan Error</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-red-100 dark:divide-red-900/10">
+                                        {bulkResults.errors.map((err, i) => (
+                                            <tr key={i} className="hover:bg-red-50/50 dark:hover:bg-red-900/5 transition-colors">
+                                                <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-medium">{err.name}</td>
+                                                <td className="px-3 py-2 text-red-600 dark:text-red-400">{err.error}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        <div className="pt-2">
+                            <Button className="w-full" onClick={() => setShowBulkModal(false)}>
+                                Selesai
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </div>
     )

@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS Offline — Dashboard Guru</title>
+    <meta name="description" content="Panel monitoring guru untuk ujian offline">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="container-wide">
+
+        <!-- ═══ SETUP VIEW (NIP Login) ═══ -->
+        <div id="view-setup" class="view">
+            <div class="setup-hero">
+                <div class="setup-icon">📡</div>
+                <h1 class="setup-title">LMS Ujian Offline</h1>
+                <p class="setup-subtitle">Masukkan NIP untuk mengunduh data dan memulai ujian</p>
+            </div>
+
+            <form onsubmit="handleSetup(event)" class="setup-form">
+                <div class="form-group">
+                    <label for="nip-input">Nomor Induk Pegawai (NIP)</label>
+                    <input type="text" id="nip-input" placeholder="Contoh: 1234567890" autocomplete="off" autofocus>
+                </div>
+                <div id="setup-error" class="alert alert-error hidden"></div>
+                <button type="submit" class="btn btn-primary" id="setup-btn">🚀 Mulai Ujian</button>
+            </form>
+        </div>
+
+        <!-- ═══ DOWNLOADING VIEW (Progress) ═══ -->
+        <div id="view-downloading" class="view hidden">
+            <div class="setup-hero">
+                <div class="setup-icon">📥</div>
+                <h1 class="setup-title">Mengunduh Data...</h1>
+                <p class="setup-subtitle" id="download-progress">Memulai download...</p>
+                <div class="loading" style="margin-top: 16px;">Mohon tunggu</div>
+            </div>
+        </div>
+
+        <!-- ═══ DASHBOARD VIEW ═══ -->
+        <div id="view-dashboard" class="view hidden">
+
+            <div class="header">
+                <h1>📡 Dashboard Guru — Ujian Offline</h1>
+                <div class="subtitle" id="teacher-info">Memuat...</div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stat-grid" id="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-students">-</div>
+                    <div class="stat-label">Siswa Terdaftar</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-quizzes">-</div>
+                    <div class="stat-label">Kuis Aktif</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-assignments">-</div>
+                    <div class="stat-label">Tugas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-sessions">-</div>
+                    <div class="stat-label">Siswa Login</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-quiz-subs">-</div>
+                    <div class="stat-label">Jawaban Kuis</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-assign-subs">-</div>
+                    <div class="stat-label">Jawaban Tugas</div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-bar">
+                <button class="btn btn-secondary" onclick="redownload()" id="redownload-btn">🔄 Re-download
+                    Data</button>
+                <button class="btn btn-upload" onclick="uploadResults()" id="upload-btn">
+                    📤 Upload Hasil
+                    <span id="upload-badge" class="upload-badge hidden">0</span>
+                </button>
+            </div>
+            <div id="upload-status" class="hidden" style="margin-bottom: 16px;"></div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchResultTab('quiz', this)">📝 Hasil Kuis</button>
+                <button class="tab" onclick="switchResultTab('assignment', this)">📋 Hasil Tugas</button>
+            </div>
+
+            <!-- Quiz Results Table -->
+            <div id="tab-quiz-results">
+                <div id="quiz-results-container">
+                    <div class="loading">Memuat hasil...</div>
+                </div>
+            </div>
+
+            <!-- Assignment Results Table -->
+            <div id="tab-assignment-results" class="hidden">
+                <div id="assignment-results-container">
+                    <div class="loading">Memuat hasil...</div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        const API = window.location.origin;
+        let pollInterval = null;
+
+        // ═══════════════════════════════════════════════════
+        //  INITIALIZATION — check server state on load
+        // ═══════════════════════════════════════════════════
+
+        async function init() {
+            try {
+                const res = await fetch(API + '/api/server/state');
+                const data = await res.json();
+
+                if (data.state === 'ready') {
+                    showView('dashboard');
+                    loadStatus();
+                    loadResults();
+                    startDashboardPolling();
+                } else if (data.state === 'downloading') {
+                    showView('downloading');
+                    if (data.progress) {
+                        document.getElementById('download-progress').textContent = data.progress;
+                    }
+                    startStatePolling();
+                } else {
+                    // setup
+                    showView('setup');
+                    if (data.error) {
+                        const errorEl = document.getElementById('setup-error');
+                        errorEl.textContent = data.error;
+                        errorEl.classList.remove('hidden');
+                    }
+                }
+            } catch (err) {
+                showView('setup');
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  SETUP — Teacher NIP login
+        // ═══════════════════════════════════════════════════
+
+        async function handleSetup(e) {
+            e.preventDefault();
+            const nip = document.getElementById('nip-input').value.trim();
+            const errorEl = document.getElementById('setup-error');
+            const btn = document.getElementById('setup-btn');
+
+            if (!nip) {
+                errorEl.textContent = 'Masukkan NIP Anda';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Memulai...';
+            errorEl.classList.add('hidden');
+
+            try {
+                const res = await fetch(API + '/api/teacher/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nip })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Gagal memulai download');
+                }
+
+                // Switch to downloading view and poll for state changes
+                showView('downloading');
+                startStatePolling();
+            } catch (err) {
+                errorEl.textContent = err.message;
+                errorEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Mulai Ujian';
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  STATE POLLING — during download
+        // ═══════════════════════════════════════════════════
+
+        function startStatePolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(pollState, 1500);
+        }
+
+        function stopPolling() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+
+        async function pollState() {
+            try {
+                const res = await fetch(API + '/api/server/state');
+                const data = await res.json();
+
+                if (data.state === 'ready') {
+                    stopPolling();
+                    showView('dashboard');
+                    loadStatus();
+                    loadResults();
+                    startDashboardPolling();
+                } else if (data.state === 'downloading') {
+                    document.getElementById('download-progress').textContent =
+                        data.progress || 'Mengunduh data...';
+                } else if (data.state === 'setup') {
+                    // Download failed — go back to setup
+                    stopPolling();
+                    showView('setup');
+                    if (data.error) {
+                        const errorEl = document.getElementById('setup-error');
+                        errorEl.textContent = data.error;
+                        errorEl.classList.remove('hidden');
+                    }
+                }
+            } catch (err) {
+                console.error('Poll error:', err);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  DASHBOARD — Status & Results
+        // ═══════════════════════════════════════════════════
+
+        function startDashboardPolling() {
+            stopPolling();
+            pollInterval = setInterval(() => {
+                loadStatus();
+                loadResults();
+            }, 5000);
+        }
+
+        async function fetchApi(url) {
+            try {
+                const res = await fetch(API + url);
+                return await res.json();
+            } catch (err) {
+                console.error('Fetch failed:', url, err);
+                return null;
+            }
+        }
+
+        async function loadStatus() {
+            const data = await fetchApi('/api/teacher/status');
+            if (!data) return;
+
+            document.getElementById('teacher-info').textContent =
+                `${data.teacher_name} · Diunduh: ${data.download_time ? new Date(data.download_time).toLocaleString('id-ID') : '-'}`;
+
+            document.getElementById('stat-students').textContent = data.students;
+            document.getElementById('stat-quizzes').textContent = data.quizzes;
+            document.getElementById('stat-assignments').textContent = data.assignments;
+            document.getElementById('stat-sessions').textContent = data.active_sessions;
+            document.getElementById('stat-quiz-subs').textContent = data.quiz_submissions;
+            document.getElementById('stat-assign-subs').textContent = data.assignment_submissions;
+
+            // Update upload badge
+            const badge = document.getElementById('upload-badge');
+            if (data.pending_upload > 0) {
+                badge.textContent = data.pending_upload;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        async function loadResults() {
+            const data = await fetchApi('/api/teacher/results');
+            if (!data) return;
+
+            // ── Quiz Results ──
+            const quizContainer = document.getElementById('quiz-results-container');
+            if (data.quiz_results && data.quiz_results.length > 0) {
+                let html = `<table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Siswa</th>
+                            <th>Kelas</th>
+                            <th>Kuis</th>
+                            <th>Mapel</th>
+                            <th>Skor</th>
+                            <th>Waktu</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+                data.quiz_results.forEach(r => {
+                    const pct = r.max_score > 0 ? Math.round((r.total_score / r.max_score) * 100) : 0;
+                    const color = pct >= 75 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)';
+                    html += `<tr>
+                        <td>${escapeHtml(r.nama)}</td>
+                        <td>${escapeHtml(r.kelas)}</td>
+                        <td>${escapeHtml(r.quiz_title)}</td>
+                        <td>${escapeHtml(r.subject)}</td>
+                        <td><strong style="color:${color}">${r.total_score}/${r.max_score} (${pct}%)</strong></td>
+                        <td>${r.submitted_at ? new Date(r.submitted_at).toLocaleTimeString('id-ID') : '-'}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                quizContainer.innerHTML = html;
+            } else {
+                quizContainer.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>Belum ada jawaban kuis masuk</p></div>';
+            }
+
+            // ── Assignment Results ──
+            const assignContainer = document.getElementById('assignment-results-container');
+            if (data.assignment_results && data.assignment_results.length > 0) {
+                let html = `<table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Siswa</th>
+                            <th>Kelas</th>
+                            <th>Tugas</th>
+                            <th>Mapel</th>
+                            <th>Jawaban</th>
+                            <th>Waktu</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+                data.assignment_results.forEach(r => {
+                    const preview = (r.answer_text || '').substring(0, 80) + ((r.answer_text || '').length > 80 ? '...' : '');
+                    html += `<tr>
+                        <td>${escapeHtml(r.nama)}</td>
+                        <td>${escapeHtml(r.kelas)}</td>
+                        <td>${escapeHtml(r.assignment_title)}</td>
+                        <td>${escapeHtml(r.subject)}</td>
+                        <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.answer_text)}">${escapeHtml(preview)}</td>
+                        <td>${r.submitted_at ? new Date(r.submitted_at).toLocaleTimeString('id-ID') : '-'}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                assignContainer.innerHTML = html;
+            } else {
+                assignContainer.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Belum ada jawaban tugas masuk</p></div>';
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  UPLOAD RESULTS
+        // ═══════════════════════════════════════════════════
+
+        async function uploadResults() {
+            const btn = document.getElementById('upload-btn');
+            const statusEl = document.getElementById('upload-status');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Mengupload...';
+            statusEl.classList.remove('hidden');
+            statusEl.className = 'alert alert-info';
+            statusEl.textContent = 'Menghubungkan ke internet dan mengupload hasil...';
+
+            try {
+                const res = await fetch(API + '/api/teacher/upload', { method: 'POST' });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Upload gagal');
+                }
+
+                if (data.total_pending === 0) {
+                    statusEl.className = 'alert alert-info';
+                    statusEl.textContent = 'ℹ️ Tidak ada hasil baru untuk diupload.';
+                } else if (data.total_failed === 0) {
+                    statusEl.className = 'alert alert-success';
+                    statusEl.textContent = `✅ Upload berhasil! ${data.total_uploaded} hasil diupload ke Supabase.`;
+                } else {
+                    statusEl.className = 'alert alert-error';
+                    statusEl.textContent = `⚠️ Upload sebagian: ${data.total_uploaded} berhasil, ${data.total_failed} gagal.`;
+                }
+
+                // Refresh dashboard data
+                loadStatus();
+            } catch (err) {
+                statusEl.className = 'alert alert-error';
+                statusEl.textContent = `❌ ${err.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '📤 Upload Hasil <span id="upload-badge" class="upload-badge hidden">0</span>';
+                loadStatus(); // Refresh badge
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  RE-DOWNLOAD DATA
+        // ═══════════════════════════════════════════════════
+
+        async function redownload() {
+            if (!confirm('Data akan diunduh ulang dari Supabase.\nData ujian yang sudah dikerjakan siswa TETAP tersimpan.\n\nLanjutkan?')) {
+                return;
+            }
+
+            const nip = prompt('Masukkan NIP Guru:');
+            if (!nip || nip.trim() === '') return;
+
+            const btn = document.getElementById('redownload-btn');
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(API + '/api/teacher/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nip: nip.trim() })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+
+                showView('downloading');
+                startStatePolling();
+            } catch (err) {
+                alert('Gagal: ' + err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        //  UTILITY
+        // ═══════════════════════════════════════════════════
+
+        function showView(viewName) {
+            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+            const view = document.getElementById('view-' + viewName);
+            if (view) view.classList.remove('hidden');
+        }
+
+        function switchResultTab(tabName, btnEl) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            btnEl.classList.add('active');
+            document.getElementById('tab-quiz-results').classList.toggle('hidden', tabName !== 'quiz');
+            document.getElementById('tab-assignment-results').classList.toggle('hidden', tabName !== 'assignment');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ── Start ──
+        init();
+    </script>
+</body>
+
+</html>

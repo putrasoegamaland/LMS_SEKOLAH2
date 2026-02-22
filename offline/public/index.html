@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS Ujian Offline</title>
+    <meta name="description" content="Sistem ujian offline LMS Sekolah">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+
+        <!-- ═══ LOGIN VIEW ═══ -->
+        <div id="view-login" class="view">
+            <div class="header">
+                <h1>📡 LMS Ujian Offline</h1>
+                <div class="subtitle">Masuk menggunakan NIS kamu</div>
+            </div>
+
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="nis-input">Nomor Induk Siswa (NIS)</label>
+                    <input type="text" id="nis-input" placeholder="Contoh: 12345" autocomplete="off" autofocus>
+                </div>
+                <div id="login-error" class="alert alert-error hidden"></div>
+                <button type="submit" class="btn btn-primary" id="login-btn">Masuk</button>
+            </form>
+        </div>
+
+        <!-- ═══ DASHBOARD VIEW ═══ -->
+        <div id="view-dashboard" class="view hidden">
+            <div class="header">
+                <h1>📡 LMS Ujian Offline</h1>
+            </div>
+
+            <div id="student-bar" class="student-bar"></div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('quizzes', this)">📝 Kuis</button>
+                <button class="tab" onclick="switchTab('assignments', this)">📋 Tugas</button>
+            </div>
+
+            <div id="tab-quizzes">
+                <div class="section-title">Daftar Kuis</div>
+                <div id="quiz-list">
+                    <div class="loading">Memuat kuis...</div>
+                </div>
+            </div>
+
+            <div id="tab-assignments" class="hidden">
+                <div class="section-title">Daftar Tugas</div>
+                <div id="assignment-list">
+                    <div class="loading">Memuat tugas...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ QUIZ VIEW ═══ -->
+        <div id="view-quiz" class="view hidden">
+            <div class="timer">
+                <div>
+                    <span id="quiz-title" class="timer-info"></span>
+                </div>
+                <div id="quiz-timer" class="timer-clock">00:00</div>
+            </div>
+            <div id="quiz-content"></div>
+        </div>
+
+        <!-- ═══ SCORE VIEW ═══ -->
+        <div id="view-score" class="view hidden">
+            <div class="header">
+                <h1>📡 Hasil Kuis</h1>
+            </div>
+            <div id="score-content"></div>
+        </div>
+
+        <!-- ═══ ASSIGNMENT VIEW ═══ -->
+        <div id="view-assignment" class="view hidden">
+            <div class="header">
+                <h1 id="assignment-title">Tugas</h1>
+                <div class="subtitle" id="assignment-desc"></div>
+            </div>
+            <div id="assignment-form-content">
+                <form onsubmit="submitAssignment(event)">
+                    <input type="hidden" id="assignment-id">
+                    <div class="form-group">
+                        <label for="assignment-answer">Jawaban Kamu</label>
+                        <textarea id="assignment-answer" placeholder="Tulis jawaban kamu di sini..." rows="8"></textarea>
+                    </div>
+                    <div id="assignment-error" class="alert alert-error hidden"></div>
+                    <button type="submit" class="btn btn-primary" id="submit-assignment-btn">✓ Kirim Tugas</button>
+                </form>
+                <button class="btn btn-back" onclick="backToDashboard()" style="margin-top:12px;">← Kembali ke Dashboard</button>
+            </div>
+        </div>
+
+        <!-- ═══ ASSIGNMENT SUCCESS VIEW ═══ -->
+        <div id="view-assignment-success" class="view hidden">
+            <div class="score-display">
+                <div class="score-circle good">
+                    <div class="score-value" style="font-size:2.5rem;">✓</div>
+                </div>
+                <p style="font-size:1.1rem; margin-bottom:8px;">Tugas berhasil dikumpulkan!</p>
+                <p style="color:var(--text-secondary); margin-bottom:24px;">Guru akan memeriksa jawabanmu.</p>
+                <button class="btn btn-primary" onclick="backToDashboard()" style="max-width:300px;">
+                    ← Kembali ke Dashboard
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="js/app.js"></script>
+    <script>
+        function switchTab(tabName, btnEl) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            btnEl.classList.add('active');
+            document.getElementById('tab-quizzes').classList.toggle('hidden', tabName !== 'quizzes');
+            document.getElementById('tab-assignments').classList.toggle('hidden', tabName !== 'assignments');
+        }
+    </script>
+</body>
+</html>

@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# offline server
+offline/data/
+offline/node_modules/
+offline/config.json
