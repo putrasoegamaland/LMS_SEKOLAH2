@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { validateSession } from '@/lib/auth'
 
-// Create admin client to bypass RLS
+// M2: Service Role Key required — analytics needs cross-table reads that RLS blocks for anon role.
+// Access restricted to ADMIN only.
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -98,18 +99,7 @@ export async function GET(request: NextRequest) {
             .from('exams')
             .select('id, teaching_assignment_id')
 
-        // Debug logging
-        console.log('Analytics Debug:', {
-            classesCount: classes?.length || 0,
-            subjectsCount: subjects?.length || 0,
-            studentsCount: students?.length || 0,
-            teachingAssignmentsCount: teachingAssignments?.length || 0,
-            quizSubmissionsCount: quizSubmissions?.length || 0,
-            examSubmissionsCount: examSubmissions?.length || 0,
-            quizzesCount: quizzes?.length || 0,
-            examsCount: exams?.length || 0,
-            academicYearId
-        })
+
 
         // Build a map: class_id -> subject_id -> student grades
         const classSubjectGrades: Record<string, Record<string, { student_id: string; scores: number[] }[]>> = {}

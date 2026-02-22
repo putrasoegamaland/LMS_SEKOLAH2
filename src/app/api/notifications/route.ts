@@ -148,6 +148,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
+        // C4 Security Fix: Only teachers and admins can create notifications
+        if (user.role !== 'GURU' && user.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+
         const body = await request.json()
         const { user_ids, type, title, message, link } = body
 

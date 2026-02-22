@@ -15,6 +15,11 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
+        // H3 Security Fix: Debug routes restricted to ADMIN only
+        if (user.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+
         // Get all teachers and find current user
         const { data: teachers, error: teachersError } = await supabase
             .from('teachers')

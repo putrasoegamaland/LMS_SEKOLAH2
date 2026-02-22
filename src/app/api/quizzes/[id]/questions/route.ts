@@ -28,7 +28,33 @@ export async function GET(
 
         if (error) throw error
 
-        return NextResponse.json(data)
+        let questions = data || []
+
+        // C1 Security Fix: Strip correct_answer for students unless quiz is already submitted
+        if (user.role === 'SISWA') {
+            const { data: student } = await supabase
+                .from('students')
+                .select('id')
+                .eq('user_id', user.id)
+                .single()
+
+            let hasSubmitted = false
+            if (student) {
+                const { data: submission } = await supabase
+                    .from('quiz_submissions')
+                    .select('submitted_at')
+                    .eq('quiz_id', id)
+                    .eq('student_id', student.id)
+                    .single()
+                hasSubmitted = !!submission?.submitted_at
+            }
+
+            if (!hasSubmitted) {
+                questions = questions.map(({ correct_answer, ...rest }) => rest)
+            }
+        }
+
+        return NextResponse.json(questions)
     } catch (error) {
         console.error('Error fetching questions:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })

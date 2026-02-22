@@ -3,7 +3,8 @@ import { supabase } from './supabase'
 import { User, Session, AuthUser } from './types'
 
 const SALT_ROUNDS = 10
-const SESSION_EXPIRY_DAYS = 7
+const SESSION_EXPIRY_HOURS = 24 // I1: Reduced from 7 days to 24 hours
+const SESSION_REFRESH_THRESHOLD_HOURS = 12 // Refresh when less than 12h remaining
 
 // Password utilities
 export async function hashPassword(password: string): Promise<string> {
@@ -23,7 +24,7 @@ export function generateSessionToken(): string {
 
 export function getSessionExpiry(): Date {
     const date = new Date()
-    date.setDate(date.getDate() + SESSION_EXPIRY_DAYS)
+    date.setHours(date.getHours() + SESSION_EXPIRY_HOURS)
     return date
 }
 
@@ -61,6 +62,17 @@ export async function validateSession(token: string): Promise<AuthUser | null> {
 
     if (error || !session || !session.user) {
         return null
+    }
+
+    // I1: Sliding window — extend session if expiring within threshold
+    const expiresAt = new Date(session.expires_at)
+    const hoursRemaining = (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60)
+    if (hoursRemaining < SESSION_REFRESH_THRESHOLD_HOURS) {
+        const newExpiry = getSessionExpiry()
+        await supabase
+            .from('sessions')
+            .update({ expires_at: newExpiry.toISOString() })
+            .eq('id', session.id)
     }
 
     return {

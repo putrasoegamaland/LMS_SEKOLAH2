@@ -373,6 +373,20 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'Submission not found' }, { status: 404 })
         }
 
+        // C3 Security Fix: Verify SISWA ownership — only the student who owns this submission can modify it
+        if (user.role === 'SISWA') {
+            const { data: student } = await supabase
+                .from('students')
+                .select('id')
+                .eq('user_id', user.id)
+                .single()
+            if (!student || currentSubmission.student_id !== student.id) {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+            }
+        } else if (user.role !== 'GURU' && user.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+
         if (currentSubmission.is_submitted) {
             return NextResponse.json({ error: 'Already submitted' }, { status: 400 })
         }

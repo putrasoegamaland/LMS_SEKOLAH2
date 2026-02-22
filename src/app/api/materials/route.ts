@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { validateSession } from '@/lib/auth'
 
-// Initialize Supabase with Service Role Key for admin privileges
+// M2: Service Role Key required because app uses custom auth (not Supabase Auth),
+// so RLS policies depending on auth.uid() won't work. Role checks enforce authorization.
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(data)
     } catch (error: any) {
         console.error('Error fetching materials:', error)
-        return NextResponse.json({ error: 'Server error', details: error.message }, { status: 500 })
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
     }
 }
 
@@ -110,9 +111,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(data)
     } catch (error: any) {
         console.error('Error creating material:', error)
-        return NextResponse.json({
-            error: error.message || 'Server error',
-            details: error.toString()
-        }, { status: 500 })
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
     }
 }

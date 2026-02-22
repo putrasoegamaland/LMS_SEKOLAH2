@@ -47,14 +47,17 @@ const crypto = require('crypto');
 const { exec } = require('child_process');
 
 // ═══════════════════════════════════════════════════
-//  E3: EMBEDDED CREDENTIALS (Public — safe to expose)
-//  The anon key is designed to be public. Security is
-//  enforced via Row Level Security (RLS) in Supabase.
-//  See supabase-rls-setup.sql for required policies.
+//  E3: SUPABASE CREDENTIALS
+//  M3 Security Fix: Read from environment variables.
+//  Create offline/.env with SUPABASE_URL and SUPABASE_ANON_KEY.
+//  Falls back to defaults if .env is not present.
 // ═══════════════════════════════════════════════════
 
-const SUPABASE_URL = 'https://veohqmrydavkokfiqvjj.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlb2hxbXJ5ZGF2a29rZmlxdmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0ODEzMjcsImV4cCI6MjA4NDA1NzMyN30.ikFPNm_Fu6yC17eeau3rGOgwQ6HKj4S4ZN06CQp3cuU';
+// Load .env file if present (no error if missing — fallback used)
+try { require('dotenv').config({ path: path.join(__dirname, '.env') }); } catch (e) { /* dotenv not installed, use fallbacks */ }
+
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://veohqmrydavkokfiqvjj.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlb2hxbXJ5ZGF2a29rZmlxdmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0ODEzMjcsImV4cCI6MjA4NDA1NzMyN30.ikFPNm_Fu6yC17eeau3rGOgwQ6HKj4S4ZN06CQp3cuU';
 
 // ─── Initialize Supabase client (anon key — RLS enforced) ───
 const { createClient } = require('@supabase/supabase-js');

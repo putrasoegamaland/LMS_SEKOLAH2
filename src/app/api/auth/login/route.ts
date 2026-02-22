@@ -1,8 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser, createSession } from '@/lib/auth'
 
+// M1 Security Fix: In-memory rate limiter for login attempts
+const loginAttempts = new Map<string, { count: number; resetTime: number }>()
+const MAX_ATTEMPTS = 5
+const WINDOW_MS = 60 * 1000 // 1 minute
+
+function checkRateLimit(ip: string): boolean {
+    const now = Date.now()
+    const entry = loginAttempts.get(ip)
+    if (!entry || now > entry.resetTime) {
+        loginAttempts.set(ip, { count: 1, resetTime: now + WINDOW_MS })
+        return true
+    }
+    entry.count++
+    if (entry.count > MAX_ATTEMPTS) return false
+    return true
+}
+
+// Cleanup stale entries every 5 minutes
+setInterval(() => {
+    const now = Date.now()
+    for (const [ip, entry] of loginAttempts.entries()) {
+        if (now > entry.resetTime) loginAttempts.delete(ip)
+    }
+}, 5 * 60 * 1000)
+
 export async function POST(request: NextRequest) {
     try {
+        // M1: Rate limit check
+        const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown'
+        if (!checkRateLimit(ip)) {
+            return NextResponse.json(
+                { error: 'Terlalu banyak percobaan login. Coba lagi dalam 1 menit.' },
+                { status: 429 }
+            )
+        }
+
         const { username, password } = await request.json()
 
         if (!username || !password) {

@@ -235,6 +235,26 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 })
         }
 
+        // H2 Security Fix: Verify this teacher owns the submission's teaching assignment
+        const { data: teacher } = await supabaseAdmin
+            .from('teachers')
+            .select('id')
+            .eq('user_id', user.id)
+            .single()
+
+        if (teacher) {
+            const { data: submission } = await supabaseAdmin
+                .from('student_submissions')
+                .select('assignment:assignments(teaching_assignment:teaching_assignments(teacher_id))')
+                .eq('id', submission_id)
+                .single()
+
+            const assignmentTeacherId = (submission?.assignment as any)?.teaching_assignment?.teacher_id
+            if (assignmentTeacherId && assignmentTeacherId !== teacher.id) {
+                return NextResponse.json({ error: 'Anda tidak memiliki akses untuk menilai submission ini' }, { status: 403 })
+            }
+        }
+
         // Check if grade exists - Use regular client here since it's user action
         const { data: existing } = await supabaseAdmin // Use admin to ensure teacher can grade
             .from('grades')

@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { validateSession } from '@/lib/auth'
 
-// Initialize Supabase with Service Role Key for admin privileges (bypassing RLS)
+// M2: Service Role Key required for Storage signed URL generation (Storage API requires admin privileges)
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // Fallback if no service key, but should be service key
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
 export async function POST(request: NextRequest) {
@@ -54,9 +54,6 @@ export async function POST(request: NextRequest) {
 
     } catch (error: any) {
         console.error('Server Error:', error)
-        return NextResponse.json({
-            error: error.message || 'Server error',
-            details: error.toString()
-        }, { status: 500 })
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
     }
 }

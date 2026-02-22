@@ -28,7 +28,33 @@ export async function GET(
 
         if (error) throw error
 
-        return NextResponse.json(data)
+        let questions = data || []
+
+        // C2 Security Fix: Strip correct_answer for students unless exam is already submitted
+        if (user.role === 'SISWA') {
+            const { data: student } = await supabase
+                .from('students')
+                .select('id')
+                .eq('user_id', user.id)
+                .single()
+
+            let hasSubmitted = false
+            if (student) {
+                const { data: submission } = await supabase
+                    .from('exam_submissions')
+                    .select('is_submitted')
+                    .eq('exam_id', id)
+                    .eq('student_id', student.id)
+                    .single()
+                hasSubmitted = !!submission?.is_submitted
+            }
+
+            if (!hasSubmitted) {
+                questions = questions.map(({ correct_answer, ...rest }) => rest)
+            }
+        }
+
+        return NextResponse.json(questions)
     } catch (error) {
         console.error('Error fetching exam questions:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })
