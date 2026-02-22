@@ -31,14 +31,14 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark overflow-hidden relative">
-            {/* Background Decorations */}
-            <div className="absolute top-0 -left-20 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl opacity-50 mix-blend-multiply filter animate-blob"></div>
-            <div className="absolute top-0 -right-20 w-96 h-96 bg-slate-400/10 rounded-full blur-3xl opacity-50 mix-blend-multiply filter animate-blob animation-delay-2000"></div>
-            <div className="absolute -bottom-32 left-20 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl opacity-50 mix-blend-multiply filter animate-blob animation-delay-4000"></div>
-
-            <div className="relative w-full max-w-md mx-4">
-                <div className="relative bg-white/90 dark:bg-surface-dark/90 backdrop-blur-xl border border-white/50 dark:border-white/5 rounded-3xl shadow-2xl shadow-slate-200/50 dark:shadow-none p-8 sm:p-10">
+        <div className="min-h-screen flex items-center justify-center overflow-hidden relative p-4" style={{
+            backgroundColor: '#E0F7FA',
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M10 10h16v20H10V10zm2 2v16h12V12H12z' fill='%2300C885' fill-opacity='0.25'/%3E%3Cpath d='M14 16h8v2h-8v-2zm0 4h8v2h-8v-2zm0 4h6v2h-6v-2z' fill='%2300C885' fill-opacity='0.3'/%3E%3Cpath d='M40 70l15-15 4 4-15 15z' fill='%2326A69A' fill-opacity='0.3'/%3E%3Cpath d='M58 58l-3 3-3-3 3-3 3 3z' fill='%2300C885' fill-opacity='0.4'/%3E%3Cpath d='M80 20h20v6H80v-6zm2 20h16v2H82v-2zm-12-8h40v2H70v-2z' fill='%234DB6AC' fill-opacity='0.2'/%3E%3Ccircle cx='90' cy='90' r='10' stroke='%2300C885' stroke-width='2' stroke-opacity='0.25'/%3E%3Cpath d='M100 100l-8-8' stroke='%2300C885' stroke-width='2' stroke-opacity='0.25'/%3E%3Cpath d='M20 90h20v4H20v-4zm0-10h20v4H20v-4zm-4-10h28v30H16V70z' fill='%2380CBC4' fill-opacity='0.2'/%3E%3Cpath d='M50 10l5 10h-10z' fill='%23009688' fill-opacity='0.2'/%3E%3Cpath d='M60 40h20v4H60v-4z' fill='%2300C885' fill-opacity='0.15' transform='rotate(-45 70 42)'/%3E%3C/g%3E%3C/svg%3E")`
+        }}>
+            <div className="relative w-full max-w-md">
+                {/* Subtle glow behind card */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="relative bg-white/95 dark:bg-surface-dark/95 backdrop-blur-xl border border-white/50 dark:border-white/5 rounded-3xl shadow-2xl shadow-slate-300/50 dark:shadow-none p-8 sm:p-10 ring-1 ring-black/5">
                     {/* Logo/Title */}
                     <div className="text-center mb-10">
                         <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-emerald-500 mb-6 shadow-lg shadow-emerald-500/20 ring-4 ring-white dark:ring-surface-dark transform rotate-3 hover:rotate-6 transition-transform">
