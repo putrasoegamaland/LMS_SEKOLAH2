@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAdmin } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 import { triggerHOTSAnalysis, triggerBulkHOTSAnalysis, type TriggerHOTSInput } from '@/lib/triggerHOTS'
 
@@ -136,7 +136,7 @@ export async function PUT(request: NextRequest) {
         // Reset status to trigger re-analysis
         updateData.status = 'ai_reviewing'
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('question_bank')
             .update(updateData)
             .eq('id', id)
@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
                 tags: q.tags || null
             }))
 
-            const { data, error } = await supabase
+            const { data, error } = await supabaseAdmin
                 .from('question_bank')
                 .insert(questions)
                 .select()
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
         // Single insert
         const { subject_id, question_text, question_type, options, correct_answer, difficulty, tags } = body
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('question_bank')
             .insert({
                 teacher_id: teacher.id,
@@ -315,7 +315,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'ID diperlukan' }, { status: 400 })
         }
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('question_bank')
             .delete()
             .eq('id', id)

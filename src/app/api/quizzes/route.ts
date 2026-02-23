@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAdmin } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
 // GET all quizzes (filtered by teacher)
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Create quiz (default: draft/inactive until published)
-        const { data: quiz, error } = await supabase
+        const { data: quiz, error } = await supabaseAdmin
             .from('quizzes')
             .insert({
                 title,
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
                 order_index: idx
             }))
 
-            const { error: questionsError } = await supabase
+            const { error: questionsError } = await supabaseAdmin
                 .from('quiz_questions')
                 .insert(questionsWithQuizId)
 
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
 
         // Handle question duplication if requested for Remedial
         if (is_remedial && remedial_for_id && duplicate_questions) {
-            const { data: originalQuestions, error: fetchError } = await supabase
+            const { data: originalQuestions, error: fetchError } = await supabaseAdmin
                 .from('quiz_questions')
                 .select('*')
                 .eq('quiz_id', remedial_for_id)
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
                     points: q.points,
                     order_index: q.order_index
                 }))
-                const { error: duplicateError } = await supabase.from('quiz_questions').insert(newQuestions)
+                const { error: duplicateError } = await supabaseAdmin.from('quiz_questions').insert(newQuestions)
                 if (duplicateError) throw duplicateError
             }
         }

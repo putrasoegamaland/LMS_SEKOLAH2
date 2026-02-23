@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAdmin } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
 // GET all assignments
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 })
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('assignments')
             .insert({ teaching_assignment_id, title, description, type, due_date })
             .select()
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         // Send notifications to all students in the class
         try {
             // Get the teaching assignment to find the class
-            const { data: ta } = await supabase
+            const { data: ta } = await supabaseAdmin
                 .from('teaching_assignments')
                 .select('class_id, subject:subjects(name)')
                 .eq('id', teaching_assignment_id)
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
 
             if (ta?.class_id) {
                 // Get all students in this class
-                const { data: students } = await supabase
+                const { data: students } = await supabaseAdmin
                     .from('students')
                     .select('user_id')
                     .eq('class_id', ta.class_id)
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
                     const notifType = type === 'TUGAS' ? 'TUGAS_BARU' : 'TUGAS_BARU'
                     const subjectName = (ta.subject as any)?.name || ''
 
-                    await supabase.from('notifications').insert(
+                    await supabaseAdmin.from('notifications').insert(
                         userIds.map(uid => ({
                             user_id: uid,
                             type: notifType,

@@ -363,35 +363,37 @@ export default function GuruUlanganPage() {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-2 mt-auto pt-2">
-                                        {exam.is_active ? (
-                                            <div className="flex gap-2">
-                                                <Link href={`/dashboard/guru/ulangan/${exam.id}/hasil`} className="flex-1">
-                                                    <Button variant="secondary" size="sm" className="w-full justify-center">
-                                                        <span className="text-secondary"><Graph set="bold" primaryColor="currentColor" size={16} /></span> Hasil
-                                                    </Button>
-                                                </Link>
-                                                {!(exam as any).is_remedial && status.label === 'Selesai' && (
-                                                    <Button
-                                                        variant="secondary"
-                                                        size="sm"
-                                                        onClick={() => handleOpenRemedial(exam)}
-                                                        className="flex-1 justify-center bg-orange-100 dark:bg-orange-900/30 text-orange-600 hover:bg-orange-200 dark:hover:bg-orange-800/50 border-orange-200 dark:border-orange-800/50"
-                                                    >
-                                                        <RefreshCw className="w-4 h-4 mr-1" /> Remedial
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <Button variant="secondary" size="sm" disabled className="w-full justify-center opacity-50 cursor-not-allowed">
-                                                <span className="text-secondary"><Graph set="bold" primaryColor="currentColor" size={16} /></span> Hasil
-                                            </Button>
-                                        )}
+                                    <div className="flex flex-col gap-2 mt-auto pt-2">
+                                        <div className="flex gap-2 w-full">
+                                            {exam.is_active ? (
+                                                <>
+                                                    <Link href={`/dashboard/guru/ulangan/${exam.id}/hasil`} className="flex-1">
+                                                        <Button variant="secondary" size="sm" className="w-full justify-center">
+                                                            <span className="text-secondary"><Graph set="bold" primaryColor="currentColor" size={16} /></span> Hasil
+                                                        </Button>
+                                                    </Link>
+                                                    {!(exam as any).is_remedial && status.label === 'Selesai' && (
+                                                        <Button
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={() => handleOpenRemedial(exam)}
+                                                            className="flex-1 justify-center bg-orange-100 dark:bg-orange-900/30 text-orange-600 hover:bg-orange-200 dark:hover:bg-orange-800/50 border-orange-200 dark:border-orange-800/50"
+                                                        >
+                                                            <RefreshCw className="w-4 h-4 mr-1 hidden sm:inline" /> Remedial
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <Button variant="secondary" size="sm" disabled className="w-full justify-center opacity-50 cursor-not-allowed">
+                                                    <span className="text-secondary"><Graph set="bold" primaryColor="currentColor" size={16} /></span> Hasil
+                                                </Button>
+                                            )}
+                                        </div>
 
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 w-full">
                                             <Link href={`/dashboard/guru/ulangan/${exam.id}`} className="flex-1">
                                                 <Button variant="outline" size="sm" className="w-full justify-center border-primary/20 text-primary hover:bg-primary/5">
-                                                    <Edit set="bold" primaryColor="currentColor" size={16} />
+                                                    <Edit set="bold" primaryColor="currentColor" size={16} /> Edit
                                                 </Button>
                                             </Link>
                                             <Button
@@ -400,7 +402,7 @@ export default function GuruUlanganPage() {
                                                 onClick={() => handleDelete(exam.id)}
                                                 className="flex-1 justify-center text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-900/30"
                                             >
-                                                <span className="text-red-500"><Delete set="bold" primaryColor="currentColor" size={16} /></span>
+                                                <span className="text-red-500"><Delete set="bold" primaryColor="currentColor" size={16} /></span> Hapus
                                             </Button>
                                         </div>
                                     </div>
