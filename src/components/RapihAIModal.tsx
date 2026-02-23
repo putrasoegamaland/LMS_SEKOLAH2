@@ -84,6 +84,10 @@ export default function RapihAIModal({
     const processResults = (questions: any[]) => {
         const processed = questions.map((q: any, idx: number) => ({
             ...q,
+            // Clean literal \n from AI-generated text
+            question_text: (q.question_text || '').replace(/\\n/g, '\n'),
+            passage_text: q.passage_text ? q.passage_text.replace(/\\n/g, '\n') : q.passage_text,
+            options: q.options ? q.options.map((opt: string) => opt.replace(/\\n/g, '\n')) : q.options,
             points: 10,
             order_index: idx,
             difficulty: undefined // Guru harus menentukan sendiri
