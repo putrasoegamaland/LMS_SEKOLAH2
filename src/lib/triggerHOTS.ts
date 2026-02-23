@@ -105,6 +105,34 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
             .update({ status: newStatus })
             .eq('id', input.questionId)
 
+        // 6. Notify teacher if question needs admin review or is auto-approved
+        try {
+            let teacherUserId: string | null = null
+            if (input.questionSource === 'bank') {
+                const { data: q } = await supabase
+                    .from('question_bank')
+                    .select('teacher:teachers(user_id)')
+                    .eq('id', input.questionId)
+                    .single()
+                teacherUserId = (q as any)?.teacher?.user_id || null
+            }
+
+            if (teacherUserId) {
+                if (newStatus === 'admin_review') {
+                    await supabase.from('notifications').insert({
+                        user_id: teacherUserId,
+                        type: 'HOTS_REVIEW',
+                        title: '🤖 Analisis AI selesai — soal perlu review admin',
+                        message: `Soal Anda telah dianalisis AI dan diteruskan ke admin untuk review. Alasan: ${routing.reasons?.join(', ') || 'Perlu verifikasi manual'}`,
+                        link: '/dashboard/guru/bank-soal'
+                    })
+                }
+                // Don't notify on auto_approve to avoid noise
+            }
+        } catch (notifErr) {
+            console.error('Notification error:', notifErr)
+        }
+
         console.log(`HOTS analysis complete for ${input.questionSource}/${input.questionId}: ${newStatus}`)
 
     } catch (error) {

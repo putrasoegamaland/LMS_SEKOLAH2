@@ -24,6 +24,7 @@ interface QuestionBankItem {
     status?: string
     teacher_hots_claim?: boolean
     ai_review?: any
+    admin_review?: any
 }
 
 interface Subject {
@@ -37,6 +38,7 @@ interface PassageQuestion {
     options: string[]
     correct_answer: string
     difficulty: 'EASY' | 'MEDIUM' | 'HARD'
+    teacher_hots_claim?: boolean
 }
 
 interface Passage {
@@ -65,6 +67,7 @@ export default function BankSoalPage() {
     const [selectedDifficulty, setSelectedDifficulty] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
     const [selectedType, setSelectedType] = useState('')
+    const [selectedStatus, setSelectedStatus] = useState('')
     const [currentPage, setCurrentPage] = useState(1)
     const ITEMS_PER_PAGE = 20
 
@@ -114,7 +117,8 @@ export default function BankSoalPage() {
             question_type: 'MULTIPLE_CHOICE' as 'ESSAY' | 'MULTIPLE_CHOICE',
             options: ['', '', '', ''],
             correct_answer: '',
-            difficulty: 'MEDIUM' as 'EASY' | 'MEDIUM' | 'HARD'
+            difficulty: 'MEDIUM' as 'EASY' | 'MEDIUM' | 'HARD',
+            teacher_hots_claim: false
         }] as PassageQuestion[]
     })
 
@@ -288,7 +292,8 @@ export default function BankSoalPage() {
                 question_type: 'MULTIPLE_CHOICE',
                 options: ['', '', '', ''],
                 correct_answer: '',
-                difficulty: 'MEDIUM'
+                difficulty: 'MEDIUM',
+                teacher_hots_claim: false
             }]
         })
     }
@@ -301,7 +306,8 @@ export default function BankSoalPage() {
                 question_type: 'MULTIPLE_CHOICE',
                 options: ['', '', '', ''],
                 correct_answer: '',
-                difficulty: 'MEDIUM'
+                difficulty: 'MEDIUM',
+                teacher_hots_claim: false
             }]
         })
     }
@@ -363,7 +369,8 @@ export default function BankSoalPage() {
                 question_type: 'MULTIPLE_CHOICE',
                 options: ['', '', '', ''],
                 correct_answer: '',
-                difficulty: 'MEDIUM'
+                difficulty: 'MEDIUM',
+                teacher_hots_claim: false
             }]
         })
     }
@@ -387,7 +394,8 @@ export default function BankSoalPage() {
         correct_answer: '',
         difficulty: 'MEDIUM' as 'EASY' | 'MEDIUM' | 'HARD',
         subject_id: '',
-        image_url: ''
+        image_url: '',
+        teacher_hots_claim: false
     })
 
     const handleEditQuestion = (q: QuestionBankItem) => {
@@ -399,7 +407,8 @@ export default function BankSoalPage() {
             correct_answer: q.correct_answer || '',
             difficulty: q.difficulty,
             subject_id: q.subject?.id || '',
-            image_url: q.image_url || ''
+            image_url: q.image_url || '',
+            teacher_hots_claim: q.teacher_hots_claim || false
         })
         setShowEditQuestionModal(true)
     }
@@ -428,6 +437,7 @@ export default function BankSoalPage() {
         if (selectedSubject && q.subject?.id !== selectedSubject) return false
         if (selectedDifficulty && q.difficulty !== selectedDifficulty) return false
         if (selectedType && q.question_type !== selectedType) return false
+        if (selectedStatus && q.status !== selectedStatus) return false
         if (searchQuery && !q.question_text.toLowerCase().includes(searchQuery.toLowerCase())) return false
         return true
     })
@@ -755,6 +765,18 @@ export default function BankSoalPage() {
                         <option value="MULTIPLE_CHOICE">Pilihan Ganda</option>
                         <option value="ESSAY">Essay</option>
                     </select>
+                    <select
+                        value={selectedStatus}
+                        onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1) }}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer hover:bg-secondary/10 transition-colors"
+                    >
+                        <option value="">Semua Status</option>
+                        <option value="approved">✅ Approved</option>
+                        <option value="ai_reviewing">🤖 AI Review</option>
+                        <option value="admin_review">⚠️ Perlu Review</option>
+                        <option value="returned">❌ Dikembalikan</option>
+                        <option value="draft">📝 Draft</option>
+                    </select>
                     {(filteredQuestions.length > 0 || filteredPassages.length > 0) && (
                         <Button
                             variant="secondary"
@@ -933,6 +955,13 @@ export default function BankSoalPage() {
                                                     )}
                                                     {getStatusBadge(q.status)}
                                                 </div>
+                                                {/* Admin return reason */}
+                                                {q.status === 'returned' && q.admin_review?.notes && (
+                                                    <div className="mt-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                                        <p className="text-xs font-bold text-amber-700 dark:text-amber-300 mb-0.5">📋 Alasan Pengembalian dari Admin:</p>
+                                                        <p className="text-xs text-amber-600 dark:text-amber-400">{q.admin_review.notes}</p>
+                                                    </div>
+                                                )}
                                                 <SmartText text={q.question_text} className="text-text-main dark:text-white mb-4 text-lg font-medium leading-relaxed" />
                                                 {q.question_type === 'MULTIPLE_CHOICE' && q.options && (
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -1484,6 +1513,22 @@ export default function BankSoalPage() {
                             ))}
                         </div>
                     )}
+                    {/* HOTS Claim Toggle */}
+                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={editQuestionForm.teacher_hots_claim}
+                                onChange={e => setEditQuestionForm({ ...editQuestionForm, teacher_hots_claim: e.target.checked })}
+                                className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                        <div>
+                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400">Tandai soal ini sebagai Higher-Order Thinking</p>
+                        </div>
+                    </div>
                     <div className="flex gap-3 pt-4">
                         <Button variant="secondary" onClick={() => setShowEditQuestionModal(false)} className="flex-1">Batal</Button>
                         <Button onClick={handleSaveEditQuestion} disabled={saving} className="flex-1">

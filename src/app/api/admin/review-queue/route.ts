@@ -233,6 +233,56 @@ export async function POST(request: NextRequest) {
             throw updateError
         }
 
+        // 3. Notify the teacher about the decision
+        try {
+            let teacherUserId: string | null = null
+
+            if (question_source === 'bank') {
+                const { data: q } = await supabase
+                    .from('question_bank')
+                    .select('teacher:teachers(user_id)')
+                    .eq('id', question_id)
+                    .single()
+                teacherUserId = (q as any)?.teacher?.user_id || null
+            } else {
+                const sourceTable = question_source === 'quiz' ? 'quiz_questions' : 'exam_questions'
+                const parentField = question_source === 'quiz' ? 'quiz:quizzes(teaching_assignment:teaching_assignments(teacher:teachers(user_id)))' : 'exam:exams(teaching_assignment:teaching_assignments(teacher:teachers(user_id)))'
+                const { data: q } = await supabase
+                    .from(sourceTable)
+                    .select(parentField)
+                    .eq('id', question_id)
+                    .single()
+                const parent = question_source === 'quiz' ? (q as any)?.quiz : (q as any)?.exam
+                teacherUserId = parent?.teaching_assignment?.teacher?.user_id || null
+            }
+
+            if (teacherUserId) {
+                const notifTitle = decision === 'approve'
+                    ? '✅ Soal Anda telah disetujui admin'
+                    : decision === 'return'
+                        ? '↩️ Soal Anda dikembalikan oleh admin'
+                        : '📦 Soal Anda telah diarsipkan'
+                const notifMessage = notes
+                    ? `Catatan admin: ${notes}`
+                    : decision === 'approve'
+                        ? 'Soal Anda telah melewati review dan disetujui.'
+                        : decision === 'return'
+                            ? 'Silakan periksa dan perbaiki soal Anda.'
+                            : 'Soal telah dipindahkan ke arsip.'
+
+                await supabase.from('notifications').insert({
+                    user_id: teacherUserId,
+                    type: 'HOTS_REVIEW',
+                    title: notifTitle,
+                    message: notifMessage,
+                    link: '/dashboard/guru/bank-soal'
+                })
+            }
+        } catch (notifError) {
+            console.error('Error sending notification:', notifError)
+            // Don't fail the main action if notification fails
+        }
+
         return NextResponse.json({
             success: true,
             question_id,

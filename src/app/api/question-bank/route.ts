@@ -52,7 +52,50 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
-        return NextResponse.json(data)
+        // Fetch AI reviews for all questions
+        const questionIds = (data || []).map((q: any) => q.id)
+        let aiReviewMap = new Map()
+        let adminReviewMap = new Map()
+
+        if (questionIds.length > 0) {
+            const { data: aiReviews } = await supabase
+                .from('ai_reviews')
+                .select('*')
+                .eq('question_source', 'bank')
+                .in('question_id', questionIds)
+                .order('created_at', { ascending: false })
+
+            // Keep only the latest AI review per question
+            aiReviews?.forEach((r: any) => {
+                if (!aiReviewMap.has(r.question_id)) {
+                    aiReviewMap.set(r.question_id, r)
+                }
+            })
+
+            // Fetch admin reviews (for return reasons)
+            const { data: adminReviews } = await supabase
+                .from('admin_reviews')
+                .select('*')
+                .eq('question_source', 'bank')
+                .in('question_id', questionIds)
+                .order('created_at', { ascending: false })
+
+            // Keep only the latest admin review per question
+            adminReviews?.forEach((r: any) => {
+                if (!adminReviewMap.has(r.question_id)) {
+                    adminReviewMap.set(r.question_id, r)
+                }
+            })
+        }
+
+        // Merge reviews into question data
+        const enrichedData = (data || []).map((q: any) => ({
+            ...q,
+            ai_review: aiReviewMap.get(q.id) || null,
+            admin_review: adminReviewMap.get(q.id) || null
+        }))
+
+        return NextResponse.json(enrichedData)
     } catch (error) {
         console.error('Error fetching question bank:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -73,7 +116,7 @@ export async function PUT(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { question_text, question_type, options, correct_answer, difficulty, subject_id } = body
+        const { question_text, question_type, options, correct_answer, difficulty, subject_id, teacher_hots_claim, image_url } = body
         const id = request.nextUrl.searchParams.get('id') || body.id
 
         if (!id) {
@@ -87,6 +130,11 @@ export async function PUT(request: NextRequest) {
         if (correct_answer !== undefined) updateData.correct_answer = correct_answer
         if (difficulty !== undefined) updateData.difficulty = difficulty
         if (subject_id !== undefined) updateData.subject_id = subject_id || null
+        if (teacher_hots_claim !== undefined) updateData.teacher_hots_claim = teacher_hots_claim
+        if (image_url !== undefined) updateData.image_url = image_url || null
+
+        // Reset status to trigger re-analysis
+        updateData.status = 'ai_reviewing'
 
         const { data, error } = await supabase
             .from('question_bank')
@@ -100,6 +148,27 @@ export async function PUT(request: NextRequest) {
             .single()
 
         if (error) throw error
+
+        // Trigger HOTS re-analysis after edit (fire-and-forget)
+        if (data) {
+            let subjectName = ''
+            if (data.subject_id) {
+                const { data: subjectData } = await supabase
+                    .from('subjects').select('name').eq('id', data.subject_id).single()
+                subjectName = subjectData?.name || ''
+            }
+            triggerHOTSAnalysis({
+                questionId: data.id,
+                questionSource: 'bank',
+                questionText: data.question_text,
+                questionType: data.question_type,
+                options: data.options,
+                correctAnswer: data.correct_answer,
+                teacherDifficulty: data.difficulty,
+                teacherHotsClaim: data.teacher_hots_claim || false,
+                subjectName
+            }).catch(err => console.error('HOTS re-analysis trigger error:', err))
+        }
 
         return NextResponse.json(data)
     } catch (error) {

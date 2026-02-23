@@ -69,6 +69,10 @@ export default function BottomNavigation() {
     const { user } = useAuth()
     const [isOpen, setIsOpen] = useState(false)
 
+    useEffect(() => {
+        setIsOpen(false)
+    }, [pathname])
+
     if (!user) return null
 
     let barLeft: NavItem[], barRight: NavItem[], arcItems: NavItem[]
@@ -90,9 +94,6 @@ export default function BottomNavigation() {
         return pathname.startsWith(path)
     }
 
-    useEffect(() => {
-        setIsOpen(false)
-    }, [pathname])
 
     // Arc positions
     const getItemStyle = (index: number, total: number) => {

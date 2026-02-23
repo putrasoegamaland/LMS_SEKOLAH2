@@ -497,11 +497,7 @@ export default function ReviewSoalPage() {
                                                                 </span>
                                                             )}
                                                             {item.ai_review && (
-                                                                <span className="px-1.5 py-0.5 text-xs bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300 rounded">
-                                                                    <div className="inline mr-0.5"><Brain set="bold" primaryColor="currentColor" size={12} /></div>
-                                                                    Bloom L{item.ai_review.primary_bloom_level}
-                                                                    {item.ai_review.hots_flag && ' • HOTS'}
-                                                                </span>
+                                                                <AIReviewPanel review={item.ai_review} compact />
                                                             )}
                                                             {getClassName(item) && (
                                                                 <span className="px-1.5 py-0.5 text-xs rounded bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
@@ -564,7 +560,7 @@ export default function ReviewSoalPage() {
                                                     <div className="border-t dark:border-zinc-700 pt-3">
                                                         <div className="flex flex-col md:flex-row gap-3">
                                                             <textarea
-                                                                placeholder="Catatan admin (opsional)..."
+                                                                placeholder="Tulis catatan / alasan pengembalian soal ke guru..."
                                                                 value={notes[item.id] || ''}
                                                                 onChange={e => setNotes(prev => ({ ...prev, [item.id]: e.target.value }))}
                                                                 className="flex-1 p-2 text-sm border rounded-lg bg-white dark:bg-zinc-800 dark:border-zinc-700 dark:text-white transition-colors focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none resize-none"
@@ -581,7 +577,13 @@ export default function ReviewSoalPage() {
                                                                 </Button>
                                                                 <Button
                                                                     variant="secondary"
-                                                                    onClick={() => handleAction(item, 'return')}
+                                                                    onClick={() => {
+                                                                        if (!notes[item.id]?.trim()) {
+                                                                            alert('Harap tulis alasan pengembalian di catatan admin sebelum mengembalikan soal.')
+                                                                            return
+                                                                        }
+                                                                        handleAction(item, 'return')
+                                                                    }}
                                                                     disabled={actionLoading === item.id}
                                                                     className="!bg-amber-500 hover:!bg-amber-600 !text-white text-xs flex-1 md:flex-none justify-center transition-all shadow-sm"
                                                                 >
