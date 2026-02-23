@@ -60,44 +60,55 @@ export async function GET(request: NextRequest) {
 
         if (taError) throw taError
 
-        // Get all assignments
-        const { data: assignments, error: assignmentsError } = await supabaseAdmin
+        // P4: Scope all queries by teaching assignment IDs for this academic year
+        const taIdList = (teachingAssignments || []).map(t => t.id)
+        if (taIdList.length === 0) {
+            return NextResponse.json({ classAverages: {}, studentDetails: {} })
+        }
+
+        // Get assignments scoped by teaching assignment
+        const { data: assignments } = await supabaseAdmin
             .from('assignments')
             .select('id, teaching_assignment_id')
+            .in('teaching_assignment_id', taIdList)
 
-        if (assignmentsError) throw assignmentsError
-
-        // Get student submissions for tugas
-        const { data: studentSubmissions, error: ssError } = await supabaseAdmin
-            .from('student_submissions')
-            .select('id, student_id, assignment_id')
-
-        // Get grades for student submissions (tugas)
-        const { data: grades, error: gradesError } = await supabaseAdmin
-            .from('grades')
-            .select('id, submission_id, score')
-
-        // Get quiz submissions (submitted ones only - submitted_at is not null)
-        const { data: quizSubmissions, error: qsError } = await supabaseAdmin
-            .from('quiz_submissions')
-            .select('id, student_id, quiz_id, total_score, max_score, submitted_at')
-            .not('submitted_at', 'is', null)
-
-        // Get quizzes to map to teaching assignments
-        const { data: quizzes, error: quizzesError } = await supabaseAdmin
+        // Get quizzes scoped by teaching assignment
+        const { data: quizzes } = await supabaseAdmin
             .from('quizzes')
             .select('id, teaching_assignment_id')
+            .in('teaching_assignment_id', taIdList)
 
-        // Get exam submissions (submitted ones)
-        const { data: examSubmissions, error: esError } = await supabaseAdmin
-            .from('exam_submissions')
-            .select('id, student_id, exam_id, score, submitted_at')
-            .not('submitted_at', 'is', null)
-
-        // Get exams to map to teaching assignments
-        const { data: exams, error: examsError } = await supabaseAdmin
+        // Get exams scoped by teaching assignment
+        const { data: exams } = await supabaseAdmin
             .from('exams')
             .select('id, teaching_assignment_id')
+            .in('teaching_assignment_id', taIdList)
+
+        // Get submissions only for scoped assignments/quizzes/exams
+        const assignmentIds = (assignments || []).map(a => a.id)
+        const quizIds = (quizzes || []).map(q => q.id)
+        const examIds = (exams || []).map(e => e.id)
+
+        // Fetch in parallel for speed
+        const [studentSubmRes, gradesRes, quizSubRes, examSubRes] = await Promise.all([
+            assignmentIds.length > 0
+                ? supabaseAdmin.from('student_submissions').select('id, student_id, assignment_id').in('assignment_id', assignmentIds)
+                : { data: [], error: null },
+            assignmentIds.length > 0
+                ? supabaseAdmin.from('grades').select('id, submission_id, score')
+                : { data: [], error: null },
+            quizIds.length > 0
+                ? supabaseAdmin.from('quiz_submissions').select('id, student_id, quiz_id, total_score, max_score, submitted_at').in('quiz_id', quizIds).not('submitted_at', 'is', null)
+                : { data: [], error: null },
+            examIds.length > 0
+                ? supabaseAdmin.from('exam_submissions').select('id, student_id, exam_id, score, submitted_at').in('exam_id', examIds).not('submitted_at', 'is', null)
+                : { data: [], error: null }
+        ])
+
+        const studentSubmissions = studentSubmRes.data || []
+        const grades = gradesRes.data || []
+        const quizSubmissions = quizSubRes.data || []
+        const examSubmissions = examSubRes.data || []
 
 
 

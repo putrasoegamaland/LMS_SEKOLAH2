@@ -9,6 +9,8 @@ const supabaseAdmin = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+import { parsePagination, applyPagination, paginationHeaders } from '@/lib/pagination'
+
 // GET all materials
 export async function GET(request: NextRequest) {
     try {
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
         let query = supabaseAdmin
             .from('materials')
             .select(`
-        *,
+        id, title, description, file_url, file_type, teaching_assignment_id, created_at,
           teaching_assignment:teaching_assignments(
           id,
           academic_year_id,
@@ -64,11 +66,21 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        // P1: Apply pagination
+        const pagination = parsePagination(request)
+        if (pagination) {
+            query = applyPagination(query, pagination)
+        }
+
         const { data, error } = await query
 
         if (error) throw error
 
-        return NextResponse.json(data)
+        const response = NextResponse.json(data)
+        if (pagination) {
+            Object.entries(paginationHeaders(pagination)).forEach(([k, v]) => response.headers.set(k, v))
+        }
+        return response
     } catch (error: any) {
         console.error('Error fetching materials:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })

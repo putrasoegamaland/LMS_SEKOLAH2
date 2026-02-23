@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
+import { parsePagination, applyPagination, paginationHeaders } from '@/lib/pagination'
+
+// P5: Throttle lazy sweep to once per 60 seconds
+let lastSweepTime = 0
+const SWEEP_INTERVAL_MS = 60_000
 
 // GET submissions (for teacher or student)
 export async function GET(request: NextRequest) {
@@ -18,9 +23,12 @@ export async function GET(request: NextRequest) {
         const quizId = request.nextUrl.searchParams.get('quiz_id')
         const studentId = request.nextUrl.searchParams.get('student_id')
         const allYears = request.nextUrl.searchParams.get('all_years')
+        const pagination = parsePagination(request)
 
-        // Lazy Sweep: Auto-close expired submissions if quizId is provided (Teacher View)
-        if (quizId && user.role === 'GURU') {
+        // P5: Lazy Sweep with throttle — only run if 60s has elapsed
+        const now = Date.now()
+        if (quizId && user.role === 'GURU' && (now - lastSweepTime > SWEEP_INTERVAL_MS)) {
+            lastSweepTime = now
             try {
                 const { data: quizData } = await supabase
                     .from('quizzes')
@@ -170,7 +178,12 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        const { data, error } = await query
+        // P1: Apply pagination if requested
+        if (pagination) {
+            query = applyPagination(query, pagination)
+        }
+
+        const { data, error, count } = await query
 
         if (error) throw error
 

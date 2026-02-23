@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
+import { parsePagination, applyPagination, paginationHeaders } from '@/lib/pagination'
+
+// P5: Throttle lazy sweep to once per 60 seconds
+let lastExamSweepTime = 0
+const SWEEP_INTERVAL_MS = 60_000
 
 // Helper: send notification to teacher when student submits exam
 async function notifyTeacherExamSubmission(examId: string, studentName: string, isForceSubmit: boolean = false) {
@@ -49,9 +54,12 @@ export async function GET(request: NextRequest) {
         const examId = request.nextUrl.searchParams.get('exam_id')
         const studentId = request.nextUrl.searchParams.get('student_id')
         const allYears = request.nextUrl.searchParams.get('all_years')
+        const pagination = parsePagination(request)
 
-        // Lazy Sweep: Auto-close expired submissions if examId is provided (Teacher View)
-        if (examId && user.role === 'GURU') {
+        // P5: Lazy Sweep with throttle — only run if 60s has elapsed
+        const now = Date.now()
+        if (examId && user.role === 'GURU' && (now - lastExamSweepTime > SWEEP_INTERVAL_MS)) {
+            lastExamSweepTime = now
             try {
                 const { data: examData } = await supabase
                     .from('exams')
@@ -114,7 +122,8 @@ export async function GET(request: NextRequest) {
         let query = supabase
             .from('exam_submissions')
             .select(`
-                *,
+                id, exam_id, student_id, started_at, submitted_at, is_submitted,
+                total_score, violations_count, created_at,
                 student:students(id, nis, user:users(full_name)),
                 exam:exams(
                     id, 
@@ -165,6 +174,11 @@ export async function GET(request: NextRequest) {
                     return NextResponse.json([])
                 }
             }
+        }
+
+        // P1: Apply pagination if requested
+        if (pagination) {
+            query = applyPagination(query, pagination)
         }
 
         const { data, error } = await query

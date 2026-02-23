@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateSession, hashPassword } from '@/lib/auth'
+import { parsePagination, applyPagination, paginationHeaders } from '@/lib/pagination'
 
 // GET all students
 export async function GET(request: NextRequest) {
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
         let query = supabase
             .from('students')
             .select(`
-        *,
+        id, user_id, nis, class_id, angkatan, school_level, status, created_at,
         user:users(id, username, full_name, role),
         class:classes(id, name, grade_level, school_level)
       `)
@@ -44,11 +45,21 @@ export async function GET(request: NextRequest) {
             query = query.eq('status', status)
         }
 
+        // P1: Apply optional pagination
+        const pagination = parsePagination(request)
+        if (pagination) {
+            query = applyPagination(query, pagination)
+        }
+
         const { data, error } = await query
 
         if (error) throw error
 
-        return NextResponse.json(data || [])
+        const response = NextResponse.json(data || [])
+        if (pagination) {
+            Object.entries(paginationHeaders(pagination)).forEach(([k, v]) => response.headers.set(k, v))
+        }
+        return response
     } catch (error) {
         console.error('Error fetching students:', error)
         return NextResponse.json([])

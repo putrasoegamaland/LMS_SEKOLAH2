@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateSession, hashPassword } from '@/lib/auth'
+import { parsePagination, applyPagination, paginationHeaders } from '@/lib/pagination'
 
 // GET all teachers
 export async function GET(request: NextRequest) {
@@ -17,27 +18,33 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized: Invalid session' }, { status: 401 })
         }
 
-        const { data, error } = await supabase
+        // P1: Parse optional pagination
+        const pagination = parsePagination(request)
+
+        let query = supabase
             .from('teachers')
             .select(`
-        *,
+        id, user_id, nip, created_at,
         user:users(id, username, full_name, role)
       `)
             .order('created_at', { ascending: false })
 
+        if (pagination) {
+            query = applyPagination(query, pagination)
+        }
+
+        const { data, error } = await query
+
         if (error) throw error
 
-        return NextResponse.json(data)
+        const response = NextResponse.json(data)
+        if (pagination) {
+            Object.entries(paginationHeaders(pagination)).forEach(([k, v]) => response.headers.set(k, v))
+        }
+        return response
     } catch (error: any) {
-        console.error('Error fetching teachers (Detailed):', {
-            message: error.message,
-            stack: error.stack,
-            details: error
-        })
-        return NextResponse.json({
-            error: 'Server error',
-            details: error.message
-        }, { status: 500 })
+        console.error('Error fetching teachers:', error)
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
     }
 }
 
