@@ -97,46 +97,32 @@ export default function SmartText({ text, className = '', as: Tag = 'p' }: Smart
 
     const arabicClasses = isArabic ? 'arabic-text' : ''
     const combinedClassName = `${className} ${arabicClasses}`.trim()
+    let processedText = text
 
     if (hasLatex) {
-        let html: string
         if (hasExplicitLatex) {
-            html = renderLatexInText(text)
+            processedText = renderLatexInText(text)
         } else {
-            html = renderRawLatexInText(text)
+            processedText = renderRawLatexInText(text)
         }
-
-        // Process Markdown formatting (bold, italic)
-        // Note: we do this AFTER LaTeX processing so we don't break LaTeX commands
-        // However, we must be careful not to break LaTeX that might contain * or _
-        // So we only replace if it's clearly not inside a LaTeX block
-
-        // First, convert literal \n to <br> and real newlines to <br>
-        html = html.replace(/\\n/g, '<br />').replace(/\n/g, '<br />')
-
-        // Basic Markdown Bold: **text** -> <b>text</b>
-        html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-
-        // Basic Markdown Italic: *text* -> <i>text</i> (careful with LaTeX multiplication)
-        // We only match if it's not surrounded by numbers/whitespace typical in math
-        html = html.replace(/(^|[^\w\d\\])\*(?!\s)(.*?)(?<!\s)\*(?!\w)/g, '$1<i>$2</i>')
-
-        return (
-            <Tag
-                className={combinedClassName}
-                dangerouslySetInnerHTML={{ __html: html }}
-                dir="auto"
-            />
-        )
     }
+
+    // Process Markdown formatting (bold, italic) and newlines for ALL text
+    // Convert literal \n to <br> and real newlines to <br>
+    processedText = processedText.replace(/\\n/g, '<br />').replace(/\n/g, '<br />')
+
+    // Basic Markdown Bold: **text** -> <b>text</b>
+    processedText = processedText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+
+    // Basic Markdown Italic: *text* -> <i>text</i> (careful with LaTeX multiplication)
+    processedText = processedText.replace(/(^|[^\w\d\\])\*(?!\s)(.*?)(?<!\s)\*(?!\w)/g, '$1<i>$2</i>')
 
     return (
         <Tag
-            className={`${combinedClassName} whitespace-pre-wrap`}
+            className={`${combinedClassName} ${!hasLatex ? 'whitespace-pre-wrap' : ''}`.trim()}
+            dangerouslySetInnerHTML={{ __html: processedText }}
             dir="auto"
-        >
-            {text}
-        </Tag>
+        />
     )
 }
 
