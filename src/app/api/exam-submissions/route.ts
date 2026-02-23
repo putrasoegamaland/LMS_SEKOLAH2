@@ -114,7 +114,8 @@ export async function GET(request: NextRequest) {
         let query = supabase
             .from('exam_submissions')
             .select(`
-                *,
+                id, exam_id, student_id, started_at, submitted_at, is_submitted,
+                total_score, violation_count, created_at,
                 student:students(id, nis, user:users(full_name)),
                 exam:exams(
                     id, 

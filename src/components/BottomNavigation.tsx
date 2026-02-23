@@ -18,6 +18,7 @@ const siswaNav: NavItem[] = [
     { icon: Home, label: 'Home', path: '/dashboard/siswa' },
     { icon: DocumentIcon, label: 'Materi', path: '/dashboard/siswa/materi' },
     { icon: Edit, label: 'Tugas', path: '/dashboard/siswa/tugas' },
+    { icon: TimeCircle, label: 'Ulangan', path: '/dashboard/siswa/ulangan' },
     { icon: Game, label: 'Kuis', path: '/dashboard/siswa/kuis' },
     { icon: Graph, label: 'Nilai', path: '/dashboard/siswa/nilai' },
 ]
@@ -26,8 +27,10 @@ const guruNav: NavItem[] = [
     { icon: Home, label: 'Home', path: '/dashboard/guru' },
     { icon: DocumentIcon, label: 'Materi', path: '/dashboard/guru/materi' },
     { icon: Edit, label: 'Tugas', path: '/dashboard/guru/tugas' },
-    { icon: Game, label: 'Kuis', path: '/dashboard/guru/kuis' },
     { icon: TimeCircle, label: 'Ulangan', path: '/dashboard/guru/ulangan' },
+    { icon: Game, label: 'Kuis', path: '/dashboard/guru/kuis' },
+    { icon: Bookmark, label: 'Bank Soal', path: '/dashboard/guru/bank-soal' },
+    { icon: Graph, label: 'Nilai', path: '/dashboard/guru/nilai' },
     { icon: User, label: 'Wali', path: '/dashboard/guru/wali-kelas' },
 ]
 
@@ -78,7 +81,8 @@ export default function BottomNavigation() {
                 {/* Subtle gradient accent on top */}
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
 
-                <div className="flex items-center justify-around h-[72px] px-2">
+                {/* Make container horizontally scrollable to fit all items */}
+                <div className="flex items-center gap-1 h-[72px] px-2 overflow-x-auto hide-scrollbar snap-x snap-mandatory">
                     {navItems.map((item) => {
                         const active = isActive(item.path)
                         const IconComponent = item.icon
@@ -87,7 +91,7 @@ export default function BottomNavigation() {
                             <Link
                                 key={item.path}
                                 href={item.path}
-                                className="relative flex flex-col items-center justify-center flex-1 h-full group"
+                                className="relative flex flex-col items-center justify-center flex-shrink-0 w-20 h-full group snap-start"
                             >
                                 {/* Active Background Pill with animation */}
                                 {active && (
@@ -113,7 +117,7 @@ export default function BottomNavigation() {
                                 </div>
 
                                 {/* Label with better typography */}
-                                <span className={`relative z-10 text-[10px] mt-1.5 transition-all duration-300 ${active
+                                <span className={`relative z-10 text-[10px] mt-1.5 transition-all duration-300 whitespace-nowrap ${active
                                     ? 'font-bold text-primary scale-105'
                                     : 'font-medium text-text-secondary group-hover:text-text-main group-hover:scale-105'
                                     }`}>

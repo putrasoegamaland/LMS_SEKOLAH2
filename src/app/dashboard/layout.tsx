@@ -8,6 +8,8 @@ import NotificationBell from '@/components/NotificationBell'
 import BottomNavigation from '@/components/BottomNavigation'
 import { Document as DocumentIcon, Logout } from 'react-iconly'
 
+import Sidebar from '@/components/Sidebar'
+
 interface DashboardLayoutProps {
     children: ReactNode
 }
@@ -49,7 +51,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return (
         <div className="min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">
             {/* Header */}
-            {/* Header */}
             <header className="sticky top-0 z-50 bg-slate-900 text-white shadow-md border-b border-slate-800">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-20">
@@ -83,6 +84,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 onClick={handleLogout}
                                 className="p-2.5 rounded-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                                 title="Logout"
+                                aria-label="Logout"
                             >
                                 <Logout set="bold" primaryColor="currentColor" size="medium" />
                             </button>
@@ -91,10 +93,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </div>
             </header>
 
-            {/* Main content - add bottom padding on mobile for bottom nav */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 lg:pb-8 animate-in fade-in duration-500">
-                {children}
-            </main>
+            <div className="flex h-[calc(100vh-5rem)]">
+                {/* Desktop Sidebar (Left spacing provided by internal fixed class) */}
+                <Sidebar />
+
+                {/* Main content - add bottom padding on mobile for bottom nav, left padding for desktop sidebar */}
+                <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 lg:pb-8 lg:pl-[17rem] overflow-y-auto animate-in fade-in duration-500">
+                    {children}
+                </main>
+            </div>
 
             {/* Bottom Navigation - only visible on mobile/tablet */}
             <BottomNavigation />

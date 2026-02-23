@@ -4,21 +4,13 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import Card from '@/components/ui/Card'
-import { Document, Edit, TimeCircle, Game, Chart, Home, User, Voice, Danger, Calendar, ArrowRight } from 'react-iconly'
-import { PartyPopper, GraduationCap } from 'lucide-react'
+import { TimeCircle as Clock, Danger, Calendar, Document, Edit, ArrowRight } from 'react-iconly'
+import { PartyPopper, GraduationCap, Loader2 } from 'lucide-react'
 
 interface StudentData {
     id: string
     nis: string | null
     class: { id: string; name: string } | null
-}
-
-interface Announcement {
-    id: string
-    title: string
-    content: string
-    published_at: string
 }
 
 interface DeadlineItem {
@@ -31,15 +23,26 @@ interface DeadlineItem {
     timeLeft: number // in hours
 }
 
+interface ScheduleEntry {
+    id: string
+    day_of_week: number
+    period: number
+    time_start: string
+    time_end: string
+    subject: { id: string; name: string } | null
+    teacher: { id: string; user: { full_name: string } } | null
+    room: string | null
+}
+
 export default function SiswaDashboard() {
     const { user } = useAuth()
     const router = useRouter()
     const [student, setStudent] = useState<StudentData | null>(null)
-    const [announcements, setAnnouncements] = useState<Announcement[]>([])
     const [loading, setLoading] = useState(true)
 
-    // Deadline Warning State
+    // Dashboard Data State
     const [upcomingDeadlines, setUpcomingDeadlines] = useState<DeadlineItem[]>([])
+    const [todaySchedule, setTodaySchedule] = useState<ScheduleEntry[]>([])
 
     // Resume Modal State
     const [resumeItem, setResumeItem] = useState<{
@@ -69,7 +72,7 @@ export default function SiswaDashboard() {
                 const myStudent = students.find((s: { user: { id: string } }) => s.user.id === user?.id)
                 setStudent(myStudent || null)
 
-                // Check for promotion status
+                // Check for promotion status (unchanged)
                 if (myStudent) {
                     try {
                         const enrollRes = await fetch(`/api/student-enrollments?student_id=${myStudent.id}`)
@@ -93,47 +96,41 @@ export default function SiswaDashboard() {
                     }
                 }
 
-                // Fetch announcements for student's class
                 if (myStudent?.class?.id) {
-                    const announcementsRes = await fetch(`/api/announcements?class_id=${myStudent.class.id}&limit=5`)
-                    if (announcementsRes.ok) {
-                        const data = await announcementsRes.json()
-                        setAnnouncements(Array.isArray(data) ? data : [])
-                    }
-
-                    // --- Fetch Deadlines (Tugas & Ulangan) ---
-                    const [assignmentsRes, examsRes, submissionsRes, examSubmissionsRes] = await Promise.all([
+                    // Fetch Deadlines & Schedule in parallel
+                    const [assignmentsRes, examsRes, submissionsRes, examSubmissionsRes, scheduleRes] = await Promise.all([
                         fetch('/api/assignments'),
                         fetch('/api/exams'),
-                        fetch(`/api/submissions?student_id=${myStudent.id}`), // Tugas submissions
-                        fetch(`/api/exam-submissions?student_id=${myStudent.id}`) // Ulangan submissions
+                        fetch(`/api/submissions?student_id=${myStudent.id}`),
+                        fetch(`/api/exam-submissions?student_id=${myStudent.id}`),
+                        fetch('/api/schedules/student-schedule')
                     ])
 
                     const assignmentsData = await assignmentsRes.json()
                     const examsData = await examsRes.json()
                     const submissionsData = await submissionsRes.json()
                     const examSubmissionsData = await examSubmissionsRes.json()
+                    const scheduleData = await scheduleRes.json()
+
+                    setTodaySchedule(Array.isArray(scheduleData) ? scheduleData : [])
 
                     const assignments = Array.isArray(assignmentsData) ? assignmentsData : []
                     const exams = Array.isArray(examsData) ? examsData : []
                     const assignmentSubmissions = Array.isArray(submissionsData) ? submissionsData : []
                     const examSubmissions = Array.isArray(examSubmissionsData) ? examSubmissionsData : []
 
-                    const now = new Date().getTime()
-                    const warningThreshold = 48 * 60 * 60 * 1000 // 48 hours in ms
+                    const nowTime = new Date().getTime()
+                    const warningThreshold = 48 * 60 * 60 * 1000 // 48 hours
                     const newDeadlines: DeadlineItem[] = []
 
                     // Process Assignments
                     assignments.forEach((a: any) => {
-                        // Filter by class
                         if (a.teaching_assignment?.class?.name !== myStudent.class.name) return
-                        // Filter if already submitted
                         if (assignmentSubmissions.some((s: any) => s.assignment_id === a.id)) return
-                        // Filter if no due date
                         if (!a.due_date) return
 
                         const dueDate = new Date(a.due_date).getTime()
-                        const diff = dueDate - now
+                        const diff = dueDate - nowTime
 
                         if (diff > 0 && diff <= warningThreshold) {
                             newDeadlines.push({
@@ -150,21 +147,14 @@ export default function SiswaDashboard() {
 
                     // Process Exams
                     exams.forEach((e: any) => {
-                        // Filter by class (assuming API returns teaching_assignment with class)
                         if (e.teaching_assignment?.class?.name !== myStudent.class.name) return
-                        // Filter if already submitted
                         if (examSubmissions.some((s: any) => s.exam_id === e.id && s.is_submitted)) return
-                        // Active exams only
                         if (!e.is_active) return
 
                         const startTime = new Date(e.start_time).getTime()
-                        // Use start_time + duration as rough "due date" window, or just start_time if it's strictly scheduled
-                        // Let's use strict end time logic: start_time + duration
                         const endTime = startTime + (e.duration_minutes * 60 * 1000)
-                        const diff = endTime - now
+                        const diff = endTime - nowTime
 
-                        // Logic: If it's available NOW or starting soon, and ends within 48h
-                        // For exams, "deadline" is the end time.
                         if (diff > 0 && diff <= warningThreshold) {
                             newDeadlines.push({
                                 id: e.id,
@@ -172,13 +162,12 @@ export default function SiswaDashboard() {
                                 title: e.title,
                                 subject: e.teaching_assignment?.subject?.name || 'Mapel',
                                 deadline: new Date(endTime).toISOString(),
-                                link: `/dashboard/siswa/ulangan/${e.id}`, // Direct link to start
+                                link: `/dashboard/siswa/ulangan/${e.id}`,
                                 timeLeft: diff / (1000 * 60 * 60)
                             })
                         }
                     })
 
-                    // Sort by most urgent
                     newDeadlines.sort((a, b) => a.timeLeft - b.timeLeft)
                     setUpcomingDeadlines(newDeadlines)
                 }
@@ -192,13 +181,12 @@ export default function SiswaDashboard() {
         if (user) fetchData()
     }, [user])
 
-    // Check for incomplete assessments and auto-submit expired ones
+    // Check for incomplete assessments logic (unchanged)
     useEffect(() => {
         if (!user || user.role !== 'SISWA') return
 
         const checkIncomplete = async () => {
             try {
-                // Fetch student ID first (Already done in fetchData but safe to repeat or optimize later)
                 const studentsRes = await fetch('/api/students')
                 const students = await studentsRes.json()
                 const myStudent = students.find((s: any) => s.user.id === user.id)
@@ -215,19 +203,15 @@ export default function SiswaDashboard() {
 
                 let foundResumeItem = null
 
-                // Check active exams first (higher priority)
                 if (Array.isArray(exams)) {
                     for (const e of exams) {
                         if (!e.is_submitted && e.exam?.is_active) {
                             const startedAt = new Date(e.started_at).getTime()
                             const durationMs = (e.exam.duration_minutes || 0) * 60 * 1000
                             const now = Date.now()
-                            // Buffer 1 min
                             const isExpired = now > (startedAt + durationMs + 60000)
 
                             if (isExpired) {
-                                // Auto-submit background
-                                console.log('Auto-submitting expired exam:', e.id)
                                 await fetch('/api/exam-submissions', {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
@@ -241,15 +225,12 @@ export default function SiswaDashboard() {
                                     type: 'Ulangan' as const,
                                     title: e.exam?.title || 'Ulangan Tanpa Judul',
                                     link: `/dashboard/siswa/ulangan/${e.exam_id}`,
-                                    // Calculate remaining time for display if needed
-                                    remainingTime: undefined
                                 }
                             }
                         }
                     }
                 }
 
-                // Check active quizzes
                 if (Array.isArray(quizzes)) {
                     for (const q of quizzes) {
                         if (!q.submitted_at && q.quiz?.is_active) {
@@ -259,14 +240,12 @@ export default function SiswaDashboard() {
                             const isExpired = now > (startedAt + durationMs + 60000)
 
                             if (isExpired) {
-                                // Auto-submit background
-                                console.log('Auto-submitting expired quiz:', q.id)
                                 await fetch('/api/quiz-submissions', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
                                         quiz_id: q.quiz_id,
-                                        answers: [], // Safe: API uses existing answers if empty
+                                        answers: [],
                                         submit: true
                                     })
                                 })
@@ -285,233 +264,229 @@ export default function SiswaDashboard() {
                     setResumeItem(foundResumeItem)
                     setShowResumeModal(true)
                 }
-
-            } catch (error) {
-                console.error('Error checking incomplete assessments:', error)
-            }
+            } catch (error) { }
         }
-
         checkIncomplete()
     }, [user])
 
-    const quickLinks = [
-        { href: '/dashboard/siswa/materi', icon: Document, label: 'Materi', sub: 'Bahan belajar', variant: 'blue' as const },
-        { href: '/dashboard/siswa/tugas', icon: Edit, label: 'Tugas', sub: 'Kerjakan PR', variant: 'amber' as const },
-        { href: '/dashboard/siswa/ulangan', icon: TimeCircle, label: 'Ulangan', sub: 'Ujian sekolah', variant: 'red' as const },
-        { href: '/dashboard/siswa/kuis', icon: Game, label: 'Kuis', sub: 'Latihan soal', variant: 'purple' as const },
-        { href: '/dashboard/siswa/nilai', icon: Chart, label: 'Nilai', sub: 'Lihat rapor', variant: 'green' as const },
-    ]
-
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('id-ID', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
+            day: '2-digit', month: 'short', year: 'numeric'
         })
     }
 
     const formatHour = (dateString: string) => {
         return new Date(dateString).toLocaleTimeString('id-ID', {
-            hour: '2-digit',
-            minute: '2-digit'
+            hour: '2-digit', minute: '2-digit'
         })
     }
 
+    const now = new Date()
+    const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+
+    const isCurrentPeriod = (startTime: string, endTime: string) => {
+        return currentTimeStr >= startTime.slice(0, 5) && currentTimeStr < endTime.slice(0, 5)
+    }
+    const isPastPeriod = (endTime: string) => {
+        return currentTimeStr >= endTime.slice(0, 5)
+    }
+
     return (
-        <div className="space-y-8">
-            {/* Welcome */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-primary to-primary-dark p-8 shadow-xl shadow-primary/20">
-                <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10"></div>
-                <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
-
-                <div className="relative">
-                    <h1 className="text-3xl font-bold text-white mb-2 leading-tight">
-                        Selamat Datang, {user?.full_name || 'Siswa'}! 👋
+        <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Header Area */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl lg:text-4xl font-black text-text-main dark:text-white tracking-tight">
+                        Halo, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-500">{user?.full_name?.split(' ')[0] || 'Siswa'}</span> 👋
                     </h1>
-                    <p className="text-blue-50/90 text-lg mb-4">
-                        Semangat belajar hari ini! Jangan lupa cek tugas terbaru.
+                    <p className="text-text-secondary dark:text-zinc-400 mt-2 font-medium">
+                        Siap untuk belajar hari ini? Berikut ringkasan jadwal dan tugasmu.
                     </p>
+                </div>
+                <div className="bg-white dark:bg-surface-dark px-4 py-2 rounded-2xl shadow-sm border border-black/5 dark:border-white/5 flex items-center gap-3 w-max">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                        <Calendar set="bold" size={20} />
+                    </div>
+                    <div>
+                        <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">{now.toLocaleDateString('id-ID', { weekday: 'long' })}</p>
+                        <p className="font-bold text-text-main dark:text-white">{now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                    </div>
+                </div>
+            </div>
 
-                    {!loading && student?.class && (
-                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-md rounded-full text-white font-medium text-sm">
-                            <Home set="bold" primaryColor="currentColor" size={20} />
-                            <span>Kelas: {student.class.name}</span>
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                {/* Left Column: Upcoming Deadlines */}
+                <div className="xl:col-span-7 space-y-6">
+                    <div className="flex items-center justify-between border-b-2 border-amber-500/20 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl text-white shadow-lg shadow-amber-500/20">
+                                <Danger set="bold" size={24} />
+                            </div>
+                            <h2 className="text-2xl font-bold text-text-main dark:text-white tracking-tight">Tugas yang Mendekati</h2>
+                        </div>
+                        {!loading && upcomingDeadlines.length > 0 && (
+                            <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-800 animate-pulse">
+                                {upcomingDeadlines.length} Tugas
+                            </div>
+                        )}
+                    </div>
+
+                    {!loading && upcomingDeadlines.length === 0 ? (
+                        <div className="h-64 flex flex-col items-center justify-center text-center p-8 bg-gradient-to-br from-emerald-50/50 to-transparent dark:from-emerald-900/10 dark:to-transparent rounded-3xl border border-emerald-100 dark:border-emerald-900/30">
+                            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 rounded-full flex items-center justify-center mb-4">
+                                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                            </div>
+                            <h3 className="text-xl font-bold text-text-main dark:text-white mb-2">Semua Tugas Selesai!</h3>
+                            <p className="text-text-secondary dark:text-zinc-400">Kerja bagus! Tidak ada tugas atau ulangan yang mendekati tenggat waktu saat ini.</p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4">
+                            {upcomingDeadlines.map((item) => (
+                                <Link key={item.id} href={item.link}>
+                                    <div className="group h-full bg-white/70 dark:bg-surface-dark/70 backdrop-blur-xl border border-amber-100 dark:border-amber-900/30 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-amber-300 dark:hover:border-amber-700 transition-all relative overflow-hidden">
+                                        {/* Status Glow */}
+                                        <div className={`absolute top-0 right-0 w-32 h-32 bg-amber-500/5 dark:bg-amber-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110`}></div>
+
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            <div className="max-w-[70%]">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${item.type === 'ULANGAN'
+                                                        ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+                                                        : 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400'
+                                                        }`}>
+                                                        {item.type}
+                                                    </span>
+                                                    <span className="text-xs font-bold text-amber-600 dark:text-amber-500 flex items-center gap-1">
+                                                        <Clock set="bold" size={12} />
+                                                        {Math.ceil(item.timeLeft)} jam lagi
+                                                    </span>
+                                                </div>
+                                                <h3 className="font-bold text-lg text-text-main dark:text-white mb-1 line-clamp-1 group-hover:text-primary transition-colors">
+                                                    {item.title}
+                                                </h3>
+                                                <div className="flex items-center gap-3 text-sm text-text-secondary dark:text-zinc-400">
+                                                    <span className="flex items-center gap-1 bg-secondary/10 px-2 py-0.5 rounded-md text-xs">
+                                                        <Document set="bold" size={12} /> {item.subject}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2">
+                                                <div className="text-sm font-bold text-text-secondary dark:text-zinc-500">
+                                                    {formatDate(item.deadline)} <br className="hidden sm:block" /> <span className="text-xs">{formatHour(item.deadline)}</span>
+                                                </div>
+                                                <button className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-amber-50 dark:bg-amber-900/20 text-amber-600 hover:bg-amber-600 hover:text-white transition-colors">
+                                                    <ArrowRight size={20} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Right Column: Today's Schedule (Timeline Style) */}
+                <div className="xl:col-span-5 space-y-6">
+                    <div className="flex items-center justify-between border-b-2 border-blue-500/20 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl text-white shadow-lg shadow-blue-500/20">
+                                <Calendar set="bold" size={24} />
+                            </div>
+                            <h2 className="text-2xl font-bold text-text-main dark:text-white tracking-tight">Pelajaran Hari Ini</h2>
+                        </div>
+                    </div>
+
+                    {!loading && todaySchedule.length === 0 ? (
+                        <div className="h-64 flex flex-col items-center justify-center text-center p-8 bg-gradient-to-br from-secondary/10 to-transparent rounded-3xl border border-secondary/20">
+                            <div className="w-16 h-16 bg-white dark:bg-surface-dark text-secondary rounded-full flex items-center justify-center mb-4 shadow-sm">
+                                <Calendar set="light" size={32} />
+                            </div>
+                            <h3 className="text-xl font-bold text-text-main dark:text-white mb-2">Libur / Bebas Kelas!</h3>
+                            <p className="text-text-secondary dark:text-zinc-400">Tidak ada jadwal pelajaran untuk hari ini.</p>
+                        </div>
+                    ) : (
+                        <div className="relative pl-6 lg:pl-8 space-y-6">
+                            {/* Timeline Line */}
+                            <div className="absolute left-0 top-2 bottom-6 w-0.5 bg-gradient-to-b from-blue-500/50 via-blue-500/20 to-transparent rounded-full ml-[11px] lg:ml-[15px]"></div>
+
+                            {todaySchedule.map((entry, index) => {
+                                const current = isCurrentPeriod(entry.time_start, entry.time_end)
+                                const past = isPastPeriod(entry.time_end)
+
+                                return (
+                                    <div key={entry.id} className={`relative flex flex-col gap-2 group transition-all duration-300 ${past ? 'opacity-60' : ''}`}>
+                                        {/* Timeline Dot */}
+                                        <div className={`absolute -left-6 lg:-left-8 mt-4 w-6 h-6 rounded-full border-4 flex items-center justify-center z-10 transition-colors ${current
+                                            ? 'bg-blue-500 border-blue-500/30 outline outline-4 outline-blue-500/10 animate-pulse'
+                                            : past
+                                                ? 'bg-zinc-300 dark:bg-zinc-600 border-white dark:border-surface-dark'
+                                                : 'bg-white dark:bg-surface-dark border-blue-500'
+                                            }`}>
+                                            {current && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                                        </div>
+
+                                        {/* Class Card (Compact for side column) */}
+                                        <div className={`flex flex-col sm:flex-row sm:items-center rounded-2xl p-4 transition-all duration-300 border backdrop-blur-xl ${current
+                                            ? 'bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/30 shadow-lg shadow-blue-500/10 scale-[1.02] transform-origin-left'
+                                            : 'bg-white/70 dark:bg-surface-dark/70 border-black/5 dark:border-white/5 shadow-sm'
+                                            }`}>
+
+                                            <div className="flex-1 w-full flex items-center justify-between">
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className={`text-sm font-black ${current ? 'text-blue-500' : 'text-text-main dark:text-white'}`}>
+                                                            {entry.time_start.slice(0, 5)} - {entry.time_end.slice(0, 5)}
+                                                        </span>
+                                                        {current && (
+                                                            <span className="px-2 py-0.5 bg-blue-500 text-white text-[10px] font-bold rounded-full animate-pulse">
+                                                                SEKARANG
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <h3 className={`text-lg font-bold mb-1 ${current ? 'text-blue-600 dark:text-blue-400' : 'text-text-main dark:text-white'}`}>
+                                                        {entry.subject?.name || 'Mata Pelajaran'}
+                                                    </h3>
+                                                    <div className="flex items-center gap-2 text-xs text-text-secondary">
+                                                        <span className="font-medium bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded">
+                                                            P{entry.period}
+                                                        </span>
+                                                        {entry.teacher && (
+                                                            <span className="truncate">👩‍🏫 {entry.teacher.user.full_name}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {entry.room && (
+                                                    <div className="flex flex-col items-end justify-center ml-2 border-l border-black/5 dark:border-white/5 pl-4">
+                                                        <span className="text-[10px] font-bold text-text-secondary tracking-wider uppercase mb-0.5">Ruang</span>
+                                                        <span className="text-xl font-black text-text-main dark:text-white">{entry.room}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* Deadline Warning Section */}
-            {!loading && upcomingDeadlines.length > 0 && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg animate-pulse text-red-500">
-                                <Danger set="bold" primaryColor="currentColor" size={24} />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold text-text-main dark:text-white">Penting: Segera Kerjakan!</h2>
-                                <p className="text-sm text-red-500 dark:text-red-400 font-medium">
-                                    {upcomingDeadlines.length} tugas/ulangan mendekati deadline (&lt; 48 jam)
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                        {upcomingDeadlines.map((item) => (
-                            <Link key={item.id} href={item.link}>
-                                <div className="group h-full bg-white dark:bg-surface-dark border-l-4 border-red-500 rounded-r-xl rounded-l-md p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden">
-                                    {/* Background gradient/glow on hover */}
-                                    <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-
-                                    <div className="relative">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${item.type === 'ULANGAN'
-                                                ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'
-                                                : 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300'
-                                                }`}>
-                                                {item.type}
-                                            </span>
-                                            <span className="text-xs font-bold text-red-500 flex items-center gap-1">
-                                                <TimeCircle set="bold" primaryColor="currentColor" size={12} />
-                                                {Math.ceil(item.timeLeft)} jam lagi
-                                            </span>
-                                        </div>
-
-                                        <h3 className="font-bold text-text-main dark:text-white mb-1 line-clamp-1 group-hover:text-primary transition-colors">
-                                            {item.title}
-                                        </h3>
-
-                                        <div className="flex items-center justify-between mt-3 text-xs text-text-secondary dark:text-zinc-400">
-                                            <span className="flex items-center gap-1">
-                                                <Document set="bold" primaryColor="currentColor" size={12} />
-                                                {item.subject}
-                                            </span>
-                                            <span className="flex items-center gap-1">
-                                                <Calendar set="bold" primaryColor="currentColor" size={12} />
-                                                {formatDate(item.deadline)}, {formatHour(item.deadline)}
-                                            </span>
-                                        </div>
-
-                                        <div className="mt-3 flex items-center justify-end text-primary text-xs font-bold opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0 transition-all gap-1">
-                                            Kerjakan Sekarang <ArrowRight set="bold" primaryColor="currentColor" size={14} />
-                                        </div>
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Quick Actions */}
-            <div>
-                <h2 className="text-xl font-bold text-text-main dark:text-white mb-6">Menu Belajar</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
-                    {quickLinks.map((link) => (
-                        <Link key={link.href} href={link.href}>
-                            <Card className="h-full border-2 border-primary/30 hover:border-primary hover:shadow-lg hover:shadow-primary/10 active:scale-95 transition-all group bg-white dark:bg-surface-dark cursor-pointer p-3 sm:p-4">
-                                <div className="flex flex-col items-center text-center gap-2 sm:gap-3">
-                                    {/* Duotone Icon Container */}
-                                    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all duration-300 ${link.href.includes('materi') ? 'bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-600 text-blue-600 dark:text-blue-400 group-hover:text-white' :
-                                        link.href.includes('tugas') ? 'bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-600 text-amber-600 dark:text-amber-400 group-hover:text-white' :
-                                            link.href.includes('ulangan') ? 'bg-red-100 dark:bg-red-900/30 group-hover:bg-red-600 text-red-600 dark:text-red-400 group-hover:text-white' :
-                                                link.href.includes('kuis') ? 'bg-purple-100 dark:bg-purple-900/30 group-hover:bg-purple-600 text-purple-600 dark:text-purple-400 group-hover:text-white' :
-                                                    'bg-green-100 dark:bg-green-900/30 group-hover:bg-green-600 text-green-600 dark:text-green-400 group-hover:text-white'
-                                        }`}>
-                                        <link.icon set="bold" primaryColor="currentColor" size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-text-main dark:text-white group-hover:text-primary transition-colors text-sm sm:text-lg">{link.label}</h3>
-                                        <p className="text-[10px] sm:text-xs text-text-secondary dark:text-[#A8BC9F] mt-0.5 sm:mt-1 line-clamp-1">{link.sub}</p>
-                                    </div>
-                                </div>
-                            </Card>
-                        </Link>
-                    ))}
-                </div>
-            </div>
-
-            {/* Info Card */}
-            {!loading && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card>
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center text-primary">
-                                <User set="bold" primaryColor="currentColor" size={24} />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-text-main dark:text-white">Informasi Akun</h3>
-                                <p className="text-sm text-text-secondary dark:text-[#A8BC9F]">Detail data diri siswa</p>
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between p-3 bg-secondary/5 rounded-xl">
-                                <span className="text-sm text-text-secondary dark:text-[#A8BC9F]">Nama Lengkap</span>
-                                <span className="font-bold text-text-main dark:text-white">{user?.full_name || '-'}</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-secondary/5 rounded-xl">
-                                <span className="text-sm text-text-secondary dark:text-[#A8BC9F]">NIS</span>
-                                <span className="font-bold text-text-main dark:text-white">{student?.nis || '-'}</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-secondary/5 rounded-xl">
-                                <span className="text-sm text-text-secondary dark:text-[#A8BC9F]">Kelas</span>
-                                <span className="font-bold text-text-main dark:text-white">{student?.class?.name || 'Belum ada kelas'}</span>
-                            </div>
-                        </div>
-                    </Card>
-
-                    <Card className="bg-gradient-to-br from-secondary/10 to-primary/5 border-none">
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-orange-500">
-                                <Voice set="bold" primaryColor="currentColor" size={24} />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-text-main dark:text-white">Pengumuman</h3>
-                                <p className="text-sm text-text-secondary dark:text-[#A8BC9F]">Info terbaru dari sekolah</p>
-                            </div>
-                        </div>
-
-                        {announcements.length === 0 ? (
-                            <div className="text-center py-8 text-text-secondary dark:text-[#A8BC9F] italic">
-                                Belum ada pengumuman baru untuk saat ini.
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {announcements.slice(0, 3).map((announcement) => (
-                                    <div key={announcement.id} className="p-3 bg-white/50 dark:bg-surface-dark/50 rounded-xl">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <h4 className="font-bold text-text-main dark:text-white text-sm line-clamp-1">{announcement.title}</h4>
-                                            <span className="text-xs text-text-secondary whitespace-nowrap">{formatDate(announcement.published_at)}</span>
-                                        </div>
-                                        <p className="text-xs text-text-secondary dark:text-zinc-400 mt-1 line-clamp-2">{announcement.content}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </Card>
-                </div>
-            )}
-
-            {/* Global Resume Modal */}
+            {/* Global Resume Modal (unchanged) */}
             {showResumeModal && resumeItem && (
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
                     <div className="bg-surface-light dark:bg-surface-dark border-2 border-primary/20 rounded-2xl p-8 w-full max-w-md text-center shadow-2xl relative overflow-hidden">
-                        {/* Decorative background blob */}
                         <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
                         <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
 
                         <div className="relative">
                             <div className="w-20 h-20 bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner ring-4 ring-white dark:ring-surface-dark">
-                                <TimeCircle set="bold" primaryColor="currentColor" size={40} />
+                                <Clock set="bold" size={40} />
                             </div>
-
                             <h3 className="text-2xl font-bold text-text-main dark:text-white mb-2">
                                 Ada {resumeItem.type} Belum Selesai!
                             </h3>
-
                             <div className="bg-surface-ground/50 dark:bg-surface-ground/30 rounded-xl p-4 my-6 border border-secondary/10">
                                 <p className="text-sm text-text-secondary dark:text-zinc-400 mb-1">
                                     Kamu sedang mengerjakan:
@@ -520,7 +495,6 @@ export default function SiswaDashboard() {
                                     {resumeItem.title}
                                 </p>
                             </div>
-
                             <div className="space-y-3">
                                 <Link
                                     href={resumeItem.link}
@@ -528,7 +502,6 @@ export default function SiswaDashboard() {
                                 >
                                     🚀 Lanjutkan Sekarang
                                 </Link>
-
                                 <button
                                     onClick={() => setShowResumeModal(false)}
                                     className="w-full py-3 text-text-secondary hover:text-text-main dark:text-zinc-400 dark:hover:text-white transition-colors"
@@ -541,48 +514,25 @@ export default function SiswaDashboard() {
                 </div>
             )}
 
-            {/* Promotion Celebration Popup */}
+            {/* Promotion Celebration Popup (unchanged) */}
             {showPromotionPopup && promotionInfo && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-surface-dark rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center relative overflow-hidden">
-                        {/* Confetti decoration */}
                         <div className="absolute inset-0 pointer-events-none">
                             {[...Array(20)].map((_, i) => (
-                                <div
-                                    key={i}
-                                    className="absolute w-2 h-2 rounded-full animate-bounce"
-                                    style={{
-                                        left: `${Math.random() * 100}%`,
-                                        top: `${Math.random() * 100}%`,
-                                        backgroundColor: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'][i % 6],
-                                        animationDelay: `${Math.random() * 2}s`,
-                                        animationDuration: `${1 + Math.random()}s`
-                                    }}
-                                />
+                                <div key={i} className="absolute w-2 h-2 rounded-full animate-bounce" style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, backgroundColor: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'][i % 6], animationDelay: `${Math.random() * 2}s`, animationDuration: `${1 + Math.random()}s` }} />
                             ))}
                         </div>
-
                         <div className="relative">
                             <div className="flex justify-center gap-3 mb-4">
                                 <PartyPopper className="w-10 h-10 text-yellow-500 animate-bounce" />
                                 <GraduationCap className="w-12 h-12 text-primary" />
                                 <PartyPopper className="w-10 h-10 text-yellow-500 animate-bounce" style={{ animationDelay: '0.5s' }} />
                             </div>
-
-                            <h2 className="text-2xl font-bold text-text-main dark:text-white mb-2">
-                                🎉 Selamat Naik Kelas!
-                            </h2>
-                            <p className="text-text-secondary dark:text-zinc-400 mb-4">
-                                Kamu berhasil naik dari <strong>{promotionInfo.fromClass}</strong> ke <strong>{promotionInfo.toClass}</strong>!
-                            </p>
-                            <p className="text-sm text-text-secondary dark:text-zinc-500 mb-6">
-                                Terus semangat belajar ya! 💪
-                            </p>
-
-                            <button
-                                onClick={() => setShowPromotionPopup(false)}
-                                className="w-full py-3.5 bg-gradient-to-r from-primary to-emerald-500 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
-                            >
+                            <h2 className="text-2xl font-bold text-text-main dark:text-white mb-2">🎉 Selamat Naik Kelas!</h2>
+                            <p className="text-text-secondary dark:text-zinc-400 mb-4">Kamu berhasil naik dari <strong>{promotionInfo.fromClass}</strong> ke <strong>{promotionInfo.toClass}</strong>!</p>
+                            <p className="text-sm text-text-secondary dark:text-zinc-500 mb-6">Terus semangat belajar ya! 💪</p>
+                            <button onClick={() => setShowPromotionPopup(false)} className="w-full py-3.5 bg-gradient-to-r from-primary to-emerald-500 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
                                 Terima Kasih! 🚀
                             </button>
                         </div>
