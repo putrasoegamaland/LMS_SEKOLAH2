@@ -227,10 +227,49 @@ export async function GET(request: NextRequest) {
         teachingWarnings.sort((a, b) => a.avg_score - b.avg_score)
         homeroomWarnings.sort((a, b) => a.avg_score - b.avg_score)
 
+        // Build "My Classes" grouped data (reuses already-fetched data, no extra queries)
+        const classMap = new Map<string, { class_id: string; class_name: string; subjects: string[]; isHomeroom: boolean }>()
+
+        for (const ta of activeDirectAssignments) {
+            const cls = unwrap(ta.class)
+            const subj = unwrap(ta.subject)
+            if (!cls) continue
+            const existing = classMap.get(cls.id)
+            if (existing) {
+                if (subj?.name && !existing.subjects.includes(subj.name)) {
+                    existing.subjects.push(subj.name)
+                }
+            } else {
+                classMap.set(cls.id, {
+                    class_id: cls.id,
+                    class_name: cls.name,
+                    subjects: subj?.name ? [subj.name] : [],
+                    isHomeroom: hrClassIds.includes(cls.id)
+                })
+            }
+        }
+
+        // Include homeroom-only classes (not in teaching assignments)
+        for (const hrClass of (homeroomClasses || [])) {
+            if (!classMap.has(hrClass.id)) {
+                classMap.set(hrClass.id, {
+                    class_id: hrClass.id,
+                    class_name: hrClass.name,
+                    subjects: [],
+                    isHomeroom: true
+                })
+            } else {
+                classMap.get(hrClass.id)!.isHomeroom = true
+            }
+        }
+
+        const myClasses = Array.from(classMap.values()).sort((a, b) => a.class_name.localeCompare(b.class_name))
+
         return NextResponse.json({
             kkm: KKM,
             teachingWarnings,
-            homeroomWarnings
+            homeroomWarnings,
+            myClasses
         })
     } catch (error: any) {
         console.error('Error fetching dashboard warnings:', error)

@@ -98,7 +98,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Sidebar />
 
                 {/* Main content - add bottom padding on mobile for bottom nav, left padding for desktop sidebar */}
-                <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 lg:pb-8 lg:pl-[17rem] overflow-y-auto animate-in fade-in duration-500">
+                <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 lg:pb-8 lg:pl-[17rem] overflow-y-auto animate-in fade-in duration-500" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    <style>{`main::-webkit-scrollbar { display: none; }`}</style>
                     {children}
                 </main>
             </div>

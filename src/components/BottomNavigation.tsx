@@ -1,11 +1,12 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import {
     Home, Document as DocumentIcon, Edit, Game, Graph, TimeCircle, User, Work,
-    Category, Bookmark, Chart, Ticket, Notification, Calendar
+    Category, Bookmark, Chart, Ticket, Notification, Calendar, Folder
 } from 'react-iconly'
 
 interface NavItem {
@@ -14,31 +15,46 @@ interface NavItem {
     path: string
 }
 
-const siswaNav: NavItem[] = [
+// --- SISWA ---
+const siswaBarLeft: NavItem[] = [
     { icon: Home, label: 'Home', path: '/dashboard/siswa' },
-    { icon: DocumentIcon, label: 'Materi', path: '/dashboard/siswa/materi' },
     { icon: Edit, label: 'Tugas', path: '/dashboard/siswa/tugas' },
-    { icon: TimeCircle, label: 'Ulangan', path: '/dashboard/siswa/ulangan' },
+]
+const siswaBarRight: NavItem[] = [
     { icon: Game, label: 'Kuis', path: '/dashboard/siswa/kuis' },
+    { icon: TimeCircle, label: 'Ulangan', path: '/dashboard/siswa/ulangan' },
+]
+const siswaArc: NavItem[] = [
+    { icon: DocumentIcon, label: 'Materi', path: '/dashboard/siswa/materi' },
     { icon: Graph, label: 'Nilai', path: '/dashboard/siswa/nilai' },
 ]
 
-const guruNav: NavItem[] = [
+// --- GURU ---
+const guruBarLeft: NavItem[] = [
     { icon: Home, label: 'Home', path: '/dashboard/guru' },
-    { icon: DocumentIcon, label: 'Materi', path: '/dashboard/guru/materi' },
     { icon: Edit, label: 'Tugas', path: '/dashboard/guru/tugas' },
-    { icon: TimeCircle, label: 'Ulangan', path: '/dashboard/guru/ulangan' },
+]
+const guruBarRight: NavItem[] = [
     { icon: Game, label: 'Kuis', path: '/dashboard/guru/kuis' },
-    { icon: Bookmark, label: 'Bank Soal', path: '/dashboard/guru/bank-soal' },
+    { icon: TimeCircle, label: 'Ulangan', path: '/dashboard/guru/ulangan' },
+]
+const guruArc: NavItem[] = [
+    { icon: DocumentIcon, label: 'Materi', path: '/dashboard/guru/materi' },
+    { icon: Folder, label: 'Bank Soal', path: '/dashboard/guru/bank-soal' },
     { icon: Graph, label: 'Nilai', path: '/dashboard/guru/nilai' },
     { icon: User, label: 'Wali', path: '/dashboard/guru/wali-kelas' },
 ]
 
-const adminNav: NavItem[] = [
+// --- ADMIN ---
+const adminBarLeft: NavItem[] = [
     { icon: Home, label: 'Home', path: '/dashboard/admin' },
     { icon: User, label: 'Siswa', path: '/dashboard/admin/siswa' },
+]
+const adminBarRight: NavItem[] = [
     { icon: Work, label: 'Guru', path: '/dashboard/admin/guru' },
     { icon: Category, label: 'Kelas', path: '/dashboard/admin/kelas' },
+]
+const adminArc: NavItem[] = [
     { icon: Graph, label: 'Kenaikan', path: '/dashboard/admin/kenaikan-kelas' },
     { icon: Bookmark, label: 'Mapel', path: '/dashboard/admin/mapel' },
     { icon: Calendar, label: 'Tahun', path: '/dashboard/admin/tahun-ajaran' },
@@ -51,19 +67,21 @@ const adminNav: NavItem[] = [
 export default function BottomNavigation() {
     const pathname = usePathname()
     const { user } = useAuth()
+    const [isOpen, setIsOpen] = useState(false)
 
     if (!user) return null
 
-    const getNavItems = (): NavItem[] => {
-        switch (user.role) {
-            case 'SISWA': return siswaNav
-            case 'GURU': return guruNav
-            case 'ADMIN': return adminNav
-            default: return []
-        }
+    let barLeft: NavItem[], barRight: NavItem[], arcItems: NavItem[]
+    switch (user.role) {
+        case 'SISWA':
+            barLeft = siswaBarLeft; barRight = siswaBarRight; arcItems = siswaArc; break
+        case 'GURU':
+            barLeft = guruBarLeft; barRight = guruBarRight; arcItems = guruArc; break
+        case 'ADMIN':
+            barLeft = adminBarLeft; barRight = adminBarRight; arcItems = adminArc; break
+        default:
+            barLeft = []; barRight = []; arcItems = []
     }
-
-    const navItems = getNavItems()
 
     const isActive = (path: string) => {
         if (path === `/dashboard/${user.role.toLowerCase()}`) {
@@ -72,70 +90,163 @@ export default function BottomNavigation() {
         return pathname.startsWith(path)
     }
 
+    useEffect(() => {
+        setIsOpen(false)
+    }, [pathname])
+
+    // Arc positions
+    const getItemStyle = (index: number, total: number) => {
+        const startAngle = 150
+        const endAngle = 30
+        const angleStep = (startAngle - endAngle) / Math.max(total - 1, 1)
+        const angleDeg = startAngle - index * angleStep
+        const angleRad = (angleDeg * Math.PI) / 180
+        const radius = total <= 3 ? 110 : total <= 5 ? 130 : 155
+        const delay = index * 50
+        return {
+            x: radius * Math.cos(angleRad),
+            y: -radius * Math.sin(angleRad),
+            delay,
+        }
+    }
+
+    const renderBarItem = (item: NavItem) => {
+        const active = isActive(item.path)
+        const IconComponent = item.icon
+        return (
+            <Link
+                key={item.path}
+                href={item.path}
+                className="relative flex flex-col items-center justify-center w-14"
+                onClick={() => setIsOpen(false)}
+            >
+                <div className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 ${active
+                    ? 'bg-gradient-to-br from-primary to-emerald-500 text-white shadow-lg shadow-primary/30 scale-105 -translate-y-0.5'
+                    : isOpen
+                        ? 'text-white/60 dark:text-slate-500'
+                        : 'text-slate-400 dark:text-slate-500'
+                    }`}>
+                    <IconComponent
+                        set={active ? 'bold' : 'light'}
+                        primaryColor={active ? 'white' : 'currentColor'}
+                        size="small"
+                    />
+                </div>
+                <span className={`text-[10px] mt-0.5 font-bold transition-colors ${active
+                    ? 'text-primary'
+                    : isOpen
+                        ? 'text-white/50 dark:text-slate-600'
+                        : 'text-slate-400 dark:text-slate-500'
+                    }`}>
+                    {item.label}
+                </span>
+            </Link>
+        )
+    }
+
     return (
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50">
-            {/* Stronger shadow and blur for elevation */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent pointer-events-none" style={{ height: '120px', bottom: 0 }} />
+        <>
+            {/* Backdrop overlay — separate from nav for clean layering */}
+            {isOpen && (
+                <div
+                    className="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setIsOpen(false)}
+                />
+            )}
 
-            <div className="relative bg-white/98 dark:bg-surface-dark/98 backdrop-blur-2xl border-t-2 border-primary/10 dark:border-primary/20 shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.3)]">
-                {/* Subtle gradient accent on top */}
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-
-                {/* Make container horizontally scrollable to fit all items */}
-                <div className="flex items-center gap-1 h-[72px] px-2 overflow-x-auto hide-scrollbar snap-x snap-mandatory">
-                    {navItems.map((item) => {
+            {/* Arc items — rendered as a fixed layer above backdrop, below bar */}
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 z-[52] flex justify-center pb-5" style={{ pointerEvents: 'none' }}>
+                <div className="relative" style={{ width: 0, height: 0, marginBottom: '56px' }}>
+                    {arcItems.map((item, index) => {
+                        const { x, y, delay } = getItemStyle(index, arcItems.length)
                         const active = isActive(item.path)
                         const IconComponent = item.icon
 
                         return (
-                            <Link
+                            <div
                                 key={item.path}
-                                href={item.path}
-                                className="relative flex flex-col items-center justify-center flex-shrink-0 w-20 h-full group snap-start"
+                                className="absolute flex flex-col items-center"
+                                style={{
+                                    left: '-23px',
+                                    top: '-23px',
+                                    width: '46px',
+                                    pointerEvents: isOpen ? 'auto' : 'none',
+                                    transform: isOpen
+                                        ? `translate(${x}px, ${y}px) scale(1)`
+                                        : `translate(0px, 0px) scale(0)`,
+                                    opacity: isOpen ? 1 : 0,
+                                    transition: isOpen
+                                        ? `transform 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) ${delay}ms, opacity 0.3s ease ${delay}ms`
+                                        : `transform 0.3s cubic-bezier(0.6, -0.28, 0.735, 0.045) ${(arcItems.length - index) * 30}ms, opacity 0.2s ease ${(arcItems.length - index) * 30}ms`,
+                                }}
                             >
-                                {/* Active Background Pill with animation */}
-                                {active && (
-                                    <div className="absolute inset-x-2 top-2 bottom-2 bg-gradient-to-br from-primary/20 to-primary/10 dark:from-primary/25 dark:to-primary/15 rounded-2xl animate-in fade-in zoom-in-95 duration-200" />
-                                )}
-
-                                {/* Hover effect for inactive items */}
-                                {!active && (
-                                    <div className="absolute inset-x-2 top-2 bottom-2 bg-secondary/0 group-hover:bg-secondary/10 dark:group-hover:bg-white/5 rounded-2xl transition-all duration-200" />
-                                )}
-
-                                {/* Icon Container with stronger elevation */}
-                                <div className={`relative z-10 flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 ${active
-                                    ? 'bg-gradient-to-br from-primary to-primary-dark text-white shadow-lg shadow-primary/40 scale-110 -translate-y-1'
-                                    : 'text-text-secondary group-hover:text-text-main dark:group-hover:text-white group-hover:scale-105 group-hover:-translate-y-0.5'
-                                    }`}>
-                                    <IconComponent
-                                        set={active ? 'bold' : 'light'}
-                                        primaryColor={active ? 'white' : 'currentColor'}
-                                        size={active ? 'medium' : 'small'}
-                                        style={{ transition: 'all 0.3s ease' }}
-                                    />
-                                </div>
-
-                                {/* Label with better typography */}
-                                <span className={`relative z-10 text-[10px] mt-1.5 transition-all duration-300 whitespace-nowrap ${active
-                                    ? 'font-bold text-primary scale-105'
-                                    : 'font-medium text-text-secondary group-hover:text-text-main group-hover:scale-105'
-                                    }`}>
-                                    {item.label}
-                                </span>
-
-                                {/* Active indicator dot */}
-                                {active && (
-                                    <div className="absolute -bottom-1 w-1 h-1 rounded-full bg-primary animate-in fade-in zoom-in duration-200" />
-                                )}
-                            </Link>
+                                <Link
+                                    href={item.path}
+                                    onClick={() => setIsOpen(false)}
+                                    className="flex flex-col items-center"
+                                >
+                                    <div className={`w-[46px] h-[46px] rounded-full flex items-center justify-center transition-all duration-200 ${active
+                                        ? 'bg-gradient-to-br from-primary to-emerald-500 text-white shadow-xl shadow-primary/40 ring-2 ring-white/30'
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-xl shadow-black/20 dark:shadow-black/50 active:scale-90'
+                                        }`}>
+                                        <IconComponent
+                                            set="bold"
+                                            primaryColor={active ? 'white' : 'currentColor'}
+                                            size="small"
+                                        />
+                                    </div>
+                                    <span className={`text-[10px] mt-1 font-bold whitespace-nowrap ${active
+                                        ? 'text-primary'
+                                        : 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]'
+                                        }`}>
+                                        {item.label}
+                                    </span>
+                                </Link>
+                            </div>
                         )
                     })}
                 </div>
-
-                {/* Safe area padding for iPhone with stronger visual */}
-                <div className="h-safe-area-inset-bottom bg-white/98 dark:bg-surface-dark/98" />
             </div>
-        </nav>
+
+            {/* Bottom Bar — highest z-index, always clickable */}
+            <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-[51] flex justify-center pb-5 px-4" style={{ pointerEvents: 'none' }}>
+                <div className={`flex items-center h-16 rounded-[28px] transition-all duration-500 ${isOpen
+                    ? 'bg-slate-900/90 dark:bg-white/90 backdrop-blur-xl shadow-2xl shadow-black/30'
+                    : 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl shadow-2xl shadow-black/10 dark:shadow-black/30 border border-black/5 dark:border-white/10'
+                    }`} style={{ pointerEvents: 'auto' }}>
+
+                    {/* Left items */}
+                    <div className="flex items-center gap-1 pl-3 pr-2">
+                        {barLeft.map(item => renderBarItem(item))}
+                    </div>
+
+                    {/* Center Trigger Button */}
+                    <div className="relative -mt-5 mx-1">
+                        <button
+                            onClick={() => setIsOpen(!isOpen)}
+                            type="button"
+                            className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-500 cursor-pointer ${isOpen
+                                ? 'bg-red-500 shadow-xl shadow-red-500/30 rotate-[135deg] scale-105'
+                                : 'bg-gradient-to-br from-primary to-emerald-500 shadow-lg shadow-primary/40 hover:shadow-xl hover:scale-105 active:scale-95'
+                                }`}
+                            aria-label={isOpen ? 'Close menu' : 'Open menu'}
+                        >
+                            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" className="text-white">
+                                <line x1="11" y1="4" x2="11" y2="18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                                <line x1="4" y1="11" x2="18" y2="11" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                            </svg>
+                        </button>
+                        {!isOpen && (
+                            <div className="absolute inset-[-4px] rounded-full border-2 border-primary/20 animate-ping pointer-events-none" style={{ animationDuration: '2.5s' }} />
+                        )}
+                    </div>
+
+                    {/* Right items */}
+                    <div className="flex items-center gap-1 pl-2 pr-3">
+                        {barRight.map(item => renderBarItem(item))}
+                    </div>
+                </div>
+            </nav>
+        </>
     )
 }
