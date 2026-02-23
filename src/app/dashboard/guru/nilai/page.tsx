@@ -289,8 +289,11 @@ export default function NilaiPage() {
     // Stats
     const totalGraded = allSubmissions.filter(s => s.grade?.length > 0).length + quizSubmissions.filter(q => q.is_graded).length + examSubmissions.length
     const totalUngraded = allSubmissions.filter(s => !s.grade?.length).length + quizSubmissions.filter(q => !q.is_graded).length
-    const classAverage = students.length > 0
-        ? Math.round(students.map(s => calculateAverage(s.id)).filter(a => a !== null).reduce((sum, a) => sum + (a || 0), 0) / students.filter(s => calculateAverage(s.id) !== null).length) || 0
+
+    // Perbaikan: Hindari pembagian dengan 0 yang menghasilkan NaN
+    const studentsWithGradesCount = students.filter(s => calculateAverage(s.id) !== null).length;
+    const classAverage = studentsWithGradesCount > 0
+        ? Math.round(students.map(s => calculateAverage(s.id)).filter(a => a !== null).reduce((sum, a) => sum + (a as number), 0) / studentsWithGradesCount)
         : 0
 
     // Filter teaching assignments by search query
