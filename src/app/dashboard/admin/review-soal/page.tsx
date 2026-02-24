@@ -484,7 +484,9 @@ export default function ReviewSoalPage() {
                                                         <p className="text-sm text-text-main dark:text-white line-clamp-2">
                                                             {item.question_text}
                                                         </p>
-                                                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                        {/* === Baris 1: Data Guru === */}
+                                                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                                            <span className="text-xs text-text-secondary dark:text-zinc-500 font-medium mr-0.5" title="Inputan Guru">👨‍🏫</span>
                                                             {getSourceBadge(item.question_source)}
                                                             {getStatusBadge(item.status)}
                                                             {getDifficultyBadge(item.difficulty)}
@@ -496,8 +498,10 @@ export default function ReviewSoalPage() {
                                                                     🏷️ Klaim HOTS
                                                                 </span>
                                                             )}
-                                                            {item.ai_review && (
-                                                                <AIReviewPanel review={item.ai_review} compact />
+                                                            {getSubjectName(item) !== '-' && (
+                                                                <span className="px-1.5 py-0.5 text-xs rounded bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-400 font-medium">
+                                                                    📚 {getSubjectName(item)}
+                                                                </span>
                                                             )}
                                                             {getClassName(item) && (
                                                                 <span className="px-1.5 py-0.5 text-xs rounded bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
@@ -505,6 +509,32 @@ export default function ReviewSoalPage() {
                                                                 </span>
                                                             )}
                                                         </div>
+                                                        {/* === Baris 2: Analisis AI === */}
+                                                        {item.ai_review && (
+                                                            <div className="flex flex-wrap items-center gap-1.5 mt-1 pl-0.5">
+                                                                <span className="text-xs text-text-secondary dark:text-zinc-500 font-medium mr-0.5" title="Analisis AI">🤖</span>
+                                                                <AIReviewPanel review={item.ai_review} compact />
+                                                                {/* Konflik: Guru klaim HOTS tapi AI bilang LOTS */}
+                                                                {item.teacher_hots_claim && item.ai_review.hots_strength === 'S0' && (
+                                                                    <span className="px-1.5 py-0.5 text-xs rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 font-bold animate-pulse" title="Guru mengklaim soal ini HOTS, tetapi AI mendeteksi soal ini sebagai LOTS">
+                                                                        ⚡ Konflik: Guru HOTS ≠ AI LOTS
+                                                                    </span>
+                                                                )}
+                                                                {/* Konflik: Difficulty guru ≠ AI */}
+                                                                {item.difficulty && item.ai_review.difficulty_label && (() => {
+                                                                    const guruDiff = item.difficulty.toLowerCase()
+                                                                    const aiDiff = item.ai_review.difficulty_label.toLowerCase()
+                                                                    if (guruDiff !== aiDiff) {
+                                                                        return (
+                                                                            <span className="px-1.5 py-0.5 text-xs rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 font-bold" title={`Guru: ${item.difficulty}, AI: ${item.ai_review.difficulty_label}`}>
+                                                                                ⚡ Kesulitan berbeda
+                                                                            </span>
+                                                                        )
+                                                                    }
+                                                                    return null
+                                                                })()}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div className="flex-shrink-0 text-xs text-text-secondary dark:text-zinc-500">
                                                         {new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
