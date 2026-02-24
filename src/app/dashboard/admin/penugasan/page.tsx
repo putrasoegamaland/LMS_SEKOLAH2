@@ -8,7 +8,7 @@ import {
     Document as BookOpen, AddUser as UserPlus, User, Delete as Trash2, Edit,
     InfoCircle as AlertCircle, ChevronDown, ChevronUp, Home as School, ChevronRight
 } from 'react-iconly'
-import { Loader2, X, HeartHandshake, Save, Check } from 'lucide-react'
+import { Loader2, X, HeartHandshake, Save, Check, Copy } from 'lucide-react'
 import { AcademicYear, Class, Subject } from '@/lib/types'
 
 interface Teacher {
@@ -59,6 +59,7 @@ export default function PenugasanPage() {
     const [waliKelasMap, setWaliKelasMap] = useState<Record<string, string>>({})
     const [savingWali, setSavingWali] = useState<string | null>(null)
     const [editingWali, setEditingWali] = useState<Set<string>>(new Set())
+    const [copyingClasses, setCopyingClasses] = useState(false)
     // Track the "saved" state per class (what the DB actually has)
     const [savedWaliMap, setSavedWaliMap] = useState<Record<string, string>>({})
 
@@ -294,6 +295,35 @@ export default function PenugasanPage() {
             setEditMode(undefined)
         }
         setShowWizard(true)
+    }
+
+    // Copy classes from another year to the selected year
+    const handleCopyClasses = async () => {
+        if (!selectedYearId) return
+        // Find the most recent completed year, or any other year that has classes
+        const otherYears = academicYears.filter(y => y.id !== selectedYearId)
+        const sourceYear = otherYears.find(y => y.status === 'COMPLETED') || otherYears[0]
+        if (!sourceYear) { alert('Tidak ada tahun ajaran lain untuk disalin'); return }
+
+        setCopyingClasses(true)
+        try {
+            const res = await fetch('/api/classes/copy-classes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from_year_id: sourceYear.id, to_year_id: selectedYearId })
+            })
+            const data = await res.json()
+            if (res.ok && data.copied > 0) {
+                // Refresh classes
+                const classesRes = await fetch('/api/classes')
+                const classesData = await classesRes.json()
+                setClasses(classesData)
+            } else if (res.ok && data.copied === 0) {
+                alert('Semua kelas sudah ada di tahun ini')
+            } else {
+                alert(`Error: ${data.error}`)
+            }
+        } catch { alert('Terjadi error') } finally { setCopyingClasses(false) }
     }
 
     // Filter classes for active year
@@ -667,8 +697,14 @@ export default function PenugasanPage() {
                             <div className="p-6">
                                 <EmptyState
                                     icon={<div className="text-teal-200"><School set="bold" primaryColor="currentColor" size={48} /></div>}
-                                    title="Belum Ada Kelas"
-                                    description="Buat kelas terlebih dahulu di menu Kelas"
+                                    title="Belum Ada Kelas di Tahun Ini"
+                                    description="Salin kelas dari tahun ajaran sebelumnya agar bisa mengatur wali kelas"
+                                    action={
+                                        <Button onClick={handleCopyClasses} loading={copyingClasses}>
+                                            <Copy className="w-4 h-4 mr-1" />
+                                            Salin Kelas dari Tahun Sebelumnya
+                                        </Button>
+                                    }
                                 />
                             </div>
                         ) : (
