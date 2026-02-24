@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
 /**
@@ -73,15 +73,33 @@ export async function POST(request: NextRequest) {
             (existingAssignments || []).map(a => `${a.teacher_id}_${a.subject_id}_${a.class_id}`)
         )
 
-        // Filter out duplicates
+        // Build class mapping: old year classes -> new year classes (by matching name + grade + school_level)
+        let classMapping: Record<string, string> = {}
+        const { data: sourceClasses } = await supabase
+            .from('classes').select('id, name, grade_level, school_level').eq('academic_year_id', from_year_id)
+        const { data: targetClasses } = await supabase
+            .from('classes').select('id, name, grade_level, school_level').eq('academic_year_id', to_year_id)
+        if (sourceClasses && targetClasses) {
+            for (const src of sourceClasses) {
+                const match = targetClasses.find((t: any) =>
+                    t.name === src.name && t.grade_level === src.grade_level && t.school_level === src.school_level
+                )
+                if (match) classMapping[src.id] = match.id
+            }
+        }
+
+        // Filter out duplicates and remap class_ids
         const newAssignments = sourceAssignments
+            .map(a => {
+                const mappedClassId = classMapping[a.class_id] || a.class_id
+                return {
+                    teacher_id: a.teacher_id,
+                    subject_id: a.subject_id,
+                    class_id: mappedClassId,
+                    academic_year_id: to_year_id
+                }
+            })
             .filter(a => !existingKeys.has(`${a.teacher_id}_${a.subject_id}_${a.class_id}`))
-            .map(a => ({
-                teacher_id: a.teacher_id,
-                subject_id: a.subject_id,
-                class_id: a.class_id,
-                academic_year_id: to_year_id
-            }))
 
         if (newAssignments.length === 0) {
             return NextResponse.json({

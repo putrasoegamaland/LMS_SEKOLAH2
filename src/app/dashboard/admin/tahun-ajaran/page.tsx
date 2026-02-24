@@ -348,6 +348,28 @@ export default function TahunAjaranPage() {
                 })
             })
             if (res.ok) {
+                // Auto-copy classes from last completed year to new year
+                await fetchData()
+                const updatedYears = await (await fetch('/api/academic-years')).json()
+                const newYear = (updatedYears as AcademicYear[]).find((y: AcademicYear) => y.is_active)
+                const fromYear = lastCompletedYear || years.find(y => y.status === 'COMPLETED')
+
+                if (fromYear && newYear) {
+                    try {
+                        const copyRes = await fetch('/api/classes/copy-classes', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ from_year_id: fromYear.id, to_year_id: newYear.id })
+                        })
+                        const copyData = await copyRes.json()
+                        if (copyRes.ok && copyData.copied > 0) {
+                            console.log(`Auto-copied ${copyData.copied} classes to new year`)
+                        }
+                    } catch (e) {
+                        console.error('Auto-copy classes failed:', e)
+                    }
+                }
+
                 setShowWizardCreateModal(false)
                 await fetchData()
                 setNewYearName('')
