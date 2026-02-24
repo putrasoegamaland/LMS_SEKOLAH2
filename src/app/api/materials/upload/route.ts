@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { validateSession } from '@/lib/auth'
 
 // M2: Service Role Key required for Storage signed URL generation (Storage API requires admin privileges)
-const supabaseAdmin = createClient(
+const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         console.log(`Generating signed upload URL for: ${storagePath}`)
 
         // Create Signed Upload URL
-        const { data, error } = await supabaseAdmin.storage
+        const { data, error } = await supabase.storage
             .from('materials')
             .createSignedUploadUrl(storagePath)
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { validateSession } from '@/lib/auth'
 
-const supabaseAdmin = createClient(
+const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get student's class
-        const { data: student, error: studentError } = await supabaseAdmin
+        const { data: student, error: studentError } = await supabase
             .from('students')
             .select('class_id')
             .eq('user_id', user.id)
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get active academic year
-        const { data: activeYear } = await supabaseAdmin
+        const { data: activeYear } = await supabase
             .from('academic_years')
             .select('id')
             .eq('is_active', true)
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         const today = new Date().toISOString().split('T')[0]
 
         // Find schedule for student's class
-        const { data: entries, error } = await supabaseAdmin
+        const { data: entries, error } = await supabase
             .from('schedule_entries')
             .select(`
                 *,

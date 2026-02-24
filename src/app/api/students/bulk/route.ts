@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { validateSession, hashPassword } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
@@ -29,6 +29,13 @@ export async function POST(request: NextRequest) {
         classesData?.forEach(c => {
             classMap.set(c.name.trim().toLowerCase(), c.id)
         })
+
+        // Fetch active academic year once for enrollment creation
+        const { data: activeYear } = await supabase
+            .from('academic_years')
+            .select('id')
+            .eq('is_active', true)
+            .single()
 
         const results = []
 
@@ -83,7 +90,7 @@ export async function POST(request: NextRequest) {
                 if (userError) throw userError
 
                 // Create student record
-                const { error: studentError } = await supabase
+                const { data: newStudent, error: studentError } = await supabase
                     .from('students')
                     .insert({
                         user_id: newUser.id,
@@ -93,11 +100,25 @@ export async function POST(request: NextRequest) {
                         angkatan: angkatan ? String(angkatan) : null,
                         status: 'ACTIVE'
                     })
+                    .select('id')
+                    .single()
 
                 if (studentError) {
                     // Rollback
                     await supabase.from('users').delete().eq('id', newUser.id)
                     throw studentError
+                }
+
+                // Auto-create enrollment for the active academic year
+                if (newStudent && mapped_class_id && activeYear) {
+                    await supabase
+                        .from('student_enrollments')
+                        .insert({
+                            student_id: newStudent.id,
+                            class_id: mapped_class_id,
+                            academic_year_id: activeYear.id,
+                            status: 'ACTIVE'
+                        })
                 }
 
                 results.push({ item, success: true })

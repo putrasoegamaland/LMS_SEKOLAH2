@@ -4,7 +4,7 @@ import { validateSession } from '@/lib/auth'
 
 // M2: Service Role Key required because app uses custom auth (not Supabase Auth),
 // so RLS policies depending on auth.uid() won't work. Role checks enforce authorization.
-const supabaseAdmin = createClient(
+const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
         const teachingAssignmentId = request.nextUrl.searchParams.get('teaching_assignment_id')
         const allYears = request.nextUrl.searchParams.get('all_years')
 
-        let query = supabaseAdmin
+        let query = supabase
             .from('materials')
             .select(`
         *,
@@ -44,14 +44,14 @@ export async function GET(request: NextRequest) {
             query = query.eq('teaching_assignment_id', teachingAssignmentId)
         } else if (allYears !== 'true') {
             // Filter by active year
-            const { data: activeYear } = await supabaseAdmin
+            const { data: activeYear } = await supabase
                 .from('academic_years')
                 .select('id')
                 .eq('is_active', true)
                 .single()
 
             if (activeYear) {
-                const { data: taIds } = await supabaseAdmin
+                const { data: taIds } = await supabase
                     .from('teaching_assignments')
                     .select('id')
                     .eq('academic_year_id', activeYear.id)
@@ -94,8 +94,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 })
         }
 
-        // Use supabaseAdmin to bypass RLS for insert
-        const { data, error } = await supabaseAdmin
+        // Use supabase to bypass RLS for insert
+        const { data, error } = await supabase
             .from('materials')
             .insert({ teaching_assignment_id, title, description, type, content_url, content_text })
             .select()

@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { validateSession } from '@/lib/auth'
 
 // Create admin client to bypass RLS
-const supabaseAdmin = createClient(
+const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
             if (allYears !== 'true') {
                 let filterYearId = academicYearId
                 if (!filterYearId) {
-                    const { data: activeYear } = await supabaseAdmin
+                    const { data: activeYear } = await supabase
                         .from('academic_years')
                         .select('id')
                         .eq('is_active', true)
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
                 }
 
                 if (filterYearId) {
-                    const { data: tas } = await supabaseAdmin
+                    const { data: tas } = await supabase
                         .from('teaching_assignments')
                         .select('id')
                         .eq('academic_year_id', filterYearId)
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
             const allGrades: any[] = []
 
             // 1. Fetch Assignment Grades (TUGAS)
-            let assignmentQuery = supabaseAdmin
+            let assignmentQuery = supabase
                 .from('grades')
                 .select(`
                     id,
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
                 .order('graded_at', { ascending: false })
 
             // 2. Fetch Quiz Grades (KUIS)
-            let quizQuery = supabaseAdmin
+            let quizQuery = supabase
                 .from('quiz_submissions')
                 .select(`
                     id,
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
                 .not('submitted_at', 'is', null)
 
             // 3. Fetch Exam Grades (ULANGAN)
-            let examQuery = supabaseAdmin
+            let examQuery = supabase
                 .from('exam_submissions')
                 .select(`
                     id,
@@ -236,14 +236,14 @@ export async function POST(request: NextRequest) {
         }
 
         // H2 Security Fix: Verify this teacher owns the submission's teaching assignment
-        const { data: teacher } = await supabaseAdmin
+        const { data: teacher } = await supabase
             .from('teachers')
             .select('id')
             .eq('user_id', user.id)
             .single()
 
         if (teacher) {
-            const { data: submission } = await supabaseAdmin
+            const { data: submission } = await supabase
                 .from('student_submissions')
                 .select('assignment:assignments(teaching_assignment:teaching_assignments(teacher_id))')
                 .eq('id', submission_id)
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if grade exists - Use regular client here since it's user action
-        const { data: existing } = await supabaseAdmin // Use admin to ensure teacher can grade
+        const { data: existing } = await supabase // Use admin to ensure teacher can grade
             .from('grades')
             .select('id')
             .eq('submission_id', submission_id)
@@ -266,7 +266,7 @@ export async function POST(request: NextRequest) {
 
         if (existing) {
             // Update existing grade
-            const { data, error } = await supabaseAdmin
+            const { data, error } = await supabase
                 .from('grades')
                 .update({ score, feedback, graded_at: new Date().toISOString() })
                 .eq('id', existing.id)
@@ -277,7 +277,7 @@ export async function POST(request: NextRequest) {
             gradeData = data
         } else {
             // Create new grade
-            const { data, error } = await supabaseAdmin
+            const { data, error } = await supabase
                 .from('grades')
                 .insert({ submission_id, score, feedback })
                 .select()
@@ -289,7 +289,7 @@ export async function POST(request: NextRequest) {
 
         // Send notification to student
         try {
-            const { data: submission } = await supabaseAdmin
+            const { data: submission } = await supabase
                 .from('student_submissions')
                 .select(`
                     student:students(user_id),
@@ -303,7 +303,7 @@ export async function POST(request: NextRequest) {
                 const assignmentTitle = (submission?.assignment as any)?.title || 'Tugas'
                 const subjectName = (submission?.assignment as any)?.teaching_assignment?.subject?.name || ''
 
-                await supabaseAdmin.from('notifications').insert({
+                await supabase.from('notifications').insert({
                     user_id: studentData.user_id,
                     type: 'NILAI_KELUAR',
                     title: `Nilai Keluar: ${assignmentTitle}`,

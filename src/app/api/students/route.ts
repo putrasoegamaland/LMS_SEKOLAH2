@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { validateSession, hashPassword } from '@/lib/auth'
 
 // GET all students
@@ -126,6 +126,26 @@ export async function POST(request: NextRequest) {
             // Rollback user creation
             await supabase.from('users').delete().eq('id', newUser.id)
             throw studentError
+        }
+
+        // Auto-create enrollment for the active academic year
+        if (student && class_id) {
+            const { data: activeYear } = await supabase
+                .from('academic_years')
+                .select('id')
+                .eq('is_active', true)
+                .single()
+
+            if (activeYear) {
+                await supabase
+                    .from('student_enrollments')
+                    .insert({
+                        student_id: student.id,
+                        class_id: class_id,
+                        academic_year_id: activeYear.id,
+                        status: 'ACTIVE'
+                    })
+            }
         }
 
         return NextResponse.json(student)

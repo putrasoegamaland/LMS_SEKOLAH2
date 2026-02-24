@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
 /**
@@ -137,7 +137,7 @@ export async function PUT(
         // 3. Update student's current class and school level
         const { error: updateStudentError } = await supabase
             .from('students')
-            .update({ 
+            .update({
                 class_id: to_class_id,
                 school_level: targetClass.school_level
             })

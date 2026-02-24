@@ -4,7 +4,7 @@ import { validateSession } from '@/lib/auth'
 
 // M2: Service Role Key required — analytics needs cross-table reads that RLS blocks for anon role.
 // Access restricted to ADMIN only.
-const supabaseAdmin = createClient(
+const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get all classes for this academic year
-        const { data: classes, error: classesError } = await supabaseAdmin
+        const { data: classes, error: classesError } = await supabase
             .from('classes')
             .select('id, name, school_level, grade_level')
             .eq('academic_year_id', academicYearId)
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
         if (classesError) throw classesError
 
         // Get all subjects
-        const { data: subjects, error: subjectsError } = await supabaseAdmin
+        const { data: subjects, error: subjectsError } = await supabase
             .from('subjects')
             .select('id, name')
             .order('name')
@@ -46,14 +46,14 @@ export async function GET(request: NextRequest) {
         if (subjectsError) throw subjectsError
 
         // Get all students with their classes
-        const { data: students, error: studentsError } = await supabaseAdmin
+        const { data: students, error: studentsError } = await supabase
             .from('students')
             .select('id, nis, class_id, user:users(full_name)')
 
         if (studentsError) throw studentsError
 
         // Get teaching assignments for this academic year
-        const { data: teachingAssignments, error: taError } = await supabaseAdmin
+        const { data: teachingAssignments, error: taError } = await supabase
             .from('teaching_assignments')
             .select('id, class_id, subject_id')
             .eq('academic_year_id', academicYearId)
@@ -61,41 +61,41 @@ export async function GET(request: NextRequest) {
         if (taError) throw taError
 
         // Get all assignments
-        const { data: assignments, error: assignmentsError } = await supabaseAdmin
+        const { data: assignments, error: assignmentsError } = await supabase
             .from('assignments')
             .select('id, teaching_assignment_id')
 
         if (assignmentsError) throw assignmentsError
 
         // Get student submissions for tugas
-        const { data: studentSubmissions, error: ssError } = await supabaseAdmin
+        const { data: studentSubmissions, error: ssError } = await supabase
             .from('student_submissions')
             .select('id, student_id, assignment_id')
 
         // Get grades for student submissions (tugas)
-        const { data: grades, error: gradesError } = await supabaseAdmin
+        const { data: grades, error: gradesError } = await supabase
             .from('grades')
             .select('id, submission_id, score')
 
         // Get quiz submissions (submitted ones only - submitted_at is not null)
-        const { data: quizSubmissions, error: qsError } = await supabaseAdmin
+        const { data: quizSubmissions, error: qsError } = await supabase
             .from('quiz_submissions')
             .select('id, student_id, quiz_id, total_score, max_score, submitted_at')
             .not('submitted_at', 'is', null)
 
         // Get quizzes to map to teaching assignments
-        const { data: quizzes, error: quizzesError } = await supabaseAdmin
+        const { data: quizzes, error: quizzesError } = await supabase
             .from('quizzes')
             .select('id, teaching_assignment_id')
 
         // Get exam submissions (submitted ones)
-        const { data: examSubmissions, error: esError } = await supabaseAdmin
+        const { data: examSubmissions, error: esError } = await supabase
             .from('exam_submissions')
             .select('id, student_id, exam_id, score, submitted_at')
             .not('submitted_at', 'is', null)
 
         // Get exams to map to teaching assignments
-        const { data: exams, error: examsError } = await supabaseAdmin
+        const { data: exams, error: examsError } = await supabase
             .from('exams')
             .select('id, teaching_assignment_id')
 
