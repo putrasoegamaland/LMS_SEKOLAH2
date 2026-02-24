@@ -9,9 +9,10 @@ import { AcademicYear, Class, SchoolLevel } from '@/lib/types'
 import {
     ArrowRight, People as Users, TickSquare as CheckCircle, CloseSquare as XCircle,
     Danger as AlertTriangle, Document as GraduationCap, ArrowUpSquare as ArrowUpRight,
-    ChevronDown, ChevronRight, Search, Download, ShieldFail as ShieldAlert
+    ChevronDown, ChevronRight, Search, Download, ShieldFail as ShieldAlert,
+    Calendar, Filter as FilterIcon, TimeCircle as History
 } from 'react-iconly'
-import { Loader2, UserCheck, UserX } from 'lucide-react'
+import { Loader2, UserCheck, UserX, ChevronUp } from 'lucide-react'
 
 interface Student {
     id: string
@@ -25,7 +26,12 @@ interface Student {
         username: string
         full_name: string | null
     }
-    class: { id: string; name: string; grade_level: number | null; school_level: SchoolLevel | null } | null
+    class: { id: string; name: string; grade_level: number | null; school_level: SchoolLevel | null; academic_year_id?: string } | null
+    // Enrollment info from the source year
+    enrollment_status?: string
+    enrollment_id?: string
+    enrollment_ended_at?: string | null
+    enrollment_notes?: string | null
 }
 
 interface ClassGroup {
@@ -34,12 +40,12 @@ interface ClassGroup {
     targetClassId: string
     targetClassName: string
     action: 'PROMOTE' | 'GRADUATE' | 'TRANSITION'
-    // Per-student exclusions
     excludedStudents: Set<string>
-    // Status tracking
     isCompleted: boolean
     completedCount: number
 }
+
+type FilterMode = 'ALL' | 'PENDING' | 'DONE'
 
 export default function KenaikanKelasPage() {
     const router = useRouter()
@@ -50,14 +56,20 @@ export default function KenaikanKelasPage() {
     const [students, setStudents] = useState<Student[]>([])
     const [classGroups, setClassGroups] = useState<ClassGroup[]>([])
     const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
-    const [activeYear, setActiveYear] = useState<AcademicYear | null>(null)
+
+    // Source = COMPLETED year, Target = ACTIVE year
+    const [sourceYear, setSourceYear] = useState<AcademicYear | null>(null)
     const [targetYear, setTargetYear] = useState<AcademicYear | null>(null)
 
     // Expanded accordion state
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
-    // Search
+    // Search & Filter  
     const [searchQuery, setSearchQuery] = useState('')
+    const [filterMode, setFilterMode] = useState<FilterMode>('ALL')
+
+    // History panel
+    const [showHistory, setShowHistory] = useState(false)
 
     // Confirmation modal
     const [showConfirmModal, setShowConfirmModal] = useState(false)
@@ -69,58 +81,116 @@ export default function KenaikanKelasPage() {
     // Processing progress
     const [processProgress, setProcessProgress] = useState({ current: 0, total: 0 })
 
-    const fetchData = async () => {
+    const completedYears = useMemo(() =>
+        academicYears
+            .filter(y => y.status === 'COMPLETED')
+            .sort((a, b) => new Date(b.end_date || b.created_at).getTime() - new Date(a.end_date || a.created_at).getTime()),
+        [academicYears]
+    )
+
+    const activeYear = useMemo(() =>
+        academicYears.find(y => y.is_active || y.status === 'ACTIVE') || null,
+        [academicYears]
+    )
+
+    // === Stats ===
+    const processedStudents = useMemo(() => {
+        return students.filter(s =>
+            s.enrollment_status === 'PROMOTED' ||
+            s.enrollment_status === 'GRADUATED' ||
+            s.enrollment_status === 'RETAINED'
+        )
+    }, [students])
+
+    const pendingStudents = useMemo(() => {
+        return students.filter(s => s.enrollment_status === 'ACTIVE')
+    }, [students])
+
+    const progressPercent = students.length > 0
+        ? Math.round((processedStudents.length / students.length) * 100)
+        : 0
+
+    // === Data fetching ===
+    const fetchYears = async () => {
         try {
-            const [yearsRes, classesRes, studentsRes] = await Promise.all([
+            const [yearsRes, classesRes] = await Promise.all([
                 fetch('/api/academic-years'),
                 fetch('/api/classes'),
-                fetch('/api/students?status=ACTIVE')
             ])
-
-            const [yearsData, classesData, studentsData] = await Promise.all([
+            const [yearsData, classesData] = await Promise.all([
                 yearsRes.json(),
                 classesRes.json(),
-                studentsRes.json()
             ])
-
-            const years = Array.isArray(yearsData) ? yearsData : []
-            const classList = Array.isArray(classesData) ? classesData : []
-            const studentList = Array.isArray(studentsData) ? studentsData : []
+            const years: AcademicYear[] = Array.isArray(yearsData) ? yearsData : []
+            const classList: Class[] = Array.isArray(classesData) ? classesData : []
 
             setAcademicYears(years)
             setClasses(classList)
-            setStudents(studentList)
 
-            // Find active year
+            // Auto-select source and target
             const active = years.find((y: AcademicYear) => y.is_active || y.status === 'ACTIVE')
-            setActiveYear(active || null)
+            setTargetYear(active || null)
 
-            // Find next planned year (for target)
-            const planned = years.find((y: AcademicYear) => y.status === 'PLANNED')
-            setTargetYear(planned || null)
+            const completed = years
+                .filter((y: AcademicYear) => y.status === 'COMPLETED')
+                .sort((a: AcademicYear, b: AcademicYear) =>
+                    new Date(b.end_date || b.created_at).getTime() - new Date(a.end_date || a.created_at).getTime()
+                )
+            const lastCompleted = completed[0] || null
+            setSourceYear(lastCompleted)
 
-            // Generate class groups
-            if (active) {
-                generateClassGroups(classList, studentList, active)
+            // If we have a source year, fetch students
+            if (lastCompleted) {
+                await fetchStudents(lastCompleted.id, classList)
             }
         } catch (error) {
-            console.error('Error fetching data:', error)
+            console.error('Error:', error)
         } finally {
             setLoading(false)
         }
     }
 
-    const generateClassGroups = (classList: Class[], studentList: Student[], currentYear: AcademicYear) => {
-        // Get classes from current active year
-        const currentClasses = classList.filter(c => c.academic_year_id === currentYear.id)
+    const fetchStudents = async (yearId: string, classList?: Class[]) => {
+        try {
+            const res = await fetch(`/api/students?enrollment_year_id=${yearId}`)
+            const data = await res.json()
+            const studentList: Student[] = Array.isArray(data) ? data : []
+            setStudents(studentList)
 
-        // Group students by class
+            const classListToUse = classList || classes
+            generateClassGroups(classListToUse, studentList, yearId)
+        } catch (error) {
+            console.error('Error fetching students:', error)
+        }
+    }
+
+    const generateClassGroups = (classList: Class[], studentList: Student[], sourceYearId: string) => {
+        // Group students by their enrollment class 
+        const classStudentMap = new Map<string, Student[]>()
+
+        for (const student of studentList) {
+            const classId = student.class?.id
+            if (!classId) continue
+            if (!classStudentMap.has(classId)) {
+                classStudentMap.set(classId, [])
+            }
+            classStudentMap.get(classId)!.push(student)
+        }
+
         const groups: ClassGroup[] = []
 
-        for (const cls of currentClasses) {
-            const classStudents = studentList.filter(s => s.class_id === cls.id && s.status === 'ACTIVE')
+        for (const [classId, classStudents] of classStudentMap) {
+            const cls = classList.find(c => c.id === classId)
+            if (!cls || classStudents.length === 0) continue
 
-            if (classStudents.length === 0) continue
+            // Only show students with ACTIVE enrollment (not yet processed)
+            // Already-processed ones go to history
+            const pendingInGroup = classStudents.filter(s => s.enrollment_status === 'ACTIVE')
+            const processedInGroup = classStudents.filter(s =>
+                s.enrollment_status === 'PROMOTED' ||
+                s.enrollment_status === 'GRADUATED' ||
+                s.enrollment_status === 'RETAINED'
+            )
 
             // Determine target based on grade level
             let action: 'PROMOTE' | 'GRADUATE' | 'TRANSITION' = 'PROMOTE'
@@ -131,19 +201,12 @@ export default function KenaikanKelasPage() {
             const schoolLevel = cls.school_level
 
             if (gradeLevel === 3) {
-                // Final year
                 if (schoolLevel === 'SMP') {
                     action = 'TRANSITION'
                     const classSection = cls.name.replace(/[^A-Za-z]/g, '').slice(-1) || 'A'
                     const nextClass = classList.find(c =>
-                        c.grade_level === 1 &&
-                        c.school_level === 'SMA' &&
-                        c.name.includes(classSection)
-                    ) || classList.find(c =>
-                        c.grade_level === 1 &&
-                        c.school_level === 'SMA'
-                    )
-
+                        c.grade_level === 1 && c.school_level === 'SMA' && c.name.includes(classSection)
+                    ) || classList.find(c => c.grade_level === 1 && c.school_level === 'SMA')
                     if (nextClass) {
                         targetClassId = nextClass.id
                         targetClassName = nextClass.name
@@ -155,20 +218,14 @@ export default function KenaikanKelasPage() {
                     targetClassName = 'Lulus (Alumni)'
                 }
             } else {
-                // Find next grade class
                 action = 'PROMOTE'
                 const nextGrade = gradeLevel + 1
-                // Try to find matching class with same section letter
                 const classSection = cls.name.replace(/[^A-Za-z]/g, '').slice(-1) || 'A'
                 const nextClass = classList.find(c =>
-                    c.grade_level === nextGrade &&
-                    c.school_level === schoolLevel &&
-                    c.name.includes(classSection)
+                    c.grade_level === nextGrade && c.school_level === schoolLevel && c.name.includes(classSection)
                 ) || classList.find(c =>
-                    c.grade_level === nextGrade &&
-                    c.school_level === schoolLevel
+                    c.grade_level === nextGrade && c.school_level === schoolLevel
                 )
-
                 if (nextClass) {
                     targetClassId = nextClass.id
                     targetClassName = nextClass.name
@@ -177,6 +234,8 @@ export default function KenaikanKelasPage() {
                 }
             }
 
+            const isCompleted = pendingInGroup.length === 0 && processedInGroup.length > 0
+
             groups.push({
                 sourceClass: cls,
                 students: classStudents,
@@ -184,12 +243,11 @@ export default function KenaikanKelasPage() {
                 targetClassName,
                 action,
                 excludedStudents: new Set(),
-                isCompleted: false,
-                completedCount: 0
+                isCompleted,
+                completedCount: processedInGroup.length
             })
         }
 
-        // Sort by school level then grade level
         groups.sort((a, b) => {
             if (a.sourceClass.school_level !== b.sourceClass.school_level) {
                 return a.sourceClass.school_level === 'SMP' ? -1 : 1
@@ -200,46 +258,43 @@ export default function KenaikanKelasPage() {
         setClassGroups(groups)
     }
 
-    useEffect(() => {
-        fetchData()
-    }, [])
+    useEffect(() => { fetchYears() }, [])
 
-    // Get possible target classes for a group (for dropdown)
+    // Change source year
+    const handleSourceYearChange = async (yearId: string) => {
+        const year = academicYears.find(y => y.id === yearId)
+        if (!year) return
+        setSourceYear(year)
+        setSelectedGroups(new Set())
+        setLoading(true)
+        await fetchStudents(yearId)
+        setLoading(false)
+    }
+
+    // === Helpers ===
     const getTargetOptions = (group: ClassGroup): Class[] => {
         if (group.action === 'PROMOTE') {
             const nextGrade = (group.sourceClass.grade_level || 0) + 1
             return classes.filter(c =>
-                c.school_level === group.sourceClass.school_level &&
-                c.grade_level === nextGrade
+                c.school_level === group.sourceClass.school_level && c.grade_level === nextGrade
             )
         } else if (group.action === 'TRANSITION') {
-            return classes.filter(c =>
-                c.school_level === 'SMA' &&
-                c.grade_level === 1
-            )
+            return classes.filter(c => c.school_level === 'SMA' && c.grade_level === 1)
         }
         return []
     }
 
     const toggleGroup = (classId: string) => {
         const group = classGroups.find(g => g.sourceClass.id === classId)
-        if (group?.isCompleted) return // Can't select completed groups
+        if (group?.isCompleted) return
         const newSelected = new Set(selectedGroups)
-        if (newSelected.has(classId)) {
-            newSelected.delete(classId)
-        } else {
-            newSelected.add(classId)
-        }
+        if (newSelected.has(classId)) { newSelected.delete(classId) } else { newSelected.add(classId) }
         setSelectedGroups(newSelected)
     }
 
     const toggleExpand = (classId: string) => {
         const newExpanded = new Set(expandedGroups)
-        if (newExpanded.has(classId)) {
-            newExpanded.delete(classId)
-        } else {
-            newExpanded.add(classId)
-        }
+        if (newExpanded.has(classId)) { newExpanded.delete(classId) } else { newExpanded.add(classId) }
         setExpandedGroups(newExpanded)
     }
 
@@ -247,11 +302,7 @@ export default function KenaikanKelasPage() {
         setClassGroups(prev => prev.map(g => {
             if (g.sourceClass.id !== classId) return g
             const newExcluded = new Set(g.excludedStudents)
-            if (newExcluded.has(studentId)) {
-                newExcluded.delete(studentId)
-            } else {
-                newExcluded.add(studentId)
-            }
+            if (newExcluded.has(studentId)) { newExcluded.delete(studentId) } else { newExcluded.add(studentId) }
             return { ...g, excludedStudents: newExcluded }
         }))
     }
@@ -260,24 +311,30 @@ export default function KenaikanKelasPage() {
         const targetClass = classes.find(c => c.id === targetId)
         setClassGroups(prev => prev.map(g => {
             if (g.sourceClass.id !== classId) return g
-            return {
-                ...g,
-                targetClassId: targetId,
-                targetClassName: targetClass?.name || g.targetClassName
-            }
+            return { ...g, targetClassId: targetId, targetClassName: targetClass?.name || g.targetClassName }
         }))
     }
 
     const selectAll = () => {
-        const selectableGroups = classGroups.filter(g => !g.isCompleted)
-        if (selectedGroups.size === selectableGroups.length) {
+        const selectableGroups = classGroups.filter(g => !g.isCompleted && getPendingStudents(g).length > 0)
+        if (selectedGroups.size === selectableGroups.length && selectedGroups.size > 0) {
             setSelectedGroups(new Set())
         } else {
             setSelectedGroups(new Set(selectableGroups.map(g => g.sourceClass.id)))
         }
     }
 
-    // Show confirmation modal instead of processing directly
+    const getPendingStudents = (group: ClassGroup) =>
+        group.students.filter(s => s.enrollment_status === 'ACTIVE')
+
+    const getDoneStudents = (group: ClassGroup) =>
+        group.students.filter(s =>
+            s.enrollment_status === 'PROMOTED' ||
+            s.enrollment_status === 'GRADUATED' ||
+            s.enrollment_status === 'RETAINED'
+        )
+
+    // === Process ===
     const handleProcessClick = () => {
         if (selectedGroups.size === 0) return
         setShowConfirmModal(true)
@@ -289,10 +346,9 @@ export default function KenaikanKelasPage() {
         const successIds: string[] = []
         const errors: string[] = []
 
-        // Calculate total students to process
         const toProcess = classGroups
             .filter(g => selectedGroups.has(g.sourceClass.id))
-            .flatMap(g => g.students)
+            .flatMap(g => getPendingStudents(g))
 
         setProcessProgress({ current: 0, total: toProcess.length })
 
@@ -302,7 +358,7 @@ export default function KenaikanKelasPage() {
             for (const group of classGroups) {
                 if (!selectedGroups.has(group.sourceClass.id)) continue
 
-                const studentsToProcess = group.students
+                const studentsToProcess = getPendingStudents(group)
 
                 for (const student of studentsToProcess) {
                     const isExcluded = group.excludedStudents.has(student.id)
@@ -314,48 +370,45 @@ export default function KenaikanKelasPage() {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     to_class_id: group.sourceClass.id,
-                                    to_academic_year_id: targetYear?.id || activeYear?.id,
-                                    notes: `Tinggal di kelas ${group.sourceClass.name} - ${activeYear?.name}`,
+                                    to_academic_year_id: targetYear?.id,
+                                    from_academic_year_id: sourceYear?.id,
+                                    notes: `Tinggal di kelas ${group.sourceClass.name} - ${sourceYear?.name}`,
                                     enrollment_status: 'RETAINED'
                                 })
                             })
-                            if (res.ok) {
-                                successIds.push(student.id)
-                            } else {
+                            if (res.ok) { successIds.push(student.id) }
+                            else {
                                 const errData = await res.json()
                                 errors.push(`Gagal memproses (Tinggal) ${student.user.full_name}: ${errData.error}`)
                             }
                         } else if (group.action === 'GRADUATE') {
-                            // Use proper graduate endpoint
                             const res = await fetch(`/api/students/${student.id}/graduate`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                    notes: `Lulus dari ${group.sourceClass.name} - ${activeYear?.name}`
+                                    notes: `Lulus dari ${group.sourceClass.name} - ${sourceYear?.name}`
                                 })
                             })
-                            if (res.ok) {
-                                successIds.push(student.id)
-                            } else {
+                            if (res.ok) { successIds.push(student.id) }
+                            else {
                                 const errData = await res.json()
                                 errors.push(`Gagal memproses ${student.user.full_name}: ${errData.error}`)
                             }
                         } else if (group.action === 'TRANSITION' || group.action === 'PROMOTE') {
                             if (group.targetClassId) {
-                                // Use proper promote endpoint
                                 const actionName = group.action === 'TRANSITION' ? 'Transisi SMA' : 'Naik kelas'
                                 const res = await fetch(`/api/students/${student.id}/promote`, {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
                                         to_class_id: group.targetClassId,
-                                        to_academic_year_id: targetYear?.id || activeYear?.id,
-                                        notes: `${actionName} dari ${group.sourceClass.name} ke ${group.targetClassName} - ${activeYear?.name}`
+                                        to_academic_year_id: targetYear?.id,
+                                        from_academic_year_id: sourceYear?.id,
+                                        notes: `${actionName} dari ${group.sourceClass.name} ke ${group.targetClassName} - ${sourceYear?.name}`
                                     })
                                 })
-                                if (res.ok) {
-                                    successIds.push(student.id)
-                                } else {
+                                if (res.ok) { successIds.push(student.id) }
+                                else {
                                     const errData = await res.json()
                                     errors.push(`Gagal memproses ${student.user.full_name}: ${errData.error}`)
                                 }
@@ -363,33 +416,19 @@ export default function KenaikanKelasPage() {
                                 errors.push(`${student.user.full_name}: Target kelas belum tersedia`)
                             }
                         }
-                    } catch (err) {
+                    } catch {
                         errors.push(`${student.user.full_name}: Error tidak terduga`)
                     }
-
                     processedCount++
                     setProcessProgress({ current: processedCount, total: toProcess.length })
                 }
-
-                // Mark group as completed if all students were processed
-                if (studentsToProcess.every(s => successIds.includes(s.id))) {
-                    setClassGroups(prev => prev.map(g =>
-                        g.sourceClass.id === group.sourceClass.id
-                            ? { ...g, isCompleted: true, completedCount: studentsToProcess.length }
-                            : g
-                    ))
-                }
             }
 
-            setResults({
-                success: successIds.length,
-                failed: errors.length,
-                errors
-            })
+            setResults({ success: successIds.length, failed: errors.length, errors })
             setShowResultModal(true)
 
-            // Refresh data
-            await fetchData()
+            // Refresh data from source year
+            if (sourceYear) await fetchStudents(sourceYear.id)
             setSelectedGroups(new Set())
         } finally {
             setProcessing(false)
@@ -397,18 +436,19 @@ export default function KenaikanKelasPage() {
         }
     }
 
-    // Export CSV
+    // === Export CSV ===
     const handleExportCSV = () => {
         const rows: string[][] = [['No', 'Nama Siswa', 'NIS', 'Kelas Asal', 'Kelas Tujuan', 'Aksi', 'Status']]
-
         let no = 1
         classGroups.forEach(group => {
             group.students.forEach(student => {
                 const isExcluded = group.excludedStudents.has(student.id)
                 const actionLabel = group.action === 'PROMOTE' ? 'Naik Kelas'
-                    : group.action === 'GRADUATE' ? 'Lulus'
-                        : 'Transisi SMA'
-
+                    : group.action === 'GRADUATE' ? 'Lulus' : 'Transisi SMA'
+                const statusLabel = student.enrollment_status === 'PROMOTED' ? 'Sudah Dinaikkan'
+                    : student.enrollment_status === 'GRADUATED' ? 'Sudah Lulus'
+                        : student.enrollment_status === 'RETAINED' ? 'Tinggal Kelas'
+                            : isExcluded ? 'Akan Tinggal Kelas' : 'Belum Diproses'
                 rows.push([
                     String(no++),
                     student.user.full_name || student.user.username,
@@ -416,21 +456,21 @@ export default function KenaikanKelasPage() {
                     group.sourceClass.name,
                     group.targetClassName,
                     actionLabel,
-                    isExcluded ? 'Tinggal Kelas' : (group.isCompleted ? 'Selesai' : 'Menunggu')
+                    statusLabel
                 ])
             })
         })
-
         const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `kenaikan-kelas-${activeYear?.name || 'report'}.csv`
+        a.download = `kenaikan-kelas-${sourceYear?.name || 'report'}.csv`
         a.click()
         URL.revokeObjectURL(url)
     }
 
+    // === Badge helpers ===
     const getActionBadge = (action: 'PROMOTE' | 'GRADUATE' | 'TRANSITION') => {
         switch (action) {
             case 'PROMOTE':
@@ -450,43 +490,71 @@ export default function KenaikanKelasPage() {
             case 'TRANSITION':
                 return (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full text-xs font-bold">
-                        <ArrowRight set="bold" primaryColor="currentColor" size={12} />
+                        <ArrowRight set="bold" primaryColor="currentColor" size={16} />
                         Transisi SMA
                     </span>
                 )
         }
     }
 
-    // Filtered groups based on search
+    const getStudentStatusBadge = (student: Student) => {
+        switch (student.enrollment_status) {
+            case 'PROMOTED':
+                return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-[10px] font-bold"><UserCheck className="w-3 h-3" /> Dinaikkan</span>
+            case 'GRADUATED':
+                return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-bold"><GraduationCap set="bold" primaryColor="currentColor" size={10} /> Lulus</span>
+            case 'RETAINED':
+                return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full text-[10px] font-bold"><UserX className="w-3 h-3" /> Tinggal</span>
+            default:
+                return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-[10px] font-bold">⏳ Belum</span>
+        }
+    }
+
+    // === Filtered groups ===
     const filteredGroups = useMemo(() => {
-        if (!searchQuery.trim()) return classGroups
-        const q = searchQuery.toLowerCase()
-        return classGroups.filter(g =>
-            g.sourceClass.name.toLowerCase().includes(q) ||
-            g.targetClassName.toLowerCase().includes(q)
-        )
-    }, [classGroups, searchQuery])
+        let groups = classGroups
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase()
+            groups = groups.filter(g =>
+                g.sourceClass.name.toLowerCase().includes(q) ||
+                g.targetClassName.toLowerCase().includes(q)
+            )
+        }
+        if (filterMode === 'PENDING') {
+            groups = groups.filter(g => getPendingStudents(g).length > 0)
+        } else if (filterMode === 'DONE') {
+            groups = groups.filter(g => getDoneStudents(g).length > 0)
+        }
+        return groups
+    }, [classGroups, searchQuery, filterMode])
 
     const smpGroups = filteredGroups.filter(g => g.sourceClass.school_level === 'SMP')
     const smaGroups = filteredGroups.filter(g => g.sourceClass.school_level === 'SMA')
 
     const totalSelectedStudents = classGroups
         .filter(g => selectedGroups.has(g.sourceClass.id))
-        .reduce((acc, g) => acc + g.students.length - g.excludedStudents.size, 0)
+        .reduce((acc, g) => {
+            const pending = getPendingStudents(g)
+            return acc + pending.length - [...g.excludedStudents].filter(id => pending.some(s => s.id === id)).length
+        }, 0)
 
-    // Confirmation modal stats
     const confirmStats = useMemo(() => {
         const groups = classGroups.filter(g => selectedGroups.has(g.sourceClass.id))
+        const getPending = (g: ClassGroup) => getPendingStudents(g).filter(s => !g.excludedStudents.has(s.id))
         return {
-            promote: groups.filter(g => g.action === 'PROMOTE').reduce((a, g) => a + g.students.length - g.excludedStudents.size, 0),
-            graduate: groups.filter(g => g.action === 'GRADUATE').reduce((a, g) => a + g.students.length - g.excludedStudents.size, 0),
-            transition: groups.filter(g => g.action === 'TRANSITION').reduce((a, g) => a + g.students.length - g.excludedStudents.size, 0),
-            excluded: groups.reduce((a, g) => a + g.excludedStudents.size, 0),
-            total: groups.reduce((a, g) => a + g.students.length - g.excludedStudents.size, 0),
+            promote: groups.filter(g => g.action === 'PROMOTE').reduce((a, g) => a + getPending(g).length, 0),
+            graduate: groups.filter(g => g.action === 'GRADUATE').reduce((a, g) => a + getPending(g).length, 0),
+            transition: groups.filter(g => g.action === 'TRANSITION').reduce((a, g) => a + getPending(g).length, 0),
+            excluded: groups.reduce((a, g) => {
+                const pending = getPendingStudents(g)
+                return a + [...g.excludedStudents].filter(id => pending.some(s => s.id === id)).length
+            }, 0),
+            total: groups.reduce((a, g) => a + getPending(g).length, 0),
             classes: groups.length
         }
     }, [classGroups, selectedGroups])
 
+    // === RENDER ===
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
@@ -498,21 +566,28 @@ export default function KenaikanKelasPage() {
     const renderGroupRow = (group: ClassGroup) => {
         const isSelected = selectedGroups.has(group.sourceClass.id)
         const isExpanded = expandedGroups.has(group.sourceClass.id)
-        const activeStudents = group.students.length - group.excludedStudents.size
+        const pending = getPendingStudents(group)
+        const done = getDoneStudents(group)
         const targetOptions = getTargetOptions(group)
+        const allDone = pending.length === 0 && done.length > 0
+
+        // Show students based on filter
+        const visibleStudents = filterMode === 'DONE' ? done
+            : filterMode === 'PENDING' ? pending
+                : group.students
 
         return (
-            <div key={group.sourceClass.id} className={`transition-colors ${group.isCompleted ? 'opacity-60' : ''}`}>
+            <div key={group.sourceClass.id} className={`transition-colors ${allDone ? 'opacity-60' : ''}`}>
                 {/* Main row */}
                 <div
-                    className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isSelected ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''} ${group.isCompleted ? 'bg-green-50 dark:bg-green-900/10' : ''}`}
+                    className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isSelected ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''} ${allDone ? 'bg-green-50 dark:bg-green-900/10' : ''}`}
                 >
-                    {/* Checkbox */}
+                    {/* Checkbox - only if there are pending students */}
                     <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleGroup(group.sourceClass.id)}
-                        disabled={group.isCompleted}
+                        disabled={allDone}
                         className="w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500/50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     />
 
@@ -532,7 +607,8 @@ export default function KenaikanKelasPage() {
                         <div className="md:col-span-3">
                             <p className="font-bold text-text-main dark:text-white">{group.sourceClass.name}</p>
                             <p className="text-xs text-text-secondary">
-                                {activeStudents}/{group.students.length} siswa
+                                <span className="text-red-500 font-medium">{pending.length} belum</span>
+                                {done.length > 0 && <span className="text-green-500 ml-1.5">• {done.length} selesai</span>}
                                 {group.excludedStudents.size > 0 && (
                                     <span className="text-amber-500 ml-1">({group.excludedStudents.size} dikecualikan)</span>
                                 )}
@@ -544,7 +620,7 @@ export default function KenaikanKelasPage() {
                             <ArrowRight set="bold" primaryColor="currentColor" size={16} />
                         </div>
 
-                        {/* Target class (dropdown for PROMOTE, static for others) */}
+                        {/* Target class */}
                         <div className="md:col-span-4">
                             {(group.action === 'PROMOTE' || group.action === 'TRANSITION') ? (
                                 targetOptions.length > 0 ? (
@@ -552,7 +628,7 @@ export default function KenaikanKelasPage() {
                                         <select
                                             value={group.targetClassId}
                                             onChange={(e) => updateTargetClass(group.sourceClass.id, e.target.value)}
-                                            disabled={group.isCompleted}
+                                            disabled={allDone}
                                             className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 appearance-none disabled:opacity-50"
                                         >
                                             {targetOptions.map(c => (
@@ -564,9 +640,7 @@ export default function KenaikanKelasPage() {
                                 ) : (
                                     <div className="flex flex-col">
                                         <p className="font-medium text-amber-500 text-sm mb-1">{group.targetClassName}</p>
-                                        <Link href="/dashboard/admin/kelas" className="text-xs text-primary hover:underline group-hover:block transition-all">
-                                            + Buat Kelas Baru
-                                        </Link>
+                                        <Link href="/dashboard/admin/kelas" className="text-xs text-primary hover:underline">+ Buat Kelas Baru</Link>
                                     </div>
                                 )
                             ) : (
@@ -581,13 +655,13 @@ export default function KenaikanKelasPage() {
 
                         {/* Status */}
                         <div className="md:col-span-2 flex justify-end">
-                            {group.isCompleted ? (
+                            {allDone ? (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 rounded-full text-xs font-bold">
                                     <CheckCircle set="bold" primaryColor="currentColor" size={14} />
-                                    Selesai ({group.completedCount})
+                                    Selesai ({done.length})
                                 </span>
                             ) : (
-                                <span className="text-xs text-text-secondary">Menunggu</span>
+                                <span className="text-xs text-text-secondary">{pending.length} menunggu</span>
                             )}
                         </div>
                     </div>
@@ -598,45 +672,45 @@ export default function KenaikanKelasPage() {
                     <div className="bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-200 dark:border-slate-700">
                         <div className="px-4 py-2 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
                             <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">Daftar Siswa</span>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setClassGroups(prev => prev.map(g =>
-                                        g.sourceClass.id === group.sourceClass.id
-                                            ? { ...g, excludedStudents: new Set() }
-                                            : g
-                                    ))}
-                                    className="text-xs text-primary hover:underline"
-                                >
-                                    Pilih Semua
-                                </button>
-                                <span className="text-xs text-text-secondary">|</span>
-                                <button
-                                    onClick={() => setClassGroups(prev => prev.map(g =>
-                                        g.sourceClass.id === group.sourceClass.id
-                                            ? { ...g, excludedStudents: new Set(g.students.map(s => s.id)) }
-                                            : g
-                                    ))}
-                                    className="text-xs text-red-500 hover:underline"
-                                >
-                                    Batalkan Semua
-                                </button>
-                            </div>
+                            {pending.length > 0 && (
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setClassGroups(prev => prev.map(g =>
+                                            g.sourceClass.id === group.sourceClass.id ? { ...g, excludedStudents: new Set() } : g
+                                        ))}
+                                        className="text-xs text-primary hover:underline"
+                                    >Pilih Semua</button>
+                                    <span className="text-xs text-text-secondary">|</span>
+                                    <button
+                                        onClick={() => setClassGroups(prev => prev.map(g =>
+                                            g.sourceClass.id === group.sourceClass.id
+                                                ? { ...g, excludedStudents: new Set(pending.map(s => s.id)) }
+                                                : g
+                                        ))}
+                                        className="text-xs text-red-500 hover:underline"
+                                    >Batalkan Semua</button>
+                                </div>
+                            )}
                         </div>
-                        {group.students.map((student, idx) => {
+                        {visibleStudents.map((student, idx) => {
                             const isExcluded = group.excludedStudents.has(student.id)
+                            const isPending = student.enrollment_status === 'ACTIVE'
                             return (
                                 <div
                                     key={student.id}
-                                    className={`flex items-center gap-3 px-6 py-2.5 hover:bg-secondary/5 transition-colors cursor-pointer ${isExcluded ? 'opacity-50' : ''}`}
-                                    onClick={() => !group.isCompleted && toggleStudentExclusion(group.sourceClass.id, student.id)}
+                                    className={`flex items-center gap-3 px-6 py-2.5 hover:bg-secondary/5 transition-colors ${isPending ? 'cursor-pointer' : ''} ${isExcluded ? 'opacity-50' : ''}`}
+                                    onClick={() => isPending && toggleStudentExclusion(group.sourceClass.id, student.id)}
                                 >
-                                    <input
-                                        type="checkbox"
-                                        checked={!isExcluded}
-                                        onChange={() => { }}
-                                        disabled={group.isCompleted}
-                                        className="w-4 h-4 rounded border-secondary text-primary focus:ring-primary/50 cursor-pointer"
-                                    />
+                                    {isPending ? (
+                                        <input
+                                            type="checkbox"
+                                            checked={!isExcluded}
+                                            onChange={() => { }}
+                                            className="w-4 h-4 rounded border-secondary text-primary focus:ring-primary/50 cursor-pointer"
+                                        />
+                                    ) : (
+                                        <div className="w-4" />
+                                    )}
                                     <span className="text-xs text-text-secondary w-6 text-right">{idx + 1}.</span>
                                     <div className="flex-1">
                                         <span className={`text-sm ${isExcluded ? 'line-through text-text-secondary' : 'text-text-main dark:text-white'}`}>
@@ -644,10 +718,10 @@ export default function KenaikanKelasPage() {
                                         </span>
                                     </div>
                                     <span className="text-xs text-text-secondary">{student.nis || '-'}</span>
-                                    {isExcluded && (
+                                    {getStudentStatusBadge(student)}
+                                    {isExcluded && isPending && (
                                         <span className="text-xs text-amber-500 font-medium flex items-center gap-1">
-                                            <UserX className="w-3 h-3" />
-                                            Tinggal
+                                            <UserX className="w-3 h-3" /> Tinggal
                                         </span>
                                     )}
                                 </div>
@@ -659,6 +733,11 @@ export default function KenaikanKelasPage() {
         )
     }
 
+    // Determine page state
+    const noCompletedYear = completedYears.length === 0
+    const noActiveYear = !activeYear
+    const hasData = !noCompletedYear && !noActiveYear
+
     return (
         <div className="space-y-6">
             <PageHeader
@@ -668,35 +747,85 @@ export default function KenaikanKelasPage() {
                 icon={<div className="text-emerald-500"><ArrowUpRight set="bold" primaryColor="currentColor" size={24} /></div>}
             />
 
-            {/* Active Year Info */}
+            {/* Source & Target Year Info */}
             <Card className="p-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <p className="text-sm text-text-secondary">Tahun Ajaran Aktif</p>
-                        <p className="text-xl font-bold text-text-main dark:text-white">
-                            {activeYear?.name || 'Tidak ada tahun ajaran aktif'}
-                        </p>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    {/* Source year */}
+                    <div className="flex-1">
+                        <p className="text-xs text-text-secondary mb-1">📤 Asal (Tahun Selesai)</p>
+                        {completedYears.length > 0 ? (
+                            <select
+                                value={sourceYear?.id || ''}
+                                onChange={(e) => handleSourceYearChange(e.target.value)}
+                                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full sm:w-auto"
+                            >
+                                {completedYears.map(y => (
+                                    <option key={y.id} value={y.id}>✅ {y.name}</option>
+                                ))}
+                            </select>
+                        ) : (
+                            <p className="text-sm font-bold text-amber-500">Belum ada tahun ajaran selesai</p>
+                        )}
                     </div>
-                    {targetYear && (
-                        <div className="text-right">
-                            <p className="text-sm text-text-secondary">Target Tahun Ajaran</p>
-                            <p className="text-xl font-bold text-primary">
-                                {targetYear.name}
-                            </p>
-                        </div>
-                    )}
+
+                    {/* Arrow */}
+                    <div className="hidden sm:flex items-center px-4">
+                        <ArrowRight set="bold" primaryColor="currentColor" size={24} />
+                    </div>
+
+                    {/* Target year */}
+                    <div className="flex-1 text-right">
+                        <p className="text-xs text-text-secondary mb-1">📥 Tujuan (Tahun Aktif)</p>
+                        {activeYear ? (
+                            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">▶️ {activeYear.name}</p>
+                        ) : (
+                            <p className="text-sm font-bold text-amber-500">Belum ada tahun aktif</p>
+                        )}
+                    </div>
                 </div>
+
+                {/* Progress bar */}
+                {students.length > 0 && (
+                    <div className="mt-4">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-medium text-text-secondary">
+                                Progress: {processedStudents.length}/{students.length} siswa diproses
+                            </span>
+                            <span className="text-xs font-bold text-text-main dark:text-white">{progressPercent}%</span>
+                        </div>
+                        <div className="h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                                className={`h-full rounded-full transition-all duration-500 ${progressPercent === 100 ? 'bg-green-500' : 'bg-emerald-500'}`}
+                                style={{ width: `${progressPercent}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
             </Card>
 
-            {!activeYear ? (
+            {/* Empty states */}
+            {noCompletedYear ? (
                 <Card className="p-6">
                     <EmptyState
-                        icon={<div className="text-amber-500"><AlertTriangle set="bold" primaryColor="currentColor" size={48} /></div>}
-                        title="Tidak Ada Tahun Ajaran Aktif"
-                        description="Aktifkan tahun ajaran terlebih dahulu untuk melakukan kenaikan kelas"
+                        icon={<div className="text-amber-500"><Calendar set="bold" primaryColor="currentColor" size={48} /></div>}
+                        title="Belum Ada Tahun Ajaran Selesai"
+                        description="Selesaikan tahun ajaran yang sedang berjalan terlebih dahulu untuk bisa menaikkan kelas siswa"
                         action={
                             <Button onClick={() => router.push('/dashboard/admin/tahun-ajaran')}>
                                 Kelola Tahun Ajaran
+                            </Button>
+                        }
+                    />
+                </Card>
+            ) : noActiveYear ? (
+                <Card className="p-6">
+                    <EmptyState
+                        icon={<div className="text-amber-500"><AlertTriangle set="bold" primaryColor="currentColor" size={48} /></div>}
+                        title="Belum Ada Tahun Ajaran Aktif"
+                        description="Buat dan aktifkan tahun ajaran baru sebagai tujuan kenaikan kelas"
+                        action={
+                            <Button onClick={() => router.push('/dashboard/admin/tahun-ajaran')}>
+                                Buat Tahun Ajaran Baru
                             </Button>
                         }
                     />
@@ -705,8 +834,8 @@ export default function KenaikanKelasPage() {
                 <Card className="p-6">
                     <EmptyState
                         icon={<div className="text-secondary"><Users set="bold" primaryColor="currentColor" size={48} /></div>}
-                        title="Tidak Ada Siswa Aktif"
-                        description="Tidak ada siswa aktif yang terdaftar di kelas pada tahun ajaran ini"
+                        title="Tidak Ada Siswa"
+                        description={`Tidak ada siswa yang terdaftar (enrollment) di tahun ajaran ${sourceYear?.name}`}
                         action={
                             <Button onClick={() => router.push('/dashboard/admin/siswa')}>
                                 Kelola Siswa
@@ -716,11 +845,11 @@ export default function KenaikanKelasPage() {
                 </Card>
             ) : (
                 <>
-                    {/* Search + Controls */}
+                    {/* Search + Filter + Controls */}
                     <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
                             <Button variant="secondary" onClick={selectAll}>
-                                {selectedGroups.size === classGroups.filter(g => !g.isCompleted).length && selectedGroups.size > 0
+                                {selectedGroups.size === classGroups.filter(g => !g.isCompleted && getPendingStudents(g).length > 0).length && selectedGroups.size > 0
                                     ? 'Batalkan Semua'
                                     : 'Pilih Semua'}
                             </Button>
@@ -734,20 +863,91 @@ export default function KenaikanKelasPage() {
                                     className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                 />
                             </div>
+                            {/* Filter toggle */}
+                            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5 border border-slate-200 dark:border-slate-700">
+                                {(['ALL', 'PENDING', 'DONE'] as FilterMode[]).map(mode => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setFilterMode(mode)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterMode === mode
+                                            ? 'bg-white dark:bg-slate-700 text-text-main dark:text-white shadow-sm'
+                                            : 'text-text-secondary hover:text-text-main'
+                                            }`}
+                                    >
+                                        {mode === 'ALL' ? 'Semua' : mode === 'PENDING' ? '🔴 Belum' : '🟢 Sudah'}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setShowHistory(!showHistory)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg transition-colors ${showHistory
+                                    ? 'bg-primary/10 text-primary font-medium'
+                                    : 'text-text-secondary hover:text-text-main dark:hover:text-white hover:bg-secondary/10'
+                                    }`}
+                            >
+                                <History set="bold" primaryColor="currentColor" size={16} />
+                                History
+                                {showHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown set="bold" primaryColor="currentColor" size={12} />}
+                            </button>
                             <button
                                 onClick={handleExportCSV}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-text-secondary hover:text-text-main dark:hover:text-white hover:bg-secondary/10 rounded-lg transition-colors"
                             >
                                 <Download set="bold" primaryColor="currentColor" size={16} />
-                                Export CSV
+                                Export
                             </button>
                             <span className="text-sm text-text-secondary">
                                 {selectedGroups.size} kelas • {totalSelectedStudents} siswa
                             </span>
                         </div>
                     </div>
+
+                    {/* History Panel */}
+                    {showHistory && (
+                        <Card className="p-0 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                            <div className="bg-slate-50 dark:bg-slate-800 px-6 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                <h3 className="font-bold text-text-main dark:text-white text-sm flex items-center gap-2">
+                                    <History set="bold" primaryColor="currentColor" size={16} />
+                                    Riwayat Kenaikan — {sourceYear?.name}
+                                </h3>
+                                <span className="text-xs text-text-secondary">{processedStudents.length} siswa diproses</span>
+                            </div>
+                            {processedStudents.length === 0 ? (
+                                <div className="p-6 text-center text-sm text-text-secondary">
+                                    Belum ada siswa yang diproses di tahun ajaran ini.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-text-secondary">No</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-text-secondary">Nama</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-text-secondary">NIS</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-text-secondary">Kelas Asal</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-text-secondary">Status</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-text-secondary">Keterangan</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-secondary/10">
+                                            {processedStudents.map((s, i) => (
+                                                <tr key={s.enrollment_id || s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                    <td className="px-4 py-2 text-text-secondary">{i + 1}</td>
+                                                    <td className="px-4 py-2 font-medium text-text-main dark:text-white">{s.user.full_name || s.user.username}</td>
+                                                    <td className="px-4 py-2 text-text-secondary">{s.nis || '-'}</td>
+                                                    <td className="px-4 py-2 text-text-secondary">{s.class?.name || '-'}</td>
+                                                    <td className="px-4 py-2">{getStudentStatusBadge(s)}</td>
+                                                    <td className="px-4 py-2 text-xs text-text-secondary max-w-[200px] truncate">{s.enrollment_notes || '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </Card>
+                    )}
 
                     {/* SMP Section */}
                     {smpGroups.length > 0 && (
@@ -814,7 +1014,7 @@ export default function KenaikanKelasPage() {
                             <div>
                                 <p className="font-bold text-amber-700 dark:text-amber-300 text-sm">Perhatian!</p>
                                 <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
-                                    Proses ini akan memindahkan siswa ke kelas/status baru.
+                                    Siswa akan dipindahkan dari <strong>{sourceYear?.name}</strong> ke <strong>{targetYear?.name}</strong>.
                                     Pastikan data sudah benar sebelum melanjutkan.
                                 </p>
                             </div>
@@ -868,18 +1068,8 @@ export default function KenaikanKelasPage() {
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                        <Button
-                            variant="secondary"
-                            onClick={() => setShowConfirmModal(false)}
-                            className="flex-1"
-                        >
-                            Batal
-                        </Button>
-                        <Button
-                            onClick={handleConfirmProcess}
-                            className="flex-1"
-                            icon={<CheckCircle set="bold" primaryColor="currentColor" size={16} />}
-                        >
+                        <Button variant="secondary" onClick={() => setShowConfirmModal(false)} className="flex-1">Batal</Button>
+                        <Button onClick={handleConfirmProcess} className="flex-1" icon={<CheckCircle set="bold" primaryColor="currentColor" size={16} />}>
                             Ya, Proses Sekarang
                         </Button>
                     </div>
@@ -917,9 +1107,7 @@ export default function KenaikanKelasPage() {
                         </div>
                     )}
 
-                    <Button onClick={() => setShowResultModal(false)} className="w-full">
-                        Tutup
-                    </Button>
+                    <Button onClick={() => setShowResultModal(false)} className="w-full">Tutup</Button>
                 </div>
             </Modal>
         </div>

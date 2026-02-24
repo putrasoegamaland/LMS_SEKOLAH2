@@ -20,6 +20,52 @@ export async function GET(request: NextRequest) {
         const angkatan = searchParams.get('angkatan')
         const school_level = searchParams.get('school_level')
         const status = searchParams.get('status')
+        const enrollment_year_id = searchParams.get('enrollment_year_id')
+
+        // If enrollment_year_id is provided, fetch students with their enrollment in that specific year
+        if (enrollment_year_id) {
+            const { data: enrollments, error: enrollError } = await supabase
+                .from('student_enrollments')
+                .select(`
+                    id,
+                    status,
+                    class_id,
+                    academic_year_id,
+                    ended_at,
+                    notes,
+                    created_at,
+                    student:students!student_enrollments_student_id_fkey(
+                        id,
+                        nis,
+                        class_id,
+                        angkatan,
+                        school_level,
+                        status,
+                        gender,
+                        user:users(id, username, full_name, role),
+                        class:classes(id, name, grade_level, school_level, academic_year_id)
+                    ),
+                    enrollment_class:classes!student_enrollments_class_id_fkey(id, name, grade_level, school_level, academic_year_id)
+                `)
+                .eq('academic_year_id', enrollment_year_id)
+                .order('created_at', { ascending: false })
+
+            if (enrollError) throw enrollError
+
+            // Flatten: merge student data with enrollment info
+            const result = (enrollments || [])
+                .filter((e: any) => e.student)
+                .map((e: any) => ({
+                    ...e.student,
+                    class: e.enrollment_class || e.student.class,
+                    enrollment_status: e.status,
+                    enrollment_id: e.id,
+                    enrollment_ended_at: e.ended_at,
+                    enrollment_notes: e.notes
+                }))
+
+            return NextResponse.json(result)
+        }
 
         let query = supabase
             .from('students')

@@ -178,7 +178,16 @@ export default function TahunAjaranPage() {
         try {
             const url = editingYear ? `/api/academic-years/${editingYear.id}` : '/api/academic-years'
             const method = editingYear ? 'PUT' : 'POST'
-            const submitData = { ...formData, is_active: formData.status === 'ACTIVE' }
+
+            // Force active if it's the very first academic year being created
+            const isFirstYear = years.length === 0 && !editingYear;
+            const finalStatus = isFirstYear ? 'ACTIVE' : formData.status;
+
+            const submitData = {
+                ...formData,
+                status: finalStatus,
+                is_active: finalStatus === 'ACTIVE'
+            }
 
             const res = await fetch(url, {
                 method,
@@ -705,17 +714,29 @@ export default function TahunAjaranPage() {
                             <div className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-400">
                                 {editingYear.status === 'ACTIVE' ? '▶️ Aktif' : '✅ Selesai'} (tidak dapat diubah dari sini)
                             </div>
+                        ) : years.length === 0 && !editingYear ? (
+                            <div className="space-y-2">
+                                <div className="w-full px-4 py-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-2">
+                                    <PlayCircle set="bold" size={20} />
+                                    Akan di-set menjadi Aktif otomatis
+                                </div>
+                                <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                                    Karena belum ada tahun ajaran di sistem, tahun ajaran pertama ini akan langsung diaktifkan.
+                                </p>
+                            </div>
                         ) : (
                             <div className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-400">
                                 🕐 Direncanakan
                             </div>
                         )}
-                        <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                            <p className="text-xs text-blue-700 dark:text-blue-300">
-                                💡 Untuk <strong>mengaktifkan</strong> tahun ajaran, gunakan tombol <strong>&quot;Pergantian Tahun&quot;</strong> di atas.
-                                Ini memastikan semua langkah (selesaikan tahun lama, kenaikan kelas, salin penugasan) dilakukan dengan benar.
-                            </p>
-                        </div>
+                        {years.length > 0 && !(editingYear?.status === 'ACTIVE' || editingYear?.status === 'COMPLETED') && (
+                            <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                <p className="text-xs text-blue-700 dark:text-blue-300">
+                                    💡 Untuk <strong>mengaktifkan</strong> tahun ajaran, gunakan tombol <strong>&quot;Pergantian Tahun&quot;</strong> di atas.
+                                    Ini memastikan semua langkah (selesaikan tahun lama, kenaikan kelas, salin penugasan) dilakukan dengan benar.
+                                </p>
+                            </div>
+                        )}
                     </div>
                     <div className="flex gap-3 pt-2">
                         <Button type="button" variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Batal</Button>

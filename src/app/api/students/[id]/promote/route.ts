@@ -29,7 +29,7 @@ export async function PUT(
             return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
         }
 
-        const { to_class_id, to_academic_year_id, notes, enrollment_status = 'PROMOTED' } = await request.json()
+        const { to_class_id, to_academic_year_id, from_academic_year_id, notes, enrollment_status = 'PROMOTED' } = await request.json()
 
         // Validation
         if (!to_class_id || !to_academic_year_id) {
@@ -38,7 +38,7 @@ export async function PUT(
             }, { status: 400 })
         }
 
-        // Get current student data with active enrollment
+        // Get current student data with enrollments
         const { data: student, error: studentError } = await supabase
             .from('students')
             .select(`
@@ -57,8 +57,16 @@ export async function PUT(
             return NextResponse.json({ error: 'Student not found' }, { status: 404 })
         }
 
-        // Find active enrollment
-        const activeEnrollment = (student.enrollments as any[])?.find((e: any) => e.status === 'ACTIVE')
+        // Find enrollment: prefer specific year, fallback to any ACTIVE
+        let activeEnrollment: any = null
+        if (from_academic_year_id) {
+            activeEnrollment = (student.enrollments as any[])?.find((e: any) =>
+                e.academic_year_id === from_academic_year_id && e.status === 'ACTIVE'
+            )
+        }
+        if (!activeEnrollment) {
+            activeEnrollment = (student.enrollments as any[])?.find((e: any) => e.status === 'ACTIVE')
+        }
 
         if (!activeEnrollment) {
             return NextResponse.json({
