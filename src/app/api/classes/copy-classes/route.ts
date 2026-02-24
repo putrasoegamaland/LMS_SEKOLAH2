@@ -8,7 +8,7 @@ import { validateSession } from '@/lib/auth'
  * Creates new classes with the same name, grade_level, school_level
  * but linked to the new academic year.
  * 
- * Body: { from_year_id: string, to_year_id: string }
+ * Body: { from_year_id: string, to_year_id: string, copy_homeroom?: boolean }
  * Returns: { copied: number, skipped: number, total: number, class_mapping: Record<old_id, new_id> }
  */
 export async function POST(request: NextRequest) {
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Admin only' }, { status: 401 })
         }
 
-        const { from_year_id, to_year_id } = await request.json()
+        const { from_year_id, to_year_id, copy_homeroom = true } = await request.json()
 
         if (!from_year_id || !to_year_id) {
             return NextResponse.json({ error: 'from_year_id and to_year_id are required' }, { status: 400 })
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
         // Fetch source classes
         const { data: sourceClasses, error: sourceError } = await supabase
             .from('classes')
-            .select('id, name, grade_level, school_level')
+            .select('id, name, grade_level, school_level, homeroom_teacher_id')
             .eq('academic_year_id', from_year_id)
             .order('school_level')
             .order('grade_level')
@@ -95,7 +95,8 @@ export async function POST(request: NextRequest) {
                 name: c.name,
                 grade_level: c.grade_level,
                 school_level: c.school_level,
-                academic_year_id: to_year_id
+                academic_year_id: to_year_id,
+                ...(copy_homeroom && c.homeroom_teacher_id ? { homeroom_teacher_id: c.homeroom_teacher_id } : {})
             }))
 
         if (classesToCreate.length === 0) {

@@ -15,9 +15,10 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Get optional filter parameter
+        // Get optional filter parameters
         const url = new URL(request.url)
         const grade_level = url.searchParams.get('grade_level')
+        const academic_year_id = url.searchParams.get('academic_year_id')
 
         let query = supabase
             .from('classes')
@@ -31,9 +32,12 @@ export async function GET(request: NextRequest) {
         )
       `)
 
-        // Apply filter if specified
+        // Apply filters if specified
         if (grade_level) {
             query = query.eq('grade_level', parseInt(grade_level))
+        }
+        if (academic_year_id) {
+            query = query.eq('academic_year_id', academic_year_id)
         }
 
         // Order by grade_level first (nulls last), then name

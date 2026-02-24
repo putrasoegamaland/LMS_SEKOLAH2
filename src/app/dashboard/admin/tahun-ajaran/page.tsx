@@ -80,6 +80,8 @@ export default function TahunAjaranPage() {
     const [copyingAssignments, setCopyingAssignments] = useState(false)
     const [copyResult, setCopyResult] = useState<{ copied: number; skipped: number; total: number } | null>(null)
     const [sourceYearId, setSourceYearId] = useState<string>('')
+    const [copyingWali, setCopyingWali] = useState(false)
+    const [copyWaliResult, setCopyWaliResult] = useState<{ copied: number; skipped: number; total: number } | null>(null)
 
     // Wizard confirmation modal states
     const [showWizardCompleteModal, setShowWizardCompleteModal] = useState(false)
@@ -140,12 +142,22 @@ export default function TahunAjaranPage() {
                     : '⬜ Buat tahun ajaran baru'
         }
 
-        if (hasActiveYear) {
-            newSteps[2] = {
-                completed: false, loading: false,
-                detail: hasCompletedYear && hasActiveYear
-                    ? '⬜ Proses kenaikan kelas jika belum' : '⏳ Selesaikan langkah 1 & 2 dulu'
+        if (hasActiveYear && hasCompletedYear) {
+            try {
+                const enrollRes = await fetch(`/api/students?enrollment_year_id=${activeYear?.id}`)
+                const enrollData = await enrollRes.json()
+                const enrollCount = Array.isArray(enrollData) ? enrollData.length : 0
+                newSteps[2] = {
+                    completed: enrollCount > 0, loading: false,
+                    detail: enrollCount > 0
+                        ? `✅ ${enrollCount} siswa sudah terdaftar di ${activeYear?.name}`
+                        : '⬜ Proses kenaikan kelas dari tahun sebelumnya'
+                }
+            } catch {
+                newSteps[2] = { completed: false, loading: false, detail: '⬜ Proses kenaikan kelas jika belum' }
             }
+        } else if (hasActiveYear) {
+            newSteps[2] = { completed: false, loading: false, detail: '⏳ Selesaikan langkah 1 & 2 dulu' }
         } else {
             newSteps[2] = { completed: false, loading: false, detail: '⏳ Buat tahun ajaran baru dulu' }
         }
@@ -398,6 +410,58 @@ export default function TahunAjaranPage() {
         } catch { alert('Terjadi error') } finally { setCopyingAssignments(false) }
     }
 
+    const handleCopyWaliKelas = async () => {
+        const fromId = sourceYearId || lastCompletedYear?.id
+        if (!fromId || !activeYear) { alert('Tidak ada tahun sumber atau tahun aktif'); return }
+        setCopyingWali(true)
+        setCopyWaliResult(null)
+        try {
+            // copy-classes with copy_homeroom=true will copy wali kelas assignments
+            const res = await fetch('/api/classes/copy-classes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from_year_id: fromId, to_year_id: activeYear.id, copy_homeroom: true })
+            })
+            const data = await res.json()
+            if (res.ok) {
+                // For classes that already exist, update their homeroom_teacher_id
+                const { data: sourceClasses } = await fetch(`/api/classes?academic_year_id=${fromId}`).then(r => r.json()).then(classes => ({ data: classes })).catch(() => ({ data: [] }))
+                const { data: targetClasses } = await fetch(`/api/classes?academic_year_id=${activeYear.id}`).then(r => r.json()).then(classes => ({ data: classes })).catch(() => ({ data: [] }))
+
+                let updatedCount = 0
+                if (Array.isArray(sourceClasses) && Array.isArray(targetClasses)) {
+                    for (const src of sourceClasses) {
+                        if (!src.homeroom_teacher_id) continue
+                        const target = targetClasses.find((t: any) =>
+                            t.name === src.name && t.grade_level === src.grade_level && t.school_level === src.school_level
+                        )
+                        if (target && target.homeroom_teacher_id !== src.homeroom_teacher_id) {
+                            const updateRes = await fetch(`/api/classes/${target.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    name: target.name,
+                                    academic_year_id: target.academic_year_id,
+                                    grade_level: target.grade_level,
+                                    school_level: target.school_level,
+                                    homeroom_teacher_id: src.homeroom_teacher_id
+                                })
+                            })
+                            if (updateRes.ok) updatedCount++
+                        }
+                    }
+                }
+
+                const totalCopied = (data.copied || 0) + updatedCount
+                setCopyWaliResult({
+                    copied: totalCopied,
+                    skipped: (sourceClasses?.length || 0) - totalCopied,
+                    total: sourceClasses?.length || 0
+                })
+            } else { alert(`Error: ${data.error}`) }
+        } catch { alert('Terjadi error') } finally { setCopyingWali(false) }
+    }
+
     const fetchData = async () => { await fetchYears() }
 
     const getYearNameOptions = () => {
@@ -534,6 +598,9 @@ export default function TahunAjaranPage() {
                             <div className="flex-1">
                                 <h3 className="text-sm font-bold text-text-main dark:text-white">Buat & Aktifkan Tahun Baru</h3>
                                 <p className="text-xs text-text-secondary mt-0.5">{steps[1].detail}</p>
+                                {steps[1].completed && (
+                                    <p className="text-[10px] text-green-600 dark:text-green-400 mt-0.5">📋 Kelas otomatis disalin dari tahun sebelumnya</p>
+                                )}
                                 {steps[0].completed && !steps[1].completed && (
                                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                                         <select
@@ -577,17 +644,18 @@ export default function TahunAjaranPage() {
                         </div>
                     </Card>
 
-                    {/* Step 4: Copy Assignments */}
+                    {/* Step 4: Copy Assignments & Wali Kelas */}
                     <Card className={`border-l-4 ${steps[3].completed ? 'border-l-green-500' : steps[1].completed ? 'border-l-primary' : 'border-l-slate-300 opacity-60'}`}>
                         <div className="flex items-start gap-3">
                             <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${steps[3].completed ? 'bg-green-500' : steps[1].completed ? 'bg-primary' : 'bg-gray-400'}`}>
                                 {steps[3].completed ? <CheckCircle set="bold" primaryColor="currentColor" size={16} /> : '4'}
                             </div>
                             <div className="flex-1">
-                                <h3 className="text-sm font-bold text-text-main dark:text-white">Salin Penugasan Mengajar</h3>
+                                <h3 className="text-sm font-bold text-text-main dark:text-white">Salin Penugasan & Wali Kelas</h3>
                                 <p className="text-xs text-text-secondary mt-0.5">{steps[3].detail}</p>
                                 {steps[1].completed && (
-                                    <div className="space-y-2 mt-2">
+                                    <div className="space-y-3 mt-2">
+                                        {/* Source year selector */}
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-xs text-text-secondary">Dari:</span>
                                             <select
@@ -603,18 +671,44 @@ export default function TahunAjaranPage() {
                                             <span className="px-3 py-1.5 bg-green-50 dark:bg-green-900/20 rounded-lg text-xs font-medium text-green-600 dark:text-green-400">
                                                 {activeYear?.name}
                                             </span>
-                                            <Button onClick={handleCopyAssignments} disabled={copyingAssignments}>
-                                                {copyingAssignments
-                                                    ? <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Menyalin...</>
-                                                    : <><Copy className="w-3 h-3 mr-1" /> Salin</>
-                                                }
-                                            </Button>
                                         </div>
-                                        {copyResult && (
-                                            <div className={`p-3 rounded-lg border text-sm ${copyResult.copied > 0 ? 'bg-green-50 dark:bg-green-900/20 border-green-200' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200'}`}>
-                                                ✅ {copyResult.copied} disalin, {copyResult.skipped} sudah ada (dari {copyResult.total} total)
+
+                                        {/* Copy Penugasan */}
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-text-main dark:text-white">📖 Penugasan Mengajar</span>
+                                                <Button size="sm" onClick={handleCopyAssignments} disabled={copyingAssignments}>
+                                                    {copyingAssignments
+                                                        ? <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Menyalin...</>
+                                                        : <><Copy className="w-3 h-3 mr-1" /> Salin Penugasan</>
+                                                    }
+                                                </Button>
                                             </div>
-                                        )}
+                                            {copyResult && (
+                                                <div className={`p-2 rounded-lg border text-xs ${copyResult.copied > 0 ? 'bg-green-50 dark:bg-green-900/20 border-green-200' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200'}`}>
+                                                    ✅ {copyResult.copied} disalin, {copyResult.skipped} sudah ada (dari {copyResult.total} total)
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Copy Wali Kelas */}
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-text-main dark:text-white">🤝 Wali Kelas</span>
+                                                <Button size="sm" onClick={handleCopyWaliKelas} disabled={copyingWali}>
+                                                    {copyingWali
+                                                        ? <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Menyalin...</>
+                                                        : <><Copy className="w-3 h-3 mr-1" /> Salin Wali Kelas</>
+                                                    }
+                                                </Button>
+                                            </div>
+                                            {copyWaliResult && (
+                                                <div className={`p-2 rounded-lg border text-xs ${copyWaliResult.copied > 0 ? 'bg-green-50 dark:bg-green-900/20 border-green-200' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200'}`}>
+                                                    ✅ {copyWaliResult.copied} wali kelas disalin (dari {copyWaliResult.total} kelas)
+                                                </div>
+                                            )}
+                                        </div>
+
                                         <Link href="/dashboard/admin/penugasan" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
                                             Buka halaman Penugasan <ExternalLink className="w-3 h-3" />
                                         </Link>
