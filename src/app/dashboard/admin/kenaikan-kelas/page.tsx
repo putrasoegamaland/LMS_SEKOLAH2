@@ -78,6 +78,11 @@ export default function KenaikanKelasPage() {
     const [showResultModal, setShowResultModal] = useState(false)
     const [results, setResults] = useState<{ success: number; failed: number; errors: string[] }>({ success: 0, failed: 0, errors: [] })
 
+    // Promote retained student
+    const [promoteRetainedStudent, setPromoteRetainedStudent] = useState<Student | null>(null)
+    const [promoteRetainedClassId, setPromoteRetainedClassId] = useState<string>('')
+    const [promotingRetained, setPromotingRetained] = useState(false)
+
     // Processing progress
     const [processProgress, setProcessProgress] = useState({ current: 0, total: 0 })
 
@@ -470,6 +475,53 @@ export default function KenaikanKelasPage() {
         URL.revokeObjectURL(url)
     }
 
+    // === Promote Retained Student ===
+    const handlePromoteRetained = async () => {
+        if (!promoteRetainedStudent || !promoteRetainedClassId || !targetYear) return
+        setPromotingRetained(true)
+        try {
+            const res = await fetch(`/api/students/${promoteRetainedStudent.id}/promote`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    from_academic_year_id: targetYear.id,  // Source = tahun AKTIF (bukan completed)
+                    to_class_id: promoteRetainedClassId,
+                    to_academic_year_id: targetYear.id,
+                    enrollment_status: 'PROMOTED',
+                    notes: `Dinaikkan setelah pertimbangan ulang (sebelumnya tinggal kelas)`
+                })
+            })
+            if (res.ok) {
+                setPromoteRetainedStudent(null)
+                setPromoteRetainedClassId('')
+                // Refresh data
+                if (sourceYear) await fetchStudents(sourceYear.id)
+            } else {
+                const err = await res.json()
+                alert(`Gagal: ${err.error}`)
+            }
+        } catch {
+            alert('Terjadi error saat memproses')
+        } finally {
+            setPromotingRetained(false)
+        }
+    }
+
+    // Get target classes for a retained student (same school_level, higher or equal grade)
+    const getRetainedTargetClasses = (student: Student) => {
+        if (!targetYear) return []
+        // Find the student's current class info from the class groups
+        const studentGroup = classGroups.find(g => g.students.some(s => s.id === student.id))
+        if (!studentGroup) return []
+        const srcClass = studentGroup.sourceClass
+        // Show classes in the active year that are same or higher grade, same school level
+        return classes.filter(c =>
+            c.academic_year_id === targetYear.id &&
+            c.school_level === srcClass.school_level &&
+            (c.grade_level ?? 0) >= (srcClass.grade_level ?? 0)
+        )
+    }
+
     // === Badge helpers ===
     const getActionBadge = (action: 'PROMOTE' | 'GRADUATE' | 'TRANSITION') => {
         switch (action) {
@@ -504,7 +556,24 @@ export default function KenaikanKelasPage() {
             case 'GRADUATED':
                 return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-bold"><GraduationCap set="bold" primaryColor="currentColor" size={10} /> Lulus</span>
             case 'RETAINED':
-                return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full text-[10px] font-bold"><UserX className="w-3 h-3" /> Tinggal</span>
+                return (
+                    <span className="inline-flex items-center gap-1">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full text-[10px] font-bold">
+                            <UserX className="w-3 h-3" /> Tinggal
+                        </span>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                setPromoteRetainedStudent(student)
+                                setPromoteRetainedClassId('')
+                            }}
+                            className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-bold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                            title="Naikkan siswa ini"
+                        >
+                            <ArrowUpRight set="bold" primaryColor="currentColor" size={10} /> Naikkan
+                        </button>
+                    </span>
+                )
             default:
                 return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full text-[10px] font-bold">⏳ Belum</span>
         }
@@ -1109,6 +1178,65 @@ export default function KenaikanKelasPage() {
 
                     <Button onClick={() => setShowResultModal(false)} className="w-full">Tutup</Button>
                 </div>
+            </Modal>
+
+            {/* Promote Retained Student Modal */}
+            <Modal
+                open={!!promoteRetainedStudent}
+                onClose={() => { setPromoteRetainedStudent(null); setPromoteRetainedClassId('') }}
+                title="🔄 Naikkan Siswa Tinggal Kelas"
+            >
+                {promoteRetainedStudent && (
+                    <div className="space-y-4">
+                        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                            <p className="text-sm text-amber-800 dark:text-amber-200">
+                                <strong>{promoteRetainedStudent.user.full_name || promoteRetainedStudent.user.username}</strong>
+                                {' '}sebelumnya ditandai <strong>tinggal kelas</strong>. Pilih kelas tujuan untuk menaikkan siswa ini.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">
+                                Kelas Tujuan
+                            </label>
+                            <select
+                                value={promoteRetainedClassId}
+                                onChange={(e) => setPromoteRetainedClassId(e.target.value)}
+                                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                            >
+                                <option value="">Pilih kelas tujuan...</option>
+                                {getRetainedTargetClasses(promoteRetainedStudent).map(c => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.name} ({c.school_level} Kelas {c.grade_level})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {promoteRetainedClassId && (
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-800 dark:text-blue-200">
+                                ✅ Enrollment aktif di kelas lama akan ditandai <strong>PROMOTED</strong>, dan enrollment baru dibuat di kelas tujuan.
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 pt-2">
+                            <Button
+                                variant="secondary"
+                                onClick={() => { setPromoteRetainedStudent(null); setPromoteRetainedClassId('') }}
+                                className="flex-1"
+                            >
+                                Batal
+                            </Button>
+                            <Button
+                                onClick={handlePromoteRetained}
+                                disabled={!promoteRetainedClassId || promotingRetained}
+                                className="flex-1"
+                            >
+                                {promotingRetained ? 'Memproses...' : '⬆️ Naikkan Siswa'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </div>
     )
