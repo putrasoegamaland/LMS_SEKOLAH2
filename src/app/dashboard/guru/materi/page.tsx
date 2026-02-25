@@ -231,8 +231,6 @@ export default function MateriPage() {
                 throw new Error(data.error || 'Gagal menyimpan materi')
             }
 
-
-
             setToast({ message: 'Materi berhasil disimpan!', type: 'success' })
             setShowModal(false)
             setFormData({
@@ -245,7 +243,12 @@ export default function MateriPage() {
             })
             setFile(null)
             setVideoSource('YOUTUBE') // Reset default
-            fetchData()
+            // Refresh data and update selectedSubject so the list re-renders immediately
+            const freshGroups = await fetchData()
+            if (selectedSubject && freshGroups) {
+                const updated = freshGroups.find((g: SubjectGroup) => g.subjectId === selectedSubject.subjectId)
+                if (updated) setSelectedSubject(updated)
+            }
         } catch (error: any) {
             setToast({ message: error.message, type: 'error' })
         } finally {
@@ -287,7 +290,11 @@ export default function MateriPage() {
             if (!res.ok) throw new Error('Gagal menghapus materi')
 
             setToast({ message: 'Materi berhasil dihapus', type: 'success' })
-            fetchData()
+            const freshGroups = await fetchData()
+            if (selectedSubject && freshGroups) {
+                const updated = freshGroups.find((g: SubjectGroup) => g.subjectId === selectedSubject.subjectId)
+                if (updated) setSelectedSubject(updated)
+            }
         } catch (error) {
             setToast({ message: 'Gagal menghapus materi', type: 'error' })
         }

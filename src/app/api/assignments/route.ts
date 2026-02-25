@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
           academic_year_id,
           teacher:teachers(id, user:users(full_name)),
           subject:subjects(name),
-          class:classes(name),
+          class:classes(id, name),
           academic_year:academic_years(id, name, is_active)
         )
       `)
@@ -60,6 +60,31 @@ export async function GET(request: NextRequest) {
         const { data, error } = await query
 
         if (error) throw error
+
+        // Fetch submission counts for all assignments
+        if (data && data.length > 0) {
+            const assignmentIds = data.map((a: any) => a.id)
+            const { data: subCounts } = await supabase
+                .from('submissions')
+                .select('assignment_id')
+                .in('assignment_id', assignmentIds)
+
+            // Count submissions per assignment
+            const countMap: Record<string, number> = {}
+            if (subCounts) {
+                for (const s of subCounts) {
+                    countMap[s.assignment_id] = (countMap[s.assignment_id] || 0) + 1
+                }
+            }
+
+            // Merge counts into assignments
+            const enriched = data.map((a: any) => ({
+                ...a,
+                submissions: [{ count: countMap[a.id] || 0 }]
+            }))
+
+            return NextResponse.json(enriched)
+        }
 
         return NextResponse.json(data)
     } catch (error) {

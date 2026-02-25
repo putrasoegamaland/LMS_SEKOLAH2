@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
 // Helper: Supabase single-relation selects sometimes type as array
@@ -48,8 +48,15 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ classes: [], students: [], grades: [] })
         }
 
-        // Get the active class (or first one)
-        const classId = request.nextUrl.searchParams.get('class_id') || classes[0]?.id
+        // Unwrap academic_year for each class (Supabase may return as array)
+        const classesUnwrapped = classes.map((c: any) => ({
+            ...c,
+            academic_year: unwrap(c.academic_year)
+        }))
+
+        // Prioritize class from active academic year
+        const activeYearClass = classesUnwrapped.find((c: any) => c.academic_year?.is_active)
+        const classId = request.nextUrl.searchParams.get('class_id') || activeYearClass?.id || classesUnwrapped[0]?.id
 
         if (!classId) {
             return NextResponse.json({ classes, students: [], grades: [] })

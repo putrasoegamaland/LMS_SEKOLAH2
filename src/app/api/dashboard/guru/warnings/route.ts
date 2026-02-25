@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
 const KKM = 75
@@ -26,11 +26,17 @@ export async function GET(request: NextRequest) {
 
         const teacherId = teacher.id
 
-        // 1. Get Homeroom Classes
-        const { data: homeroomClasses } = await supabase
+        // 1. Get Homeroom Classes (only from active academic year)
+        const { data: allHomeroomClasses } = await supabase
             .from('classes')
-            .select('id, name')
+            .select('id, name, academic_year:academic_years(is_active)')
             .eq('homeroom_teacher_id', teacherId)
+
+        // Filter to active year only
+        const homeroomClasses = (allHomeroomClasses || []).filter((c: any) => {
+            const ay = Array.isArray(c.academic_year) ? c.academic_year[0] : c.academic_year
+            return ay?.is_active === true
+        })
 
         // 2. Get Teaching Assignments
         const { data: directAssignments } = await supabase

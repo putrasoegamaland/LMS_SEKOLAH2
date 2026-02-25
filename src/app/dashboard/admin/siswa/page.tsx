@@ -3,9 +3,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
-import { User as Users, AddUser as UserPlus, Edit as Pencil, Delete as Trash2, Show as Eye, Hide as EyeOff, InfoCircle as AlertCircle, Filter, Document as GraduationCap, Paper } from 'react-iconly'
+import { User as Users, AddUser as UserPlus, Edit as Pencil, Delete as Trash2, Show as Eye, Hide as EyeOff, InfoCircle as AlertCircle, Filter, Document as GraduationCap, Paper, Search, ChevronDown, ChevronRight } from 'react-iconly'
 import Link from 'next/link'
-import { Loader2, Upload, FileDown, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, Upload, FileDown, CheckCircle2, XCircle, Search as SearchIcon } from 'lucide-react'
 import Papa from 'papaparse'
 import { Class, SchoolLevel } from '@/lib/types'
 
@@ -72,10 +72,14 @@ export default function SiswaPage() {
     const [bulkResults, setBulkResults] = useState<{ success: number, failed: number, errors: any[] } | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
-    // Filter states
+    // Filter & Search states
+    const [searchQuery, setSearchQuery] = useState('')
     const [filterAngkatan, setFilterAngkatan] = useState('')
     const [filterSchoolLevel, setFilterSchoolLevel] = useState('')
     const [showFilters, setShowFilters] = useState(false)
+
+    // Accordion State
+    const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set())
 
     const fetchData = async () => {
         try {
@@ -100,9 +104,19 @@ export default function SiswaPage() {
 
     useEffect(() => { fetchData() }, [])
 
-    // Apply filters
+    // Apply filters and search
     useEffect(() => {
         let filtered = students
+
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase()
+            filtered = filtered.filter(s =>
+                s.user.full_name?.toLowerCase().includes(query) ||
+                s.nis?.toLowerCase().includes(query) ||
+                s.user.username.toLowerCase().includes(query)
+            )
+        }
+
         if (filterAngkatan) {
             filtered = filtered.filter(s => s.angkatan === filterAngkatan)
         }
@@ -110,7 +124,54 @@ export default function SiswaPage() {
             filtered = filtered.filter(s => s.school_level === filterSchoolLevel)
         }
         setFilteredStudents(filtered)
-    }, [students, filterAngkatan, filterSchoolLevel])
+    }, [students, searchQuery, filterAngkatan, filterSchoolLevel])
+
+    // Grouping by class
+    const groupedStudents = filteredStudents.reduce((acc, student) => {
+        const className = student.class?.name || 'Belum Masuk Kelas'
+        if (!acc[className]) {
+            acc[className] = {
+                name: className,
+                grade_level: student.class?.grade_level || 0,
+                school_level: student.class?.school_level || 'Belum Masuk Kelas',
+                students: []
+            }
+        }
+        acc[className].students.push(student)
+        return acc
+    }, {} as Record<string, { name: string, grade_level: number, school_level: string | SchoolLevel, students: Student[] }>)
+
+    // Sort groups: SMP first, then SMA, then grade, then name
+    const sortedGroups = Object.values(groupedStudents).sort((a, b) => {
+        if (a.name === 'Belum Masuk Kelas') return 1
+        if (b.name === 'Belum Masuk Kelas') return -1
+
+        const levelWeight = { 'SMP': 1, 'SMA': 2 }
+        const weightA = levelWeight[a.school_level as keyof typeof levelWeight] || 99
+        const weightB = levelWeight[b.school_level as keyof typeof levelWeight] || 99
+
+        if (weightA !== weightB) return weightA - weightB
+        if (a.grade_level !== b.grade_level) return a.grade_level - b.grade_level
+        return a.name.localeCompare(b.name)
+    })
+
+    const toggleClass = (className: string) => {
+        const newExpanded = new Set(expandedClasses)
+        if (newExpanded.has(className)) {
+            newExpanded.delete(className)
+        } else {
+            newExpanded.add(className)
+        }
+        setExpandedClasses(newExpanded)
+    }
+
+    const toggleAllClasses = () => {
+        if (expandedClasses.size === sortedGroups.length) {
+            setExpandedClasses(new Set())
+        } else {
+            setExpandedClasses(new Set(sortedGroups.map(g => g.name)))
+        }
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -271,7 +332,7 @@ export default function SiswaPage() {
                 backHref="/dashboard/admin"
                 icon={<div className="text-violet-500"><Users set="bold" primaryColor="currentColor" size={24} /></div>}
                 action={
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 justify-end">
                         <Button variant="secondary" onClick={() => setShowFilters(!showFilters)} icon={<Filter set="bold" primaryColor="currentColor" size={20} />}>
                             Filter
                         </Button>
@@ -284,6 +345,20 @@ export default function SiswaPage() {
                     </div>
                 }
             />
+
+            {/* Search Bar */}
+            <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary">
+                    <SearchIcon className="w-5 h-5 text-slate-400" />
+                </div>
+                <input
+                    type="text"
+                    placeholder="Cari berdasarkan nama, NIS, atau username..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 text-sm shadow-sm"
+                />
+            </div>
 
             {/* Filters */}
             {showFilters && (
@@ -329,95 +404,138 @@ export default function SiswaPage() {
                 </Card>
             )}
 
-            <Card className="overflow-hidden p-0">
-                {loading ? (
-                    <div className="p-12 flex justify-center">
-                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <Card className="overflow-hidden p-0 bg-transparent border-none shadow-none">
+                <div className="flex justify-between items-center mb-4 px-1">
+                    <div className="text-sm font-medium text-text-secondary">
+                        Total: <span className="text-text-main dark:text-white font-bold">{filteredStudents.length}</span> Siswa
                     </div>
+                    {sortedGroups.length > 0 && (
+                        <button
+                            onClick={toggleAllClasses}
+                            className="text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 transition-colors"
+                        >
+                            {expandedClasses.size === sortedGroups.length ? 'Tutup Semua Kelas' : 'Buka Semua Kelas'}
+                        </button>
+                    )}
+                </div>
+
+                {loading ? (
+                    <Card className="p-12 flex justify-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+                    </Card>
                 ) : filteredStudents.length === 0 ? (
-                    <div className="p-6">
+                    <Card className="p-6">
                         <EmptyState
                             icon={<div className="text-violet-200"><Users set="bold" primaryColor="currentColor" size={48} /></div>}
                             title="Belum Ada Siswa"
-                            description={students.length > 0 ? "Tidak ada siswa yang sesuai filter" : "Tambahkan akun siswa untuk memulai"}
-                            action={<Button onClick={students.length > 0 ? clearFilters : openAdd}>{students.length > 0 ? 'Reset Filter' : 'Tambah Siswa'}</Button>}
+                            description={students.length > 0 ? "Tidak ada siswa yang sesuai pencarian atau filter" : "Tambahkan akun siswa untuk memulai"}
+                            action={<Button onClick={students.length > 0 ? () => { clearFilters(); setSearchQuery(''); } : openAdd}>{students.length > 0 ? 'Reset Filter' : 'Tambah Siswa'}</Button>}
                         />
-                    </div>
+                    </Card>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                                <tr>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Nama</th>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">L/P</th>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">NIS</th>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Angkatan</th>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Kelas</th>
-                                    <th className="px-6 py-4 text-left text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Username</th>
-                                    <th className="px-6 py-4 text-right text-sm font-bold text-text-main dark:text-white uppercase tracking-wider">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-secondary/20 dark:divide-white/5">
-                                {filteredStudents.map((student) => (
-                                    <tr key={student.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-sky-500 to-blue-500 flex items-center justify-center text-white font-bold shadow-sm text-sm">
-                                                    {student.user.full_name?.[0] || '?'}
+                    <div className="space-y-4">
+                        {sortedGroups.map((group) => {
+                            const isExpanded = expandedClasses.has(group.name)
+                            return (
+                                <Card key={group.name} className="overflow-hidden p-0 transition-all duration-200">
+                                    <button
+                                        onClick={() => toggleClass(group.name)}
+                                        className="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-text-secondary transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                                                <ChevronRight set="bold" primaryColor="currentColor" size={20} />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">{group.name}</h3>
+                                                    {group.school_level && group.school_level !== 'Belum Masuk Kelas' && (
+                                                        <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-sm bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 border border-violet-200 dark:border-violet-800">
+                                                            {group.school_level}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <span className="text-slate-900 dark:text-white font-bold">{student.user.full_name || '-'}</span>
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {student.gender ? (
-                                                <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${student.gender === 'L'
-                                                    ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
-                                                    : 'bg-pink-50 text-pink-600 border-pink-200 dark:bg-pink-500/10 dark:text-pink-400 dark:border-pink-500/20'
-                                                    }`}>
-                                                    {student.gender === 'L' ? 'L' : 'P'}
-                                                </span>
-                                            ) : (
-                                                <span className="text-text-secondary dark:text-zinc-500">-</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-text-secondary dark:text-zinc-300 font-mono text-sm">{student.nis || '-'}</td>
-                                        <td className="px-6 py-4">
-                                            {student.angkatan ? (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 rounded-full text-xs font-bold">
-                                                    <GraduationCap set="bold" primaryColor="currentColor" size={12} />
-                                                    {student.angkatan}
-                                                </span>
-                                            ) : (
-                                                <span className="text-text-secondary dark:text-zinc-500">-</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {student.class ? (
-                                                <span className="px-3 py-1 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-full text-xs font-bold border border-emerald-100 dark:border-emerald-800">
-                                                    {student.class.name}
-                                                </span>
-                                            ) : (
-                                                <span className="text-text-secondary dark:text-zinc-500 text-xs italic">Belum masuk kelas</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-text-secondary dark:text-zinc-300 font-mono text-sm">{student.user.username}</td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Link href={`/dashboard/admin/siswa/${student.id}/rapor`} className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 flex items-center justify-center transition-colors" title="Cetak Rapor">
-                                                    <Paper set="bold" primaryColor="currentColor" size={16} />
-                                                </Link>
-                                                <button onClick={() => openEdit(student)} className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 flex items-center justify-center transition-colors">
-                                                    <Pencil set="bold" primaryColor="currentColor" size={16} />
-                                                </button>
-                                                <button onClick={() => handleDelete(student.id)} className="w-8 h-8 rounded-lg bg-red-500/10 text-red-600 hover:bg-red-500/20 flex items-center justify-center transition-colors">
-                                                    <Trash2 set="bold" primaryColor="currentColor" size={16} />
-                                                </button>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="px-3 py-1 bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 rounded-full text-xs font-bold">
+                                                {group.students.length} Siswa
+                                            </span>
+                                        </div>
+                                    </button>
+
+                                    {isExpanded && (
+                                        <div className="border-t border-secondary/10 dark:border-white/5">
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full">
+                                                    <thead className="bg-slate-50 dark:bg-slate-800/50">
+                                                        <tr>
+                                                            <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">Nama</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">L/P</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">NIS</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">Angkatan</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">Username</th>
+                                                            <th className="px-6 py-3 text-right text-xs font-bold text-text-secondary uppercase tracking-wider">Aksi</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-secondary/10 dark:divide-white/5 bg-white dark:bg-slate-800/20">
+                                                        {group.students.map((student) => (
+                                                            <tr key={student.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                                                                <td className="px-6 py-3">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-violet-500 to-fuchsia-500 flex items-center justify-center text-white font-bold shadow-sm text-xs">
+                                                                            {student.user.full_name?.[0] || '?'}
+                                                                        </div>
+                                                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{student.user.full_name || '-'}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-3">
+                                                                    {student.gender ? (
+                                                                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-sm border ${student.gender === 'L'
+                                                                            ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
+                                                                            : 'bg-pink-50 text-pink-600 border-pink-200 dark:bg-pink-500/10 dark:text-pink-400 dark:border-pink-500/20'
+                                                                            }`}>
+                                                                            {student.gender === 'L' ? 'L' : 'P'}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-text-secondary dark:text-zinc-500 text-xs">-</span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-6 py-3 text-text-secondary dark:text-zinc-400 font-mono text-xs">{student.nis || '-'}</td>
+                                                                <td className="px-6 py-3">
+                                                                    {student.angkatan ? (
+                                                                        <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300 text-xs font-medium">
+                                                                            <GraduationCap set="light" primaryColor="currentColor" size={12} />
+                                                                            {student.angkatan}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-text-secondary dark:text-zinc-500 text-xs">-</span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-6 py-3 text-text-secondary dark:text-zinc-400 font-mono text-xs">{student.user.username}</td>
+                                                                <td className="px-6 py-3 text-right">
+                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                        <Link href={`/dashboard/admin/siswa/${student.id}/rapor`} className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors" title="Rapor">
+                                                                            <Paper set="bold" primaryColor="currentColor" size={16} />
+                                                                        </Link>
+                                                                        <button onClick={() => openEdit(student)} className="p-1.5 rounded-md text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" title="Edit">
+                                                                            <Pencil set="bold" primaryColor="currentColor" size={16} />
+                                                                        </button>
+                                                                        <button onClick={() => handleDelete(student.id)} className="p-1.5 rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors" title="Hapus">
+                                                                            <Trash2 set="bold" primaryColor="currentColor" size={16} />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        </div>
+                                    )}
+                                </Card>
+                            )
+                        })}
                     </div>
                 )}
             </Card>

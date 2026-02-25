@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
 // GET all academic years
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
         }
 
         const user = await validateSession(token)
-        if (!user || user.role !== 'ADMIN') {
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'GURU')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 

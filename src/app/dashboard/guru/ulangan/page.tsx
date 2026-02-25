@@ -38,6 +38,8 @@ export default function GuruUlanganPage() {
     const router = useRouter()
     const [exams, setExams] = useState<Exam[]>([])
     const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([])
+    const [studentCounts, setStudentCounts] = useState<Record<string, number>>({})
+    const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [creating, setCreating] = useState(false)
@@ -68,9 +70,10 @@ export default function GuruUlanganPage() {
         if (!user) return
 
         try {
-            const [examsRes, myAssignmentsRes] = await Promise.all([
+            const [examsRes, myAssignmentsRes, yearsRes] = await Promise.all([
                 fetch('/api/exams'),
-                fetch('/api/my-teaching-assignments')
+                fetch('/api/my-teaching-assignments'),
+                fetch('/api/academic-years')
             ])
 
             let examsData = []
@@ -85,6 +88,25 @@ export default function GuruUlanganPage() {
                 myAssignments = Array.isArray(data) ? data : []
             }
 
+            // Get active academic year and fetch students with enrollment
+            const yearsData = yearsRes.ok ? await yearsRes.json() : []
+            const activeYear = Array.isArray(yearsData) ? yearsData.find((y: any) => y.is_active) : null
+            if (activeYear) {
+                try {
+                    const studentsRes = await fetch(`/api/students?enrollment_year_id=${activeYear.id}`)
+                    const studentsData = await studentsRes.json()
+                    const studentsArray = Array.isArray(studentsData) ? studentsData : []
+                    const counts: Record<string, number> = {}
+                    studentsArray.forEach((s: any) => {
+                        const classId = s.class?.id || s.class_id
+                        if (classId) counts[classId] = (counts[classId] || 0) + 1
+                    })
+                    setStudentCounts(counts)
+                } catch (e) {
+                    console.error('Error fetching students:', e)
+                }
+            }
+
             setTeachingAssignments(myAssignments)
 
             // Filter exams by my teaching assignments
@@ -92,6 +114,20 @@ export default function GuruUlanganPage() {
                 myAssignments.some((ta: TeachingAssignment) => ta.id === e.teaching_assignment?.id)
             )
             setExams(myExams)
+
+            // Fetch submission counts per exam
+            const subCounts: Record<string, number> = {}
+            await Promise.all(myExams.map(async (exam: Exam) => {
+                try {
+                    const res = await fetch(`/api/exam-submissions?exam_id=${exam.id}`)
+                    if (res.ok) {
+                        const subs = await res.json()
+                        const submitted = Array.isArray(subs) ? subs.filter((s: any) => s.is_submitted).length : 0
+                        subCounts[exam.id] = submitted
+                    }
+                } catch { }
+            }))
+            setSubmissionCounts(subCounts)
         } catch (error) {
             console.error('Error fetching data:', error)
         } finally {
@@ -361,6 +397,27 @@ export default function GuruUlanganPage() {
                                         <div className="text-xs text-text-secondary text-right">
                                             <span className="inline-flex items-center gap-1"><Calendar set="bold" primaryColor="currentColor" size={14} /> {formatDateTime(exam.start_time)}</span>
                                         </div>
+                                        {(() => {
+                                            const classId = exam.teaching_assignment?.class?.id
+                                            const total = classId ? (studentCounts[classId] || 0) : 0
+                                            const submitted = submissionCounts[exam.id] || 0
+                                            return (
+                                                <div className="flex items-center justify-between text-xs mt-1">
+                                                    <span className="text-text-secondary">Pengumpulan</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`font-bold ${submitted >= total && total > 0 ? 'text-green-600' : 'text-primary'}`}>{submitted}/{total}</span>
+                                                        {total > 0 && (
+                                                            <div className="w-16 bg-secondary/20 rounded-full h-1.5 overflow-hidden">
+                                                                <div
+                                                                    className={`h-full rounded-full transition-all duration-500 ${submitted >= total ? 'bg-green-500' : submitted > 0 ? 'bg-primary' : 'bg-secondary/30'}`}
+                                                                    style={{ width: `${Math.min(100, total > 0 ? (submitted / total) * 100 : 0)}%` }}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })()}
                                     </div>
 
                                     <div className="flex flex-col gap-2 mt-auto pt-2">

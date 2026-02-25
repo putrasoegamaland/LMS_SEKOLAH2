@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
 // GET schedules (filter by class_id, academic_year_id)

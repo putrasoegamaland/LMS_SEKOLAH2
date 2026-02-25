@@ -327,7 +327,7 @@ export default function AdminJadwalPage() {
                         <label className="text-sm font-medium text-text-secondary mb-1 block">Tahun Ajaran</label>
                         <select
                             value={selectedYearId}
-                            onChange={e => setSelectedYearId(e.target.value)}
+                            onChange={e => { setSelectedYearId(e.target.value); setSelectedClassId('') }}
                             className="w-full px-4 py-2.5 rounded-xl border border-secondary/30 bg-white dark:bg-surface-dark text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30"
                         >
                             <option value="">Pilih Tahun Ajaran</option>
@@ -344,9 +344,11 @@ export default function AdminJadwalPage() {
                             className="w-full px-4 py-2.5 rounded-xl border border-secondary/30 bg-white dark:bg-surface-dark text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30"
                         >
                             <option value="">Pilih Kelas</option>
-                            {classes.map(c => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
+                            {classes
+                                .filter((c: any) => !selectedYearId || c.academic_year_id === selectedYearId || c.academic_year?.id === selectedYearId)
+                                .map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
                         </select>
                     </div>
                 </div>

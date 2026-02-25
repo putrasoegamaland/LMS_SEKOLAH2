@@ -184,6 +184,13 @@ export default function KenaikanKelasPage() {
 
         const groups: ClassGroup[] = []
 
+        // IMPORTANT: Filter target classes to only those in the TARGET year (active year)
+        // This prevents mapping students to old-year classes
+        const targetYearId = academicYears.find(y => y.is_active || y.status === 'ACTIVE')?.id
+        const targetClasses = targetYearId
+            ? classList.filter(c => c.academic_year_id === targetYearId)
+            : classList
+
         for (const [classId, classStudents] of classStudentMap) {
             const cls = classList.find(c => c.id === classId)
             if (!cls || classStudents.length === 0) continue
@@ -209,9 +216,9 @@ export default function KenaikanKelasPage() {
                 if (schoolLevel === 'SMP') {
                     action = 'TRANSITION'
                     const classSection = cls.name.replace(/[^A-Za-z]/g, '').slice(-1) || 'A'
-                    const nextClass = classList.find(c =>
+                    const nextClass = targetClasses.find(c =>
                         c.grade_level === 1 && c.school_level === 'SMA' && c.name.includes(classSection)
-                    ) || classList.find(c => c.grade_level === 1 && c.school_level === 'SMA')
+                    ) || targetClasses.find(c => c.grade_level === 1 && c.school_level === 'SMA')
                     if (nextClass) {
                         targetClassId = nextClass.id
                         targetClassName = nextClass.name
@@ -226,9 +233,9 @@ export default function KenaikanKelasPage() {
                 action = 'PROMOTE'
                 const nextGrade = gradeLevel + 1
                 const classSection = cls.name.replace(/[^A-Za-z]/g, '').slice(-1) || 'A'
-                const nextClass = classList.find(c =>
+                const nextClass = targetClasses.find(c =>
                     c.grade_level === nextGrade && c.school_level === schoolLevel && c.name.includes(classSection)
-                ) || classList.find(c =>
+                ) || targetClasses.find(c =>
                     c.grade_level === nextGrade && c.school_level === schoolLevel
                 )
                 if (nextClass) {
@@ -278,13 +285,17 @@ export default function KenaikanKelasPage() {
 
     // === Helpers ===
     const getTargetOptions = (group: ClassGroup): Class[] => {
+        // Only show classes from the target (active) year
+        const targetClasses = targetYear
+            ? classes.filter(c => c.academic_year_id === targetYear.id)
+            : classes
         if (group.action === 'PROMOTE') {
             const nextGrade = (group.sourceClass.grade_level || 0) + 1
-            return classes.filter(c =>
+            return targetClasses.filter(c =>
                 c.school_level === group.sourceClass.school_level && c.grade_level === nextGrade
             )
         } else if (group.action === 'TRANSITION') {
-            return classes.filter(c => c.school_level === 'SMA' && c.grade_level === 1)
+            return targetClasses.filter(c => c.school_level === 'SMA' && c.grade_level === 1)
         }
         return []
     }

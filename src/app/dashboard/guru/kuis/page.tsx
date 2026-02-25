@@ -36,6 +36,8 @@ export default function GuruKuisPage() {
     const router = useRouter()
     const [quizzes, setQuizzes] = useState<Quiz[]>([])
     const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([])
+    const [studentCounts, setStudentCounts] = useState<Record<string, number>>({})
+    const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [creating, setCreating] = useState(false)
@@ -65,9 +67,10 @@ export default function GuruKuisPage() {
         }
 
         try {
-            const [quizzesRes, myAssignmentsRes] = await Promise.all([
+            const [quizzesRes, myAssignmentsRes, yearsRes] = await Promise.all([
                 fetch('/api/quizzes'),
-                fetch('/api/my-teaching-assignments')
+                fetch('/api/my-teaching-assignments'),
+                fetch('/api/academic-years')
             ])
 
             // Handle quiz response
@@ -84,6 +87,25 @@ export default function GuruKuisPage() {
                 myAssignments = Array.isArray(data) ? data : []
             }
 
+            // Get active academic year and fetch students with enrollment
+            const yearsData = yearsRes.ok ? await yearsRes.json() : []
+            const activeYear = Array.isArray(yearsData) ? yearsData.find((y: any) => y.is_active) : null
+            if (activeYear) {
+                try {
+                    const studentsRes = await fetch(`/api/students?enrollment_year_id=${activeYear.id}`)
+                    const studentsData = await studentsRes.json()
+                    const studentsArray = Array.isArray(studentsData) ? studentsData : []
+                    const counts: Record<string, number> = {}
+                    studentsArray.forEach((s: any) => {
+                        const classId = s.class?.id || s.class_id
+                        if (classId) counts[classId] = (counts[classId] || 0) + 1
+                    })
+                    setStudentCounts(counts)
+                } catch (e) {
+                    console.error('Error fetching students:', e)
+                }
+            }
+
             setTeachingAssignments(myAssignments)
 
             // Filter quizzes by my teaching assignments
@@ -91,6 +113,20 @@ export default function GuruKuisPage() {
                 myAssignments.some((ta: TeachingAssignment) => ta.id === q.teaching_assignment?.id)
             )
             setQuizzes(myQuizzes)
+
+            // Fetch submission counts per quiz
+            const subCounts: Record<string, number> = {}
+            await Promise.all(myQuizzes.map(async (quiz: Quiz) => {
+                try {
+                    const res = await fetch(`/api/quiz-submissions?quiz_id=${quiz.id}`)
+                    if (res.ok) {
+                        const subs = await res.json()
+                        const submitted = Array.isArray(subs) ? subs.filter((s: any) => s.submitted_at).length : 0
+                        subCounts[quiz.id] = submitted
+                    }
+                } catch { }
+            }))
+            setSubmissionCounts(subCounts)
         } catch (error) {
             console.error('Quiz Page - Error fetching data:', error)
             setTeachingAssignments([])
@@ -272,6 +308,27 @@ export default function GuruKuisPage() {
                                         <span className="flex items-center gap-1"><Edit set="bold" primaryColor="currentColor" size={14} /> {quiz.questions?.[0]?.count || 0} soal</span>
                                         {quiz.is_randomized && <span className="flex items-center gap-1"><Swap set="bold" primaryColor="currentColor" size={14} /> Acak</span>}
                                     </div>
+                                    {/* Submission Counter */}
+                                    {(() => {
+                                        const classId = quiz.teaching_assignment?.class?.id
+                                        const total = classId ? (studentCounts[classId] || 0) : 0
+                                        const submitted = submissionCounts[quiz.id] || 0
+                                        return (
+                                            <div className="flex items-center gap-3 mt-2">
+                                                <span className={`text-xs font-bold ${submitted >= total && total > 0 ? 'text-green-600' : 'text-primary'}`}>
+                                                    📨 {submitted}/{total} mengumpulkan
+                                                </span>
+                                                {total > 0 && (
+                                                    <div className="w-20 bg-secondary/20 rounded-full h-1.5 overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-500 ${submitted >= total ? 'bg-green-500' : submitted > 0 ? 'bg-primary' : 'bg-secondary/30'}`}
+                                                            style={{ width: `${Math.min(100, total > 0 ? (submitted / total) * 100 : 0)}%` }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })()}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {quiz.is_active && (
@@ -307,7 +364,8 @@ export default function GuruKuisPage() {
                         </Card>
                     ))}
                 </div>
-            )}
+            )
+            }
 
             <Modal
                 open={showCreate}
@@ -499,6 +557,6 @@ export default function GuruKuisPage() {
                     </div>
                 ) : null}
             </Modal>
-        </div>
+        </div >
     )
 }

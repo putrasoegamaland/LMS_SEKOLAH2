@@ -15,12 +15,13 @@ interface StudentData {
 
 interface DeadlineItem {
     id: string
-    type: 'TUGAS' | 'ULANGAN'
+    type: 'TUGAS' | 'ULANGAN' | 'KUIS'
     title: string
     subject: string
     deadline: string
     link: string
-    timeLeft: number // in hours
+    expirationTime: number
+    startTime: number
 }
 
 interface ScheduleEntry {
@@ -98,39 +99,46 @@ export default function SiswaDashboard() {
 
                 if (myStudent?.class?.id) {
                     // Fetch Deadlines & Schedule in parallel
-                    const [assignmentsRes, examsRes, submissionsRes, examSubmissionsRes, scheduleRes] = await Promise.all([
+                    const [assignmentsRes, examsRes, quizzesRes, submissionsRes, examSubmissionsRes, quizSubmissionsRes, scheduleRes] = await Promise.all([
                         fetch('/api/assignments'),
                         fetch('/api/exams'),
+                        fetch('/api/quizzes'),
                         fetch(`/api/submissions?student_id=${myStudent.id}`),
                         fetch(`/api/exam-submissions?student_id=${myStudent.id}`),
+                        fetch(`/api/quiz-submissions?student_id=${myStudent.id}`),
                         fetch('/api/schedules/student-schedule')
                     ])
 
                     const assignmentsData = await assignmentsRes.json()
                     const examsData = await examsRes.json()
+                    const quizzesData = await quizzesRes.json()
                     const submissionsData = await submissionsRes.json()
                     const examSubmissionsData = await examSubmissionsRes.json()
+                    const quizSubmissionsData = await quizSubmissionsRes.json()
                     const scheduleData = await scheduleRes.json()
 
                     setTodaySchedule(Array.isArray(scheduleData) ? scheduleData : [])
 
                     const assignments = Array.isArray(assignmentsData) ? assignmentsData : []
                     const exams = Array.isArray(examsData) ? examsData : []
+                    const quizzes = Array.isArray(quizzesData) ? quizzesData : []
                     const assignmentSubmissions = Array.isArray(submissionsData) ? submissionsData : []
                     const examSubmissions = Array.isArray(examSubmissionsData) ? examSubmissionsData : []
+                    const quizSubmissions = Array.isArray(quizSubmissionsData) ? quizSubmissionsData : []
 
                     const nowTime = new Date().getTime()
-                    const warningThreshold = 48 * 60 * 60 * 1000 // 48 hours
+                    const warningThreshold = 7 * 24 * 60 * 60 * 1000 // 7 days
                     const newDeadlines: DeadlineItem[] = []
 
                     // Process Assignments
                     assignments.forEach((a: any) => {
-                        if (a.teaching_assignment?.class?.name !== myStudent.class.name) return
+                        if (a.teaching_assignment?.class?.id !== myStudent.class.id) return
                         if (assignmentSubmissions.some((s: any) => s.assignment_id === a.id)) return
                         if (!a.due_date) return
 
-                        const dueDate = new Date(a.due_date).getTime()
-                        const diff = dueDate - nowTime
+                        const expirationTime = new Date(a.due_date).getTime()
+                        const startTime = new Date(a.created_at || Date.now() - 86400000).getTime()
+                        const diff = expirationTime - nowTime
 
                         if (diff > 0 && diff <= warningThreshold) {
                             newDeadlines.push({
@@ -140,20 +148,21 @@ export default function SiswaDashboard() {
                                 subject: a.teaching_assignment?.subject?.name || 'Mapel',
                                 deadline: a.due_date,
                                 link: '/dashboard/siswa/tugas',
-                                timeLeft: diff / (1000 * 60 * 60)
+                                expirationTime,
+                                startTime
                             })
                         }
                     })
 
                     // Process Exams
                     exams.forEach((e: any) => {
-                        if (e.teaching_assignment?.class?.name !== myStudent.class.name) return
+                        if (e.teaching_assignment?.class?.id !== myStudent.class.id) return
                         if (examSubmissions.some((s: any) => s.exam_id === e.id && s.is_submitted)) return
                         if (!e.is_active) return
 
                         const startTime = new Date(e.start_time).getTime()
-                        const endTime = startTime + (e.duration_minutes * 60 * 1000)
-                        const diff = endTime - nowTime
+                        const expirationTime = startTime + (e.duration_minutes * 60 * 1000)
+                        const diff = expirationTime - nowTime
 
                         if (diff > 0 && diff <= warningThreshold) {
                             newDeadlines.push({
@@ -161,14 +170,39 @@ export default function SiswaDashboard() {
                                 type: 'ULANGAN',
                                 title: e.title,
                                 subject: e.teaching_assignment?.subject?.name || 'Mapel',
-                                deadline: new Date(endTime).toISOString(),
+                                deadline: new Date(expirationTime).toISOString(),
                                 link: `/dashboard/siswa/ulangan/${e.id}`,
-                                timeLeft: diff / (1000 * 60 * 60)
+                                expirationTime,
+                                startTime
                             })
                         }
                     })
 
-                    newDeadlines.sort((a, b) => a.timeLeft - b.timeLeft)
+                    // Process Quizzes
+                    quizzes.forEach((q: any) => {
+                        if (q.teaching_assignment?.class?.id !== myStudent.class.id) return
+                        if (quizSubmissions.some((s: any) => s.quiz_id === q.id && s.submitted_at)) return
+                        if (!q.is_active) return
+
+                        const startTime = new Date(q.start_time).getTime()
+                        const expirationTime = startTime + (q.duration_minutes * 60 * 1000)
+                        const diff = expirationTime - nowTime
+
+                        if (diff > 0 && diff <= warningThreshold) {
+                            newDeadlines.push({
+                                id: q.id,
+                                type: 'KUIS',
+                                title: q.title,
+                                subject: q.teaching_assignment?.subject?.name || 'Mapel',
+                                deadline: new Date(expirationTime).toISOString(),
+                                link: `/dashboard/siswa/kuis/${q.id}`,
+                                expirationTime,
+                                startTime
+                            })
+                        }
+                    })
+
+                    newDeadlines.sort((a, b) => a.expirationTime - b.expirationTime)
                     setUpcomingDeadlines(newDeadlines)
                 }
 
@@ -281,7 +315,67 @@ export default function SiswaDashboard() {
         })
     }
 
-    const now = new Date()
+    // Auto-refresh state every minute for real-time countdowns
+    const [currentTimeMs, setCurrentTimeMs] = useState<number>(Date.now())
+    useEffect(() => {
+        const interval = setInterval(() => setCurrentTimeMs(Date.now()), 60000)
+        return () => clearInterval(interval)
+    }, [])
+
+    // UI helpers
+    const getCountdownText = (expirationTime: number, nowMs: number) => {
+        const diffMs = expirationTime - nowMs
+        if (diffMs <= 0) return 'Sedang Berlangsung'
+        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+        const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+
+        if (days > 0) return `${days} hari ${hours > 0 ? `${hours} jm` : ''} lagi`
+        if (hours > 0) return `${hours} jm ${minutes > 0 ? `${minutes} mnt` : ''} lagi`
+        return `${Math.max(1, minutes)} menit lagi`
+    }
+
+    const getUrgencyStyles = (expirationTime: number, nowMs: number) => {
+        const diff = expirationTime - nowMs
+        if (diff < 6 * 60 * 60 * 1000) {
+            return {
+                border: 'border-red-500 hover:border-red-600',
+                glow: 'bg-red-500/10',
+                badge: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 animate-pulse',
+                text: 'text-red-600 dark:text-red-500',
+                progressBg: 'bg-red-500',
+                iconPulse: true
+            }
+        } else if (diff < 24 * 60 * 60 * 1000) {
+            return {
+                border: 'border-amber-400 hover:border-amber-500',
+                glow: 'bg-amber-500/10',
+                badge: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+                text: 'text-amber-600 dark:text-amber-500',
+                progressBg: 'bg-amber-500',
+                iconPulse: false
+            }
+        } else {
+            return {
+                border: 'border-blue-200 hover:border-blue-300 dark:border-blue-900/40 dark:hover:border-blue-800',
+                glow: 'bg-transparent',
+                badge: 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400',
+                text: 'text-blue-600 dark:text-blue-500',
+                progressBg: 'bg-blue-500',
+                iconPulse: false
+            }
+        }
+    }
+
+    const getProgressPercent = (startTime: number, expirationTime: number, nowMs: number) => {
+        const total = expirationTime - startTime
+        if (total <= 0) return 100
+        const elapsed = nowMs - startTime
+        const percent = Math.max(0, Math.min(100, (elapsed / total) * 100))
+        return percent
+    }
+
+    const now = new Date(currentTimeMs)
     const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
     const isCurrentPeriod = (startTime: string, endTime: string) => {
@@ -326,7 +420,7 @@ export default function SiswaDashboard() {
                         </div>
                         {!loading && upcomingDeadlines.length > 0 && (
                             <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-800 animate-pulse">
-                                {upcomingDeadlines.length} Tugas
+                                {upcomingDeadlines.length} Mendatang
                             </div>
                         )}
                     </div>
@@ -337,52 +431,67 @@ export default function SiswaDashboard() {
                                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                             </div>
                             <h3 className="text-xl font-bold text-text-main dark:text-white mb-2">Semua Tugas Selesai!</h3>
-                            <p className="text-text-secondary dark:text-zinc-400">Kerja bagus! Tidak ada tugas atau ulangan yang mendekati tenggat waktu saat ini.</p>
+                            <p className="text-text-secondary dark:text-zinc-400">Kerja yang hebat, {user?.full_name?.split(' ')[0]}! Terus pertahankan semangat belajarmu. 💪</p>
                         </div>
                     ) : (
                         <div className="grid gap-4">
-                            {upcomingDeadlines.map((item) => (
-                                <Link key={item.id} href={item.link}>
-                                    <div className="group h-full bg-white/70 dark:bg-surface-dark/70 backdrop-blur-xl border border-amber-100 dark:border-amber-900/30 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-amber-300 dark:hover:border-amber-700 transition-all relative overflow-hidden">
-                                        {/* Status Glow */}
-                                        <div className={`absolute top-0 right-0 w-32 h-32 bg-amber-500/5 dark:bg-amber-500/10 rounded-bl-full -z-10 transition-transform group-hover:scale-110`}></div>
+                            {upcomingDeadlines.map((item) => {
+                                const styles = getUrgencyStyles(item.expirationTime, currentTimeMs)
+                                const progress = getProgressPercent(item.startTime, item.expirationTime, currentTimeMs)
+                                const countdownText = getCountdownText(item.expirationTime, currentTimeMs)
 
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div className="max-w-[70%]">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${item.type === 'ULANGAN'
-                                                        ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
-                                                        : 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400'
-                                                        }`}>
-                                                        {item.type}
-                                                    </span>
-                                                    <span className="text-xs font-bold text-amber-600 dark:text-amber-500 flex items-center gap-1">
-                                                        <Clock set="bold" size={12} />
-                                                        {Math.ceil(item.timeLeft)} jam lagi
-                                                    </span>
+                                return (
+                                    <Link key={item.id} href={item.link}>
+                                        <div className={`group h-full bg-white/70 dark:bg-surface-dark/70 backdrop-blur-xl border ${styles.border} rounded-2xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden flex flex-col`}>
+                                            {/* Status Glow */}
+                                            <div className={`absolute top-0 right-0 w-32 h-32 ${styles.glow} rounded-bl-full -z-10 transition-transform group-hover:scale-110`}></div>
+
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-1">
+                                                <div className="max-w-[70%]">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${styles.badge}`}>
+                                                            {item.type}
+                                                        </span>
+                                                        <span className={`text-xs font-bold flex items-center gap-1 ${styles.text}`}>
+                                                            <span className={styles.iconPulse ? "animate-pulse" : ""}>
+                                                                <Clock set="bold" size={12} />
+                                                            </span>
+                                                            {countdownText}
+                                                        </span>
+                                                    </div>
+                                                    <h3 className="font-bold text-lg text-text-main dark:text-white mb-1 line-clamp-1 group-hover:text-primary transition-colors">
+                                                        {item.title}
+                                                    </h3>
+                                                    <div className="flex items-center gap-3 text-sm text-text-secondary dark:text-zinc-400">
+                                                        <span className="flex items-center gap-1 bg-secondary/10 px-2 py-0.5 rounded-md text-xs">
+                                                            <Document set="bold" size={12} /> {item.subject}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <h3 className="font-bold text-lg text-text-main dark:text-white mb-1 line-clamp-1 group-hover:text-primary transition-colors">
-                                                    {item.title}
-                                                </h3>
-                                                <div className="flex items-center gap-3 text-sm text-text-secondary dark:text-zinc-400">
-                                                    <span className="flex items-center gap-1 bg-secondary/10 px-2 py-0.5 rounded-md text-xs">
-                                                        <Document set="bold" size={12} /> {item.subject}
-                                                    </span>
+
+                                                <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2">
+                                                    <div className="text-sm font-bold text-text-secondary dark:text-zinc-500 text-right">
+                                                        {formatDate(item.deadline)} <br className="hidden sm:block" /> <span className="text-xs">{formatHour(item.deadline)}</span>
+                                                    </div>
+                                                    <button className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-secondary/10 text-text-secondary group-hover:bg-primary group-hover:text-white transition-colors">
+                                                        <ArrowRight size={16} />
+                                                    </button>
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2">
-                                                <div className="text-sm font-bold text-text-secondary dark:text-zinc-500">
-                                                    {formatDate(item.deadline)} <br className="hidden sm:block" /> <span className="text-xs">{formatHour(item.deadline)}</span>
+                                            {/* Progress Bar */}
+                                            <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5">
+                                                <div className="w-full bg-secondary/20 rounded-full h-1.5 overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-1000 ${styles.progressBg}`}
+                                                        style={{ width: `${progress}%` }}
+                                                    />
                                                 </div>
-                                                <button className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-amber-50 dark:bg-amber-900/20 text-amber-600 hover:bg-amber-600 hover:text-white transition-colors">
-                                                    <ArrowRight size={20} />
-                                                </button>
                                             </div>
                                         </div>
-                                    </div>
-                                </Link>
-                            ))}
+                                    </Link>
+                                )
+                            })}
                         </div>
                     )}
                 </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { validateSession } from '@/lib/auth'
 
 // GET single assignment
@@ -69,6 +69,45 @@ export async function DELETE(
         return NextResponse.json({ success: true })
     } catch (error) {
         console.error('Error deleting assignment:', error)
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    }
+}
+
+// PUT (update) assignment
+export async function PUT(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params
+        const token = request.cookies.get('session_token')?.value
+        if (!token) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const user = await validateSession(token)
+        if (!user || user.role !== 'GURU') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const { title, description, type, due_date } = await request.json()
+
+        if (!title || !type) {
+            return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 })
+        }
+
+        const { data, error } = await supabase
+            .from('assignments')
+            .update({ title, description, type, due_date })
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (error) throw error
+
+        return NextResponse.json(data)
+    } catch (error) {
+        console.error('Error updating assignment:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })
     }
 }
