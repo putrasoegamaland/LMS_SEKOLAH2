@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
                 // Find students whose user_id doesn't match any user
                 const { data: students } = await supabase
                     .from('students')
-                    .select('id, user_id, user:users(id)')
+                    .select('id, user_id, user:users!students_user_id_fkey(id)')
 
                 const orphans = (students || []).filter((s: any) => !s.user)
                 if (orphans.length > 0) {

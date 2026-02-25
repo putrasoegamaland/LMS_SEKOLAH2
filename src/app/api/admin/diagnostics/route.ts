@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
             // Active sessions
             supabase.from('sessions').select('id, expires_at'),
             // Orphaned students (students without matching user)
-            supabase.from('students').select('id, user_id, user:users(id)'),
+            supabase.from('students').select('id, user_id, user:users!students_user_id_fkey(id)'),
             // Orphaned teachers (teachers without matching user)
             supabase.from('teachers').select('id, user_id, user:users(id)'),
             // Quizzes with no questions

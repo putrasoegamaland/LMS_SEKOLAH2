@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
                         school_level,
                         status,
                         gender,
-                        user:users(id, username, full_name, role),
+                        user:users!students_user_id_fkey(id, username, full_name, role),
                         class:classes(id, name, grade_level, school_level, academic_year_id)
                     ),
                     enrollment_class:classes!student_enrollments_class_id_fkey(id, name, grade_level, school_level, academic_year_id)
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
             .from('students')
             .select(`
         *,
-        user:users(id, username, full_name, role),
+        user:users!students_user_id_fkey(id, username, full_name, role),
         class:classes(id, name, grade_level, school_level)
       `)
             .order('created_at', { ascending: false })
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
             })
             .select(`
         *,
-        user:users(id, username, full_name, role),
+        user:users!students_user_id_fkey(id, username, full_name, role),
         class:classes(id, name)
       `)
             .single()

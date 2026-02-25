@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
             .select(`
                 id, exam_id, student_id, started_at, submitted_at, is_submitted,
                 total_score, violation_count, created_at,
-                student:students(id, nis, user:users(full_name)),
+                student:students(id, nis, user:users!students_user_id_fkey(full_name)),
                 exam:exams(
                     id, 
                     title, 
@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
                     .from('exam_submissions')
                     .select(`
                         *,
-                        student:students(id, nis, user:users(full_name)),
+                        student:students(id, nis, user:users!students_user_id_fkey(full_name)),
                         exam:exams(
                             id, 
                             title, 

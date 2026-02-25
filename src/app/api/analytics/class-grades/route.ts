@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
         // Get all students with their classes
         const { data: students, error: studentsError } = await supabase
             .from('students')
-            .select('id, nis, class_id, user:users(full_name)')
+            .select('id, nis, class_id, user:users!students_user_id_fkey(full_name)')
 
         if (studentsError) throw studentsError
 

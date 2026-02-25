@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         student:students(
           id,
           nis,
-          user:users(full_name)
+           user:users!students_user_id_fkey(full_name)
         ),
         assignment:assignments(
           id,

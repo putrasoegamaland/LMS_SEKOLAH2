@@ -23,7 +23,7 @@ export async function GET(
             .from('students')
             .select(`
                 *,
-                user:users(id, username, full_name),
+                user:users!students_user_id_fkey(id, username, full_name),
                 class:classes(id, name, school_level)
             `)
             .eq('id', id)
@@ -108,7 +108,7 @@ export async function PUT(
             .from('students')
             .select(`
         *,
-        user:users(id, username, full_name, role),
+        user:users!students_user_id_fkey(id, username, full_name, role),
         class:classes(id, name)
       `)
             .eq('id', id)

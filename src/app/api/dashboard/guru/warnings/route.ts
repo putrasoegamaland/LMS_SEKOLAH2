@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
             .from('students')
             .select(`
                 id, class_id, 
-                user:users(full_name),
+                user:users!students_user_id_fkey(full_name),
                 class:classes(name)
             `)
             .in('class_id', allRelevantClassIds)

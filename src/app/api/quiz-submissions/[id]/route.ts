@@ -33,7 +33,7 @@ export async function GET(
                 student:students(
                     id,
                     nis,
-                    user:users(full_name)
+                    user:users!students_user_id_fkey(full_name)
                 )
             `)
             .eq('id', id)

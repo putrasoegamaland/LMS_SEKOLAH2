@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
             .from('students')
             .select(`
                 id,
-                user:users(full_name),
+                user:users!students_user_id_fkey(full_name),
                 class:classes(name, grade_level, school_level),
                 enrollments:student_enrollments!student_enrollments_student_id_fkey(
                     id,
