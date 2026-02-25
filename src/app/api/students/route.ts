@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { username, password, full_name, nis, class_id, gender, angkatan, entry_year, school_level } = await request.json()
+        const { username, password, full_name, nis, class_id, gender, angkatan, entry_year, school_level, wali_password } = await request.json()
 
         if (!username || !password) {
             return NextResponse.json({ error: 'Username dan password harus diisi' }, { status: 400 })
@@ -129,6 +129,20 @@ export async function POST(request: NextRequest) {
 
         if (existingUser) {
             return NextResponse.json({ error: 'Username sudah digunakan' }, { status: 400 })
+        }
+
+        // Check if .wali username would collide
+        if (wali_password) {
+            const waliUsername = `${username}.wali`
+            const { data: existingWali } = await supabase
+                .from('users')
+                .select('id')
+                .eq('username', waliUsername)
+                .single()
+
+            if (existingWali) {
+                return NextResponse.json({ error: `Username ${waliUsername} sudah digunakan` }, { status: 400 })
+            }
         }
 
         // Hash password
@@ -148,6 +162,29 @@ export async function POST(request: NextRequest) {
 
         if (userError) throw userError
 
+        // Auto-create .wali user if wali_password is provided
+        let waliUserId: string | null = null
+        if (wali_password) {
+            const wali_hash = await hashPassword(wali_password)
+            const { data: waliUser, error: waliError } = await supabase
+                .from('users')
+                .insert({
+                    username: `${username}.wali`,
+                    password_hash: wali_hash,
+                    full_name: `Orang Tua - ${full_name || username}`,
+                    role: 'WALI'
+                })
+                .select('id')
+                .single()
+
+            if (waliError) {
+                console.error('Error creating wali user:', waliError)
+                // Don't fail student creation, just skip wali
+            } else {
+                waliUserId = waliUser.id
+            }
+        }
+
         // Create student record
         const { data: student, error: studentError } = await supabase
             .from('students')
@@ -159,7 +196,8 @@ export async function POST(request: NextRequest) {
                 angkatan: angkatan || null,
                 entry_year: entry_year || null,
                 school_level: school_level || null,
-                status: 'ACTIVE'
+                status: 'ACTIVE',
+                parent_user_id: waliUserId
             })
             .select(`
         *,
@@ -171,6 +209,7 @@ export async function POST(request: NextRequest) {
         if (studentError) {
             // Rollback user creation
             await supabase.from('users').delete().eq('id', newUser.id)
+            if (waliUserId) await supabase.from('users').delete().eq('id', waliUserId)
             throw studentError
         }
 

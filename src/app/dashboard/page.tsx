@@ -21,6 +21,9 @@ export default function DashboardPage() {
                 case 'SISWA':
                     router.replace('/dashboard/siswa')
                     break
+                case 'WALI':
+                    router.replace('/dashboard/wali')
+                    break
                 default:
                     router.replace('/login')
             }

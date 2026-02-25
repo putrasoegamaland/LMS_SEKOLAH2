@@ -64,6 +64,13 @@ const adminArc: NavItem[] = [
     { icon: Calendar, label: 'Jadwal', path: '/dashboard/admin/jadwal' },
 ]
 
+// --- WALI ---
+const waliBarLeft: NavItem[] = [
+    { icon: Home, label: 'Home', path: '/dashboard/wali' },
+]
+const waliBarRight: NavItem[] = []
+const waliArc: NavItem[] = []
+
 export default function BottomNavigation() {
     const pathname = usePathname()
     const { user } = useAuth()
@@ -83,6 +90,8 @@ export default function BottomNavigation() {
             barLeft = guruBarLeft; barRight = guruBarRight; arcItems = guruArc; break
         case 'ADMIN':
             barLeft = adminBarLeft; barRight = adminBarRight; arcItems = adminArc; break
+        case 'WALI':
+            barLeft = waliBarLeft; barRight = waliBarRight; arcItems = waliArc; break
         default:
             barLeft = []; barRight = []; arcItems = []
     }

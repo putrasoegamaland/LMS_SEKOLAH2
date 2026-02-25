@@ -56,18 +56,28 @@ export async function PUT(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { username, password, full_name, nis, class_id, gender, angkatan, entry_year, school_level, status } = await request.json()
+        const { username, password, full_name, nis, class_id, gender, angkatan, entry_year, school_level, status, wali_password } = await request.json()
 
-        // Get student to find user_id
+        // Get student with current user info
         const { data: student } = await supabase
             .from('students')
-            .select('user_id')
+            .select('user_id, parent_user_id')
             .eq('id', id)
             .single()
 
         if (!student) {
             return NextResponse.json({ error: 'Siswa tidak ditemukan' }, { status: 404 })
         }
+
+        // Get current username for .wali logic
+        const { data: currentUser } = await supabase
+            .from('users')
+            .select('username')
+            .eq('id', student.user_id)
+            .single()
+
+        const currentUsername = currentUser?.username || ''
+        const newUsername = username || currentUsername
 
         // Update user
         const userUpdate: Record<string, string> = {}
@@ -84,8 +94,85 @@ export async function PUT(
             if (userError) throw userError
         }
 
-        // Update student
+        // Handle .wali user lifecycle
         const studentUpdate: Record<string, string | number | null> = {}
+
+        if (wali_password) {
+            const waliUsername = `${newUsername}.wali`
+
+            // Check if current parent_user_id is actually the .wali user
+            let isCurrentWaliUser = false
+            if (student.parent_user_id) {
+                const { data: currentParent } = await supabase
+                    .from('users')
+                    .select('username')
+                    .eq('id', student.parent_user_id)
+                    .single()
+
+                if (currentParent?.username?.endsWith('.wali')) {
+                    isCurrentWaliUser = true
+                }
+            }
+
+            if (isCurrentWaliUser) {
+                // .wali user exists → update password (and username if student username changed)
+                const waliUpdate: Record<string, string> = {
+                    password_hash: await hashPassword(wali_password)
+                }
+                if (username && username !== currentUsername) {
+                    waliUpdate.username = waliUsername
+                }
+                if (full_name) {
+                    waliUpdate.full_name = `Orang Tua - ${full_name}`
+                }
+                const { error: waliUpdateError } = await supabase
+                    .from('users')
+                    .update(waliUpdate)
+                    .eq('id', student.parent_user_id)
+
+                if (waliUpdateError) throw new Error(`Gagal update password wali: ${waliUpdateError.message}`)
+            } else {
+                // No .wali user yet → create one
+                const { data: existingWali } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('username', waliUsername)
+                    .single()
+
+                if (existingWali) {
+                    return NextResponse.json({ error: `Username ${waliUsername} sudah ada` }, { status: 400 })
+                }
+
+                const wali_hash = await hashPassword(wali_password)
+                const { data: waliUser, error: waliError } = await supabase
+                    .from('users')
+                    .insert({
+                        username: waliUsername,
+                        password_hash: wali_hash,
+                        full_name: `Orang Tua - ${full_name || newUsername}`,
+                        role: 'WALI'
+                    })
+                    .select('id')
+                    .single()
+
+                if (waliError) {
+                    console.error('Error creating wali user:', waliError)
+                    throw new Error(`Gagal membuat akun wali: ${waliError.message}`)
+                }
+
+                if (waliUser) {
+                    studentUpdate.parent_user_id = waliUser.id
+                }
+            }
+        } else if (username && username !== currentUsername && student.parent_user_id) {
+            // Username changed but no wali_password → just rename .wali username
+            await supabase
+                .from('users')
+                .update({ username: `${username}.wali` })
+                .eq('id', student.parent_user_id)
+        }
+
+        // Update student fields
         if (nis !== undefined) studentUpdate.nis = nis
         if (class_id !== undefined) studentUpdate.class_id = class_id
         if (gender !== undefined) studentUpdate.gender = gender
@@ -140,10 +227,10 @@ export async function DELETE(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Get student to find user_id
+        // Get student to find user_id and parent_user_id
         const { data: student } = await supabase
             .from('students')
-            .select('user_id')
+            .select('user_id, parent_user_id')
             .eq('id', id)
             .single()
 
@@ -151,7 +238,15 @@ export async function DELETE(
             return NextResponse.json({ error: 'Siswa tidak ditemukan' }, { status: 404 })
         }
 
-        // Delete user (will cascade to student)
+        // Delete .wali user first (if exists)
+        if (student.parent_user_id) {
+            await supabase
+                .from('users')
+                .delete()
+                .eq('id', student.parent_user_id)
+        }
+
+        // Delete student user (will cascade to student record)
         const { error } = await supabase
             .from('users')
             .delete()

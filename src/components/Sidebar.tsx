@@ -48,6 +48,10 @@ export const adminNav: NavItem[] = [
     { icon: Calendar, label: 'Jadwal', path: '/dashboard/admin/jadwal' },
 ]
 
+export const waliNav: NavItem[] = [
+    { icon: Home, label: 'Dashboard', path: '/dashboard/wali' },
+]
+
 export default function Sidebar() {
     const pathname = usePathname()
     const { user } = useAuth()
@@ -59,6 +63,7 @@ export default function Sidebar() {
             case 'SISWA': return siswaNav
             case 'GURU': return guruNav
             case 'ADMIN': return adminNav
+            case 'WALI': return waliNav
             default: return []
         }
     }

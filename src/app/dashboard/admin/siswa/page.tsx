@@ -9,10 +9,12 @@ import { Loader2, Upload, FileDown, CheckCircle2, XCircle, Search as SearchIcon 
 import Papa from 'papaparse'
 import { Class, SchoolLevel } from '@/lib/types'
 
+
 interface Student {
     id: string
     nis: string | null
     class_id: string | null
+    parent_user_id: string | null
     gender: 'L' | 'P' | null
     angkatan: string | null
     entry_year: number | null
@@ -36,6 +38,7 @@ interface FormData {
     angkatan: string
     entry_year: string
     school_level: string
+    wali_password: string
 }
 
 const defaultFormData: FormData = {
@@ -47,7 +50,8 @@ const defaultFormData: FormData = {
     gender: '',
     angkatan: '',
     entry_year: '',
-    school_level: ''
+    school_level: '',
+    wali_password: ''
 }
 
 // Generate angkatan options (last 10 years)
@@ -65,6 +69,7 @@ export default function SiswaPage() {
     const [showPassword, setShowPassword] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
+    const [successMessage, setSuccessMessage] = useState('')
 
     // Bulk Upload States
     const [showBulkModal, setShowBulkModal] = useState(false)
@@ -80,6 +85,8 @@ export default function SiswaPage() {
 
     // Accordion State
     const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set())
+
+
 
     const fetchData = async () => {
         try {
@@ -189,7 +196,8 @@ export default function SiswaPage() {
                     class_id: formData.class_id || null,
                     entry_year: formData.entry_year ? parseInt(formData.entry_year) : null,
                     school_level: formData.school_level || null,
-                    angkatan: formData.angkatan || null
+                    angkatan: formData.angkatan || null,
+                    wali_password: formData.wali_password || null
                 })
             })
 
@@ -200,10 +208,24 @@ export default function SiswaPage() {
                 return
             }
 
+            const isEdit = !!editingStudent;
+            const hasWali = !!formData.wali_password;
+
+            setSuccessMessage(
+                isEdit
+                    ? `Data siswa berhasil diperbarui. ${hasWali ? 'Password wali berhasil disimpan.' : ''}`
+                    : `Siswa berhasil ditambahkan. ${hasWali ? 'Akun wali berhasil dibuat.' : ''}`
+            )
+
+            // Clear success message after 5 seconds
+            setTimeout(() => setSuccessMessage(''), 5000)
+
             setShowModal(false)
             setEditingStudent(null)
             setFormData(defaultFormData)
             fetchData()
+        } catch (err) {
+            setError('Terjadi kesalahan jaringan atau server')
         } finally {
             setSaving(false)
         }
@@ -226,7 +248,8 @@ export default function SiswaPage() {
             gender: student.gender || '',
             angkatan: student.angkatan || '',
             entry_year: student.entry_year?.toString() || '',
-            school_level: student.school_level || ''
+            school_level: student.school_level || '',
+            wali_password: ''
         })
         setError('')
         setShowModal(true)
@@ -689,6 +712,36 @@ export default function SiswaPage() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Wali Murid (Parent) Section */}
+                    <div className="bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-800 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-lg">👨‍👩‍👧</span>
+                            <span className="text-sm font-bold text-teal-800 dark:text-teal-200">Akses Orang Tua</span>
+                        </div>
+                        {editingStudent && editingStudent.parent_user_id && (
+                            <p className="text-xs text-teal-600 dark:text-teal-400 mb-2 bg-teal-100 dark:bg-teal-900/30 px-3 py-1.5 rounded-lg">
+                                ✅ Login wali: <strong>{formData.username}.wali</strong>
+                            </p>
+                        )}
+                        <label className="block text-xs font-medium text-teal-700 dark:text-teal-300 mb-1">
+                            Password Wali {editingStudent && <span className="text-text-secondary font-normal">(Kosongkan jika tidak diubah)</span>}
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.wali_password}
+                            onChange={(e) => setFormData({ ...formData, wali_password: e.target.value })}
+                            className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 placeholder-slate-400 text-sm"
+                            placeholder={editingStudent ? '••••••••' : 'Password untuk orang tua (opsional)'}
+                        />
+                        {formData.username && formData.wali_password && (
+                            <p className="text-[11px] text-teal-600 dark:text-teal-400 mt-1.5">
+                                Orang tua akan login dengan username: <strong>{formData.username}.wali</strong>
+                            </p>
+                        )}
+
+                    </div>
+
                     <div className="flex gap-3 pt-4 border-t border-secondary/10 mt-4">
                         <Button type="button" variant="secondary" onClick={() => setShowModal(false)} className="flex-1">
                             Batal

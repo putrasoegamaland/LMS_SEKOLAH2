@@ -44,6 +44,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             case 'ADMIN': return 'Administrator'
             case 'GURU': return 'Guru'
             case 'SISWA': return 'Siswa'
+            case 'WALI': return 'Orang Tua'
             default: return role
         }
     }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login']
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/debug']
 const ROLE_PATHS: Record<string, string[]> = {
     '/dashboard/admin': ['ADMIN'],
     '/dashboard/guru': ['GURU'],
