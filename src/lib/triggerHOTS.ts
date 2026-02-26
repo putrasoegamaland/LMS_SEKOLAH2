@@ -7,7 +7,7 @@
 
 import { analyzeQuestion, type HOTSAnalysisInput } from '@/lib/hotsQC'
 import { determineRouting } from '@/lib/routingRules'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 
 export interface TriggerHOTSInput {
     questionId: string
@@ -20,6 +20,8 @@ export interface TriggerHOTSInput {
     teacherHotsClaim?: boolean
     subjectName?: string
     gradeBand?: string
+    quizId?: string
+    examId?: string
 }
 
 /**
@@ -32,6 +34,7 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
             : 'exam_questions'
 
     try {
+        console.log(`[HOTS-DEBUG] triggerHOTSAnalysis called for ${input.questionSource}/${input.questionId}, table=${tableName}`)
         // 1. Set status to 'ai_reviewing'
         await supabase
             .from(tableName)
@@ -105,9 +108,11 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
             .update({ status: newStatus })
             .eq('id', input.questionId)
 
-        // 6. Notify teacher if question needs admin review or is auto-approved
+        // 6. Notify teacher and admin about HOTS analysis results
         try {
             let teacherUserId: string | null = null
+
+            // Get teacher user_id from any question source
             if (input.questionSource === 'bank') {
                 const { data: q } = await supabase
                     .from('question_bank')
@@ -115,25 +120,69 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
                     .eq('id', input.questionId)
                     .single()
                 teacherUserId = (q as any)?.teacher?.user_id || null
+            } else {
+                const sourceTable = input.questionSource === 'quiz' ? 'quiz_questions' : 'exam_questions'
+                const parentJoin = input.questionSource === 'quiz'
+                    ? 'quiz:quizzes(teaching_assignment:teaching_assignments(teacher:teachers(user_id)))'
+                    : 'exam:exams(teaching_assignment:teaching_assignments(teacher:teachers(user_id)))'
+                const { data: q } = await supabase
+                    .from(sourceTable)
+                    .select(parentJoin)
+                    .eq('id', input.questionId)
+                    .single()
+                const parent = input.questionSource === 'quiz' ? (q as any)?.quiz : (q as any)?.exam
+                const ta = parent?.teaching_assignment
+                const taObj = Array.isArray(ta) ? ta[0] : ta
+                const teacher = taObj?.teacher
+                const teacherObj = Array.isArray(teacher) ? teacher[0] : teacher
+                teacherUserId = teacherObj?.user_id || null
+                console.log(`[NOTIF-DEBUG] triggerHOTS teacher lookup: parent=${JSON.stringify(parent)?.slice(0, 200)}, teacherUserId=${teacherUserId}`)
             }
 
-            if (teacherUserId) {
-                if (newStatus === 'admin_review') {
-                    await supabase.from('notifications').insert({
-                        user_id: teacherUserId,
-                        type: 'HOTS_REVIEW',
-                        title: '🤖 Analisis AI selesai — soal perlu review admin',
-                        message: `Soal Anda telah dianalisis AI dan diteruskan ke admin untuk review. Alasan: ${routing.reasons?.join(', ') || 'Perlu verifikasi manual'}`,
-                        link: '/dashboard/guru/bank-soal'
-                    })
+            // Notify teacher if question needs admin review
+            if (teacherUserId && newStatus === 'admin_review') {
+                const sourceLabel = input.questionSource === 'quiz' ? 'kuis' : input.questionSource === 'exam' ? 'ulangan' : 'bank soal'
+                await supabase.from('notifications').insert({
+                    user_id: teacherUserId,
+                    type: 'HOTS_REVIEW',
+                    title: '🤖 Analisis AI selesai — soal perlu review admin',
+                    message: `Soal ${sourceLabel} Anda telah dianalisis AI dan diteruskan ke admin untuk review. Alasan: ${routing.reasons?.join(', ') || 'Perlu verifikasi manual'}`,
+                    link: input.questionSource === 'bank' ? '/dashboard/guru/bank-soal' : input.questionSource === 'quiz' ? '/dashboard/guru/kuis' : '/dashboard/guru/ulangan'
+                })
+            }
+
+            // Notify all admins when questions need review
+            if (newStatus === 'admin_review') {
+                const { data: admins } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('role', 'ADMIN')
+
+                if (admins?.length) {
+                    const sourceLabel = input.questionSource === 'quiz' ? 'kuis' : input.questionSource === 'exam' ? 'ulangan' : 'bank soal'
+                    await supabase.from('notifications').insert(
+                        admins.map(a => ({
+                            user_id: a.id,
+                            type: 'HOTS_REVIEW',
+                            title: '⚠️ Soal baru perlu review',
+                            message: `Soal dari ${sourceLabel} perlu ditinjau. Alasan: ${routing.reasons?.join(', ') || 'Perlu verifikasi manual'}`,
+                            link: '/dashboard/admin/review-soal'
+                        }))
+                    )
                 }
-                // Don't notify on auto_approve to avoid noise
             }
         } catch (notifErr) {
             console.error('Notification error:', notifErr)
         }
 
         console.log(`HOTS analysis complete for ${input.questionSource}/${input.questionId}: ${newStatus}`)
+
+        // If the final status is approved, and it belongs to a quiz/exam, check if we need to auto-publish
+        if (newStatus === 'approved' && (input.questionSource === 'quiz' || input.questionSource === 'exam')) {
+            import('./autoPublish').then(({ checkAndAutoPublish }) => {
+                checkAndAutoPublish(input.questionSource as 'quiz' | 'exam', input.quizId || input.examId || '').catch(console.error)
+            }).catch(console.error)
+        }
 
     } catch (error) {
         console.error(`HOTS analysis error for ${input.questionSource}/${input.questionId}:`, error)
@@ -142,6 +191,13 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
             .from(tableName)
             .update({ status: 'approved' })
             .eq('id', input.questionId)
+
+        // Check for auto-publish even on error back-off
+        if (input.questionSource === 'quiz' || input.questionSource === 'exam') {
+            import('./autoPublish').then(({ checkAndAutoPublish }) => {
+                checkAndAutoPublish(input.questionSource as 'quiz' | 'exam', input.quizId || input.examId || '').catch(console.error)
+            }).catch(console.error)
+        }
     }
 }
 

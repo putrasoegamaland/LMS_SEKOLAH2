@@ -16,6 +16,7 @@ interface Exam {
     start_time: string
     duration_minutes: number
     is_active: boolean
+    pending_publish: boolean
     is_randomized: boolean
     max_violations: number
     question_count: number
@@ -38,8 +39,9 @@ export default function GuruUlanganPage() {
     const router = useRouter()
     const [exams, setExams] = useState<Exam[]>([])
     const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([])
-    const [studentCounts, setStudentCounts] = useState<Record<string, number>>({})
     const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({})
+    const [pendingGradingCounts, setPendingGradingCounts] = useState<Record<string, number>>({})
+    const [studentCounts, setStudentCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [creating, setCreating] = useState(false)
@@ -117,17 +119,20 @@ export default function GuruUlanganPage() {
 
             // Fetch submission counts per exam
             const subCounts: Record<string, number> = {}
+            const pendingCounts: Record<string, number> = {}
             await Promise.all(myExams.map(async (exam: Exam) => {
                 try {
                     const res = await fetch(`/api/exam-submissions?exam_id=${exam.id}`)
                     if (res.ok) {
                         const subs = await res.json()
-                        const submitted = Array.isArray(subs) ? subs.filter((s: any) => s.is_submitted).length : 0
-                        subCounts[exam.id] = submitted
+                        const subsArr = Array.isArray(subs) ? subs : []
+                        subCounts[exam.id] = subsArr.filter((s: any) => s.is_submitted).length
+                        pendingCounts[exam.id] = subsArr.filter((s: any) => s.is_submitted && !s.is_graded).length
                     }
                 } catch { }
             }))
             setSubmissionCounts(subCounts)
+            setPendingGradingCounts(pendingCounts)
         } catch (error) {
             console.error('Error fetching data:', error)
         } finally {
@@ -274,6 +279,7 @@ export default function GuruUlanganPage() {
         const startTime = new Date(exam.start_time)
         const endTime = new Date(startTime.getTime() + exam.duration_minutes * 60000)
 
+        if (exam.pending_publish) return { label: '🔍 Under Review', color: 'bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-500/20 dark:text-amber-400 font-bold' }
         if (!exam.is_active) return { label: 'Draft', color: 'bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-500/20 dark:text-amber-400' }
         if (now < startTime) return { label: 'Terjadwal', color: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-500/20 dark:text-blue-400' }
         if (now >= startTime && now <= endTime) return { label: 'Berlangsung', color: 'bg-green-500/10 text-green-600 border-green-200 dark:border-green-500/20 dark:text-green-400' }
@@ -401,21 +407,32 @@ export default function GuruUlanganPage() {
                                             const classId = exam.teaching_assignment?.class?.id
                                             const total = classId ? (studentCounts[classId] || 0) : 0
                                             const submitted = submissionCounts[exam.id] || 0
+                                            const pendingGrading = pendingGradingCounts[exam.id] || 0
                                             return (
-                                                <div className="flex items-center justify-between text-xs mt-1">
-                                                    <span className="text-text-secondary">Pengumpulan</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`font-bold ${submitted >= total && total > 0 ? 'text-green-600' : 'text-primary'}`}>{submitted}/{total}</span>
-                                                        {total > 0 && (
-                                                            <div className="w-16 bg-secondary/20 rounded-full h-1.5 overflow-hidden">
-                                                                <div
-                                                                    className={`h-full rounded-full transition-all duration-500 ${submitted >= total ? 'bg-green-500' : submitted > 0 ? 'bg-primary' : 'bg-secondary/30'}`}
-                                                                    style={{ width: `${Math.min(100, total > 0 ? (submitted / total) * 100 : 0)}%` }}
-                                                                />
-                                                            </div>
-                                                        )}
+                                                <>
+                                                    <div className="flex items-center justify-between text-xs mt-1">
+                                                        <span className="text-text-secondary">Pengumpulan</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`font-bold ${submitted >= total && total > 0 ? 'text-green-600' : 'text-primary'}`}>{submitted}/{total}</span>
+                                                            {total > 0 && (
+                                                                <div className="w-16 bg-secondary/20 rounded-full h-1.5 overflow-hidden">
+                                                                    <div
+                                                                        className={`h-full rounded-full transition-all duration-500 ${submitted >= total ? 'bg-green-500' : submitted > 0 ? 'bg-primary' : 'bg-secondary/30'}`}
+                                                                        style={{ width: `${Math.min(100, total > 0 ? (submitted / total) * 100 : 0)}%` }}
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                    {pendingGrading > 0 && (
+                                                        <Link href={`/dashboard/guru/ulangan/${exam.id}/hasil`} className="block">
+                                                            <div className="flex items-center justify-between text-xs mt-1 px-2 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 transition-colors cursor-pointer">
+                                                                <span className="text-amber-600 dark:text-amber-400 font-medium">📝 Perlu Dikoreksi</span>
+                                                                <span className="font-bold text-amber-600 dark:text-amber-400">{pendingGrading}</span>
+                                                            </div>
+                                                        </Link>
+                                                    )}
+                                                </>
                                             )
                                         })()}
                                     </div>

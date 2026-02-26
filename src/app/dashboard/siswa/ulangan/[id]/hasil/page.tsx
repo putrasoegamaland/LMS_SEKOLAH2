@@ -93,7 +93,8 @@ export default function ExamResultPage() {
         )
     }
 
-    const percentage = Math.round((result.total_score / result.max_score) * 100)
+    const maxScore = result.max_score || 1
+    const percentage = Math.round((result.total_score / maxScore) * 100)
 
     return (
         <div className="space-y-6 max-w-3xl mx-auto">

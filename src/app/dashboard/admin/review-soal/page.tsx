@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import AIReviewPanel from '@/components/AIReviewPanel'
-import { ArrowLeft, Filter as Filter2, TickSquare as CheckCircle, Swap as RotateCcw, Folder as Archive, ArrowDown as ChevronDown, ArrowUp as ChevronUp, Search, User, Document as BookOpen, Discovery as Brain, Graph as BarChart3, Show as Eye, Hide as EyeOff } from 'react-iconly'
+import { ArrowLeft, Filter as Filter2, TickSquare as CheckCircle, Swap as RotateCcw, ArrowDown as ChevronDown, ArrowUp as ChevronUp, Search, User, Document as BookOpen, Discovery as Brain, Graph as BarChart3, Show as Eye, Hide as EyeOff } from 'react-iconly'
 import Link from 'next/link'
 
 interface QueueItem {
@@ -85,14 +85,13 @@ export default function ReviewSoalPage() {
         if (user) fetchQueue()
     }, [user, fetchQueue])
 
-    const handleAction = async (item: QueueItem, decision: 'approve' | 'return' | 'archive') => {
+    const handleAction = async (item: QueueItem, decision: 'approve' | 'return') => {
         setActionLoading(item.id)
 
         // Optimistic UI updates
         const statusMap: Record<string, string> = {
             approve: 'approved',
-            return: 'returned',
-            archive: 'archived'
+            return: 'returned'
         }
         const newStatus = statusMap[decision]
         const oldStatus = item.status
@@ -620,15 +619,7 @@ export default function ReviewSoalPage() {
                                                                     <RotateCcw set="bold" primaryColor="currentColor" size={14} />
                                                                     Return
                                                                 </Button>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    onClick={() => handleAction(item, 'archive')}
-                                                                    disabled={actionLoading === item.id}
-                                                                    className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xs flex-1 md:flex-none justify-center transition-all"
-                                                                >
-                                                                    <Archive set="bold" primaryColor="currentColor" size={14} />
-                                                                    Arsip
-                                                                </Button>
+
                                                             </div>
                                                         </div>
                                                     </div>

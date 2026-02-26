@@ -7,7 +7,7 @@ import SmartText from '@/components/SmartText'
 import MathTextarea from '@/components/MathTextarea'
 // import { PenLine, WandSparkles, FolderOpen, Plus } from 'lucide-react'
 import { Edit, Discovery, Folder, Plus, Upload, Danger, InfoCircle, TickSquare, CloseSquare, Delete, Document, Search } from 'react-iconly'
-import { Loader2, Eye } from 'lucide-react'
+import { Loader2, Eye, Brain } from 'lucide-react'
 import PreviewModal from '@/components/PreviewModal'
 import RapihAIModal from '@/components/RapihAIModal'
 import QuestionImageUpload from '@/components/QuestionImageUpload'
@@ -34,6 +34,7 @@ interface Quiz {
     title: string
     description: string | null
     is_active: boolean
+    pending_publish: boolean
     teaching_assignment: {
         subject: { id: string; name: string }
         class: { name: string }
@@ -97,6 +98,7 @@ export default function EditQuizPage() {
     const [showPreview, setShowPreview] = useState(false)
     const [publishing, setPublishing] = useState(false)
     const [showSuccessModal, setShowSuccessModal] = useState(false)
+    const [alertInfo, setAlertInfo] = useState<{ type: 'info' | 'warning' | 'error' | 'success', title: string, message: string } | null>(null)
 
     const fetchQuiz = useCallback(async () => {
         try {
@@ -117,7 +119,7 @@ export default function EditQuizPage() {
 
     const handlePublishClick = () => {
         if (questions.length === 0) {
-            alert('Minimal harus ada 1 soal untuk mempublish kuis!')
+            setAlertInfo({ type: 'warning', title: 'Belum Ada Soal', message: 'Minimal harus ada 1 soal untuk mempublish kuis!' })
             return
         }
         setShowPublishConfirm(true)
@@ -133,13 +135,22 @@ export default function EditQuizPage() {
             })
 
             if (res.ok) {
+                const data = await res.json()
                 setShowPublishConfirm(false)
+
+                if (data._status === 'under_review') {
+                    setAlertInfo({ type: 'info', title: '🔍 Kuis Dalam Review', message: 'Kuis berhasil disimpan! Ada soal yang masih dalam proses review (oleh AI atau Admin). Kuis akan otomatis terpublish ke siswa setelah semua soal disetujui.' })
+                } else {
+                    setShowSuccessModal(true)
+                }
+
                 fetchQuiz()
-                setShowSuccessModal(true)
+            } else {
+                throw new Error('Gagal mempublish kuis')
             }
         } catch (error) {
             console.error('Error publishing:', error)
-            alert('Gagal mempublish kuis')
+            setAlertInfo({ type: 'error', title: 'Gagal Publish', message: 'Terjadi kesalahan saat mempublish kuis. Coba lagi.' })
         } finally {
             setPublishing(false)
         }
@@ -212,16 +223,7 @@ export default function EditQuizPage() {
 
     const handleDeleteQuestion = async (questionId: string) => {
         if (!confirm('Hapus soal ini?')) return
-        // Delete individual question by re-fetching and filtering
-        const updatedQuestions = questions.filter(q => q.id !== questionId)
-        await fetch(`/api/quizzes/${quizId}/questions`, { method: 'DELETE' })
-        if (updatedQuestions.length > 0) {
-            await fetch(`/api/quizzes/${quizId}/questions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatedQuestions.map((q, idx) => ({ ...q, order_index: idx })))
-            })
-        }
+        await fetch(`/api/quizzes/${quizId}/questions?question_id=${questionId}`, { method: 'DELETE' })
         fetchQuiz()
     }
 
@@ -251,15 +253,11 @@ export default function EditQuizPage() {
         if (selectedQuestionIds.size === 0) return
         if (!confirm(`Hapus ${selectedQuestionIds.size} soal yang dipilih?`)) return
 
-        const updatedQuestions = questions.filter(q => !selectedQuestionIds.has(q.id || ''))
-        await fetch(`/api/quizzes/${quizId}/questions`, { method: 'DELETE' })
-        if (updatedQuestions.length > 0) {
-            await fetch(`/api/quizzes/${quizId}/questions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatedQuestions.map((q, idx) => ({ ...q, order_index: idx })))
-            })
-        }
+        await Promise.all(
+            Array.from(selectedQuestionIds).map(qId =>
+                fetch(`/api/quizzes/${quizId}/questions?question_id=${qId}`, { method: 'DELETE' })
+            )
+        )
         setSelectedQuestionIds(new Set())
         setIsBulkSelectMode(false)
         fetchQuiz()
@@ -296,7 +294,7 @@ export default function EditQuizPage() {
                     errData = { error: text }
                 }
                 console.error('Error saving AI questions:', errData, res.status)
-                alert('Gagal menyimpan soal: ' + (errData.error || 'Server error'))
+                setAlertInfo({ type: 'error', title: 'Gagal Menyimpan', message: 'Gagal menyimpan soal: ' + (errData.error || 'Server error') })
                 return
             }
 
@@ -304,7 +302,7 @@ export default function EditQuizPage() {
             await fetchQuiz()
         } catch (err) {
             console.error('Error saving AI results:', err)
-            alert('Gagal menyimpan soal. Cek koneksi internet.')
+            setAlertInfo({ type: 'error', title: 'Gagal Menyimpan', message: 'Gagal menyimpan soal. Cek koneksi internet.' })
         } finally {
             setSaving(false)
         }
@@ -313,24 +311,74 @@ export default function EditQuizPage() {
     const handleSaveToBank = async (results: QuizQuestion[]) => {
         if (results.length === 0) return
         try {
-            const res = await fetch('/api/question-bank', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(results.map(q => ({
-                    ...q,
-                    subject_id: quiz?.teaching_assignment?.subject?.id
-                })))
+            const subjectId = quiz?.teaching_assignment?.subject?.id || null
+
+            // Separate passage questions from standalone questions
+            const passageGroups = new Map<string, any[]>()
+            const standaloneQuestions: any[] = []
+
+            results.forEach(q => {
+                if (q.passage_text) {
+                    const key = q.passage_text
+                    if (!passageGroups.has(key)) passageGroups.set(key, [])
+                    passageGroups.get(key)!.push(q)
+                } else {
+                    standaloneQuestions.push(q)
+                }
             })
 
-            if (!res.ok) {
-                const text = await res.text()
-                console.error('Error saving to bank:', text)
-                alert('Gagal menyimpan ke Bank Soal.')
-                return
+            const promises = []
+
+            // Save standalone questions to question bank
+            if (standaloneQuestions.length > 0) {
+                promises.push(
+                    fetch('/api/question-bank', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(standaloneQuestions.map(q => ({
+                            question_text: q.question_text,
+                            question_type: q.question_type,
+                            options: q.options || null,
+                            correct_answer: q.correct_answer || null,
+                            difficulty: q.difficulty || 'MEDIUM',
+                            subject_id: subjectId,
+                            tags: null
+                        })))
+                    }).then(res => {
+                        if (!res.ok) throw new Error('Gagal menyimpan soal mandiri ke Bank Soal.')
+                    })
+                )
             }
-            alert('Soal berhasil disimpan ke Bank Soal!')
+
+            // Save passage-based questions as passages
+            for (const [passageText, pQuestions] of passageGroups) {
+                promises.push(
+                    fetch('/api/passages', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: passageText.substring(0, 50) + '...',
+                            passage_text: passageText,
+                            subject_id: subjectId,
+                            questions: pQuestions.map(q => ({
+                                question_text: q.question_text,
+                                question_type: q.question_type,
+                                options: q.options || null,
+                                correct_answer: q.correct_answer || null,
+                                difficulty: q.difficulty || 'MEDIUM'
+                            }))
+                        })
+                    }).then(res => {
+                        if (!res.ok) throw new Error('Gagal menyimpan bacaan ke Bank Soal.')
+                    })
+                )
+            }
+
+            await Promise.all(promises)
+
         } catch (error) {
             console.error('Error saving to bank:', error)
+            setAlertInfo({ type: 'error', title: 'Gagal', message: 'Gagal menyimpan ke Bank Soal.' })
         }
     }
 
@@ -372,7 +420,7 @@ export default function EditQuizPage() {
                             <Eye className="w-4 h-4 mr-1" />
                             Preview
                         </Button>
-                        {!quiz.is_active && (
+                        {!quiz.is_active && !quiz.pending_publish && (
                             <Button
                                 onClick={handlePublishClick}
                                 disabled={questions.length === 0}
@@ -527,7 +575,24 @@ export default function EditQuizPage() {
             {mode === 'list' && (
                 <div className="space-y-4">
                     {/* Simplified Selection Toolbar */}
-                    {questions.length > 0 && !quiz?.is_active && (
+                    {/* "Under Review" Banner */}
+                    {quiz?.pending_publish && (
+                        <div className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                            <div className="flex gap-3">
+                                <div className="mt-0.5 rounded-full bg-amber-100 dark:bg-amber-800 p-2 text-amber-600 dark:text-amber-400 shrink-0">
+                                    <Brain size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-amber-800 dark:text-amber-300">Kuis Sedang Direview</h3>
+                                    <p className="text-sm text-amber-700/80 dark:text-amber-400/80 mt-1">
+                                        Anda telah mempublikasi kuis ini, tetapi ada soal yang masih menunggu persetujuan (oleh AI atau Admin). Kuis akan otomatis terkirim ke siswa segera setelah semua soal disetujui.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {questions.length > 0 && !quiz?.is_active && !quiz?.pending_publish && (
                         <div className="flex items-center justify-between">
                             <Button
                                 variant={isBulkSelectMode ? 'ghost' : 'outline'}
@@ -1264,9 +1329,13 @@ export default function EditQuizPage() {
                                                         question_type: q.question_type,
                                                         options: q.options,
                                                         correct_answer: q.correct_answer,
+                                                        difficulty: q.difficulty || 'MEDIUM',
                                                         points: 10,
                                                         order_index: questions.length + idx,
-                                                        passage_text: q.passage_text || null
+                                                        passage_text: q.passage_text || null,
+                                                        teacher_hots_claim: q.teacher_hots_claim || false,
+                                                        // Inherit approved status from bank soal (skip re-review)
+                                                        bank_status: q.status
                                                     }))
 
                                                 await fetch(`/api/quizzes/${quizId}/questions`, {
@@ -1363,6 +1432,34 @@ export default function EditQuizPage() {
                 questions={questions}
                 type="kuis"
             />
+
+            {/* Custom Alert Modal (replaces browser alert) */}
+            {alertInfo && (
+                <Modal open={!!alertInfo} onClose={() => setAlertInfo(null)} title="">
+                    <div className="text-center py-2">
+                        <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${alertInfo.type === 'success' ? 'bg-green-100 dark:bg-green-500/20' :
+                            alertInfo.type === 'info' ? 'bg-blue-100 dark:bg-blue-500/20' :
+                                alertInfo.type === 'warning' ? 'bg-amber-100 dark:bg-amber-500/20' :
+                                    'bg-red-100 dark:bg-red-500/20'
+                            }`}>
+                            <span className="text-2xl">
+                                {alertInfo.type === 'success' ? '✅' :
+                                    alertInfo.type === 'info' ? '🔍' :
+                                        alertInfo.type === 'warning' ? '⚠️' : '❌'}
+                            </span>
+                        </div>
+                        <h3 className={`text-lg font-bold mb-2 ${alertInfo.type === 'success' ? 'text-green-700 dark:text-green-400' :
+                            alertInfo.type === 'info' ? 'text-blue-700 dark:text-blue-400' :
+                                alertInfo.type === 'warning' ? 'text-amber-700 dark:text-amber-400' :
+                                    'text-red-700 dark:text-red-400'
+                            }`}>{alertInfo.title}</h3>
+                        <p className="text-text-secondary dark:text-zinc-400 text-sm mb-6 leading-relaxed">{alertInfo.message}</p>
+                        <Button onClick={() => setAlertInfo(null)} className="px-8">
+                            Mengerti
+                        </Button>
+                    </div>
+                </Modal>
+            )}
         </div >
     )
 }

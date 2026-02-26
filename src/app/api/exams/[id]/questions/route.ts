@@ -106,7 +106,9 @@ export async function POST(
             order_index: startOrder + idx,
             image_url: q.image_url || null,
             passage_text: q.passage_text || null,
-            teacher_hots_claim: q.teacher_hots_claim || false
+            teacher_hots_claim: q.teacher_hots_claim || false,
+            // If question came from bank soal and is already approved, inherit that status
+            ...(q.bank_status === 'approved' ? { status: 'approved' } : {})
         }))
 
         const { data, error } = await supabase
@@ -116,28 +118,35 @@ export async function POST(
 
         if (error) throw error
 
-        // Trigger HOTS analysis for each saved question (fire-and-forget)
+        // Trigger HOTS analysis only for questions NOT already approved from bank soal
         if (data && data.length > 0) {
-            const { data: exam } = await supabase
-                .from('exams')
-                .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
-                .eq('id', id).single()
-            const ta = exam?.teaching_assignment as any
-            const subjectName = ta?.subject?.name || ''
-            const gradeBand = ta?.class?.school_level || 'SMP'
-            const hotsInputs: TriggerHOTSInput[] = data.map((q: any) => ({
-                questionId: q.id,
-                questionSource: 'exam' as const,
-                questionText: q.question_text,
-                questionType: q.question_type,
-                options: q.options,
-                correctAnswer: q.correct_answer,
-                teacherDifficulty: q.difficulty,
-                teacherHotsClaim: q.teacher_hots_claim || false,
-                subjectName,
-                gradeBand
-            }))
-            triggerBulkHOTSAnalysis(hotsInputs)
+            // Track which indices came from bank soal (already analyzed)
+            const bankIndices = new Set(body.map((q: any, i: number) => q.bank_status === 'approved' ? i : -1).filter((i: number) => i >= 0))
+            const questionsNeedingAnalysis = data.filter((_: any, i: number) => !bankIndices.has(i))
+            if (questionsNeedingAnalysis.length > 0) {
+                const { data: exam } = await supabase
+                    .from('exams')
+                    .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
+                    .eq('id', id).single()
+                const ta = exam?.teaching_assignment as any
+                const subjectName = ta?.subject?.name || ''
+                const gradeBand = ta?.class?.school_level || 'SMP'
+                const hotsInputs: TriggerHOTSInput[] = questionsNeedingAnalysis.map((q: any) => ({
+                    questionId: q.id,
+                    questionSource: 'exam' as const,
+                    questionText: q.question_text,
+                    questionType: q.question_type,
+                    options: q.options,
+                    correctAnswer: q.correct_answer,
+                    teacherDifficulty: q.difficulty,
+                    teacherHotsClaim: q.teacher_hots_claim || false,
+                    subjectName,
+                    gradeBand,
+                    examId: id
+                }))
+                console.log(`[HOTS] Triggering analysis for ${hotsInputs.length} exam questions`)
+                triggerBulkHOTSAnalysis(hotsInputs)
+            }
         }
 
         return NextResponse.json(data)

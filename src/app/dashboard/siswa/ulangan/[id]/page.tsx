@@ -235,7 +235,6 @@ export default function TakeExamPage() {
                     if (typeof window !== 'undefined') {
                         localStorage.removeItem(`exam_${examId}_answers`)
                     }
-                    // alert('Waktu ulangan telah habis. Jawaban Anda otomatis dikumpulkan.')
                     router.replace('/dashboard/siswa/ulangan')
                 } catch (e) {
                     console.error('Auto-submit error:', e)
@@ -244,8 +243,10 @@ export default function TakeExamPage() {
                 return
             }
 
+            // Always set timeLeft immediately so timer can start
+            setTimeLeft(remaining)
+
             // If elapsed is significant (> 10s) OR we found local answers, assume it's a resume
-            // (Assuming a fresh start would be very close to 0 elapsed)
             const isResume = elapsed > 10000 || Object.keys(localAnswers).length > 0
 
             if (isResume) {
@@ -257,7 +258,7 @@ export default function TakeExamPage() {
                 setShowResumeModal(true)
                 setLoading(false)
             } else {
-                startNewExamTimer(examData, startedAt)
+                setLoading(false)
             }
 
         } catch (error) {
@@ -275,12 +276,11 @@ export default function TakeExamPage() {
         }
     }, [startExam])
 
-    // Timer countdown - useEffect ensures it reacts to state changes
+    // Timer countdown - reacts to timeLeft and submission changes
     useEffect(() => {
         if (timeLeft <= 0 || !submission) return
 
         timerRef.current = setInterval(() => {
-
             setTimeLeft(prev => {
                 if (prev <= 1) {
                     if (timerRef.current) clearInterval(timerRef.current)
@@ -298,7 +298,7 @@ export default function TakeExamPage() {
         return () => {
             if (timerRef.current) clearInterval(timerRef.current)
         }
-    }, [submission])
+    }, [submission, timeLeft > 0])
 
     // Tab lock: detect visibility change
     useEffect(() => {
@@ -754,27 +754,20 @@ export default function TakeExamPage() {
                             <div className="p-4 bg-blue-500/10 rounded-xl">
                                 <p className="text-xs text-text-secondary mb-1">Sisa Waktu</p>
                                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono">
-                                    {formatTime(timeLeft)}
+                                    {formatTime(resumeData.timeRemaining)}
                                 </p>
                             </div>
                         </div>
 
                         <button
                             onClick={() => {
-                                if (exam) {
-                                    initializeExamFromResume(exam, timeLeft)
+                                if (exam && resumeData) {
+                                    initializeExamFromResume(exam, resumeData.timeRemaining)
                                 }
                             }}
                             className="w-full px-6 py-4 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark transition-all text-lg shadow-lg shadow-primary/20"
                         >
                             🚀 Lanjutkan Ulangan
-                        </button>
-
-                        <button
-                            onClick={() => router.push('/dashboard/siswa/ulangan')}
-                            className="w-full mt-3 px-6 py-3 text-text-secondary hover:text-text-main transition-colors text-sm"
-                        >
-                            Kembali ke Daftar
                         </button>
                     </div>
                 </div>

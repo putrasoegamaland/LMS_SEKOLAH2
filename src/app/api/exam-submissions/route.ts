@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
             .from('exam_submissions')
             .select(`
                 id, exam_id, student_id, started_at, submitted_at, is_submitted,
-                total_score, violation_count, created_at,
+                total_score, max_score, violation_count, violations_log, is_graded, created_at,
                 student:students(id, nis, user:users!students_user_id_fkey(full_name)),
                 exam:exams(
                     id, 
@@ -293,7 +293,7 @@ export async function POST(request: NextRequest) {
         // Check if already submitted
         const { data: existingSubmission } = await supabase
             .from('exam_submissions')
-            .select('id, is_submitted')
+            .select('id, is_submitted, question_order, started_at, violation_count, max_score')
             .eq('exam_id', exam_id)
             .eq('student_id', student.id)
             .single()
@@ -303,7 +303,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (existingSubmission) {
-            // Return existing submission
+            // Return existing submission with all data needed for resume
             return NextResponse.json(existingSubmission)
         }
 
@@ -414,22 +414,35 @@ export async function PUT(request: NextRequest) {
                 // Auto submit with current answers
                 const { data: existingAnswers } = await supabase
                     .from('exam_answers')
-                    .select('*, question:exam_questions(correct_answer, points)')
+                    .select('*, question:exam_questions(correct_answer, points, question_type)')
                     .eq('submission_id', submission_id)
 
                 let totalScore = 0
+                let hasEssays = false
                 existingAnswers?.forEach(ans => {
-                    if (ans.answer === ans.question?.correct_answer) {
-                        totalScore += ans.question?.points || 1
+                    const q = Array.isArray(ans.question) ? ans.question[0] : (ans.question as any);
+                    if (ans.answer === q?.correct_answer) {
+                        totalScore += q?.points || 1
+                    }
+                    if (q?.question_type === 'ESSAY') {
+                        hasEssays = true
                     }
                 })
+
+                // Also check if there are unanswered essays in the exam
+                const { data: examQuestions } = await supabase
+                    .from('exam_questions')
+                    .select('question_type')
+                    .eq('exam_id', currentSubmission.exam_id)
+                hasEssays = hasEssays || (examQuestions?.some(q => q.question_type === 'ESSAY') || false)
 
                 await supabase
                     .from('exam_submissions')
                     .update({
                         is_submitted: true,
                         submitted_at: new Date().toISOString(),
-                        total_score: totalScore
+                        total_score: totalScore,
+                        is_graded: !hasEssays
                     })
                     .eq('id', submission_id)
 
@@ -478,20 +491,30 @@ export async function PUT(request: NextRequest) {
 
         // Handle final submission
         if (submit) {
-            // Calculate total score
+            // Calculate total score and check if there are any essay questions
             const { data: allAnswers } = await supabase
                 .from('exam_answers')
-                .select('points_earned')
+                .select('points_earned, question:exam_questions(question_type)')
                 .eq('submission_id', submission_id)
 
             const totalScore = allAnswers?.reduce((sum, a) => sum + (a.points_earned || 0), 0) || 0
+
+            // If there are no essay questions in the exam, it's fully auto-graded
+            const { data: examQuestions } = await supabase
+                .from('exam_questions')
+                .select('question_type')
+                .eq('exam_id', currentSubmission.exam_id)
+
+            const hasEssays = examQuestions?.some(q => q.question_type === 'ESSAY') || false;
+            const isGraded = !hasEssays
 
             const { data: updatedSubmission, error } = await supabase
                 .from('exam_submissions')
                 .update({
                     is_submitted: true,
                     submitted_at: new Date().toISOString(),
-                    total_score: totalScore
+                    total_score: totalScore,
+                    is_graded: isGraded
                 })
                 .eq('id', submission_id)
                 .select()

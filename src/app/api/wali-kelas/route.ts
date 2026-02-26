@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
             .from('students')
             .select(`
                 id, nis, status,
-                user:users(id, full_name, username)
+                user:users!students_user_id_fkey(id, full_name, username)
             `)
             .eq('class_id', classId)
             .eq('status', 'ACTIVE')

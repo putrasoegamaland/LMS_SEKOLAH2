@@ -161,20 +161,27 @@ export default function SiswaDashboard() {
                         if (!e.is_active) return
 
                         const startTime = new Date(e.start_time).getTime()
-                        const expirationTime = startTime + (e.duration_minutes * 60 * 1000)
-                        const diff = expirationTime - nowTime
+                        const endTime = startTime + (e.duration_minutes * 60 * 1000)
 
-                        if (diff > 0 && diff <= warningThreshold) {
-                            newDeadlines.push({
-                                id: e.id,
-                                type: 'ULANGAN',
-                                title: e.title,
-                                subject: e.teaching_assignment?.subject?.name || 'Mapel',
-                                deadline: new Date(expirationTime).toISOString(),
-                                link: `/dashboard/siswa/ulangan/${e.id}`,
-                                expirationTime,
-                                startTime
-                            })
+                        // Show reminder if exam hasn't ended yet
+                        if (endTime > nowTime) {
+                            // For countdown: use startTime if not started, otherwise show "Sedang Berlangsung"
+                            const isStarted = startTime <= nowTime
+                            const countdownTarget = isStarted ? endTime : startTime
+
+                            // Only show if within warning threshold OR already started
+                            if (isStarted || (startTime - nowTime) <= warningThreshold) {
+                                newDeadlines.push({
+                                    id: e.id,
+                                    type: 'ULANGAN',
+                                    title: e.title,
+                                    subject: e.teaching_assignment?.subject?.name || 'Mapel',
+                                    deadline: new Date(startTime).toISOString(),
+                                    link: `/dashboard/siswa/ulangan/${e.id}`,
+                                    expirationTime: countdownTarget,
+                                    startTime
+                                })
+                            }
                         }
                     })
 
@@ -185,20 +192,25 @@ export default function SiswaDashboard() {
                         if (!q.is_active) return
 
                         const startTime = new Date(q.start_time).getTime()
-                        const expirationTime = startTime + (q.duration_minutes * 60 * 1000)
-                        const diff = expirationTime - nowTime
+                        const endTime = startTime + (q.duration_minutes * 60 * 1000)
 
-                        if (diff > 0 && diff <= warningThreshold) {
-                            newDeadlines.push({
-                                id: q.id,
-                                type: 'KUIS',
-                                title: q.title,
-                                subject: q.teaching_assignment?.subject?.name || 'Mapel',
-                                deadline: new Date(expirationTime).toISOString(),
-                                link: `/dashboard/siswa/kuis/${q.id}`,
-                                expirationTime,
-                                startTime
-                            })
+                        // Show reminder if quiz hasn't ended yet
+                        if (endTime > nowTime) {
+                            const isStarted = startTime <= nowTime
+                            const countdownTarget = isStarted ? endTime : startTime
+
+                            if (isStarted || (startTime - nowTime) <= warningThreshold) {
+                                newDeadlines.push({
+                                    id: q.id,
+                                    type: 'KUIS',
+                                    title: q.title,
+                                    subject: q.teaching_assignment?.subject?.name || 'Mapel',
+                                    deadline: new Date(startTime).toISOString(),
+                                    link: `/dashboard/siswa/kuis/${q.id}`,
+                                    expirationTime: countdownTarget,
+                                    startTime
+                                })
+                            }
                         }
                     })
 
@@ -323,9 +335,27 @@ export default function SiswaDashboard() {
     }, [])
 
     // UI helpers
-    const getCountdownText = (expirationTime: number, nowMs: number) => {
+    const getCountdownText = (expirationTime: number, nowMs: number, startTime?: number) => {
+        // For exams/quizzes: check if it hasn't started yet
+        if (startTime && startTime > nowMs) {
+            const diffMs = startTime - nowMs
+            const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+            const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+
+            if (days > 0) return `Mulai ${days} hari ${hours > 0 ? `${hours} jm` : ''} lagi`
+            if (hours > 0) return `Mulai ${hours} jm ${minutes > 0 ? `${minutes} mnt` : ''} lagi`
+            return `Mulai ${Math.max(1, minutes)} menit lagi`
+        }
+
+        // For exams/quizzes that have started: show "Sedang Berlangsung"
+        if (startTime && startTime <= nowMs) {
+            return '🔴 Sedang Berlangsung — Kerjakan!'
+        }
+
+        // For assignments (no startTime): countdown to deadline
         const diffMs = expirationTime - nowMs
-        if (diffMs <= 0) return 'Sedang Berlangsung'
+        if (diffMs <= 0) return 'Waktu Habis'
         const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
         const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
         const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
@@ -438,7 +468,7 @@ export default function SiswaDashboard() {
                             {upcomingDeadlines.map((item) => {
                                 const styles = getUrgencyStyles(item.expirationTime, currentTimeMs)
                                 const progress = getProgressPercent(item.startTime, item.expirationTime, currentTimeMs)
-                                const countdownText = getCountdownText(item.expirationTime, currentTimeMs)
+                                const countdownText = getCountdownText(item.expirationTime, currentTimeMs, item.type !== 'TUGAS' ? item.startTime : undefined)
 
                                 return (
                                     <Link key={item.id} href={item.link}>

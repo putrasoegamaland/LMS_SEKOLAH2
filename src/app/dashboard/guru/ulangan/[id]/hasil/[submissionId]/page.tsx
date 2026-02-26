@@ -30,20 +30,21 @@ interface SubmissionDetail {
     answers: Answer[]
     total_score: number
     max_score: number
+    violation_count: number
     student: {
         user: { full_name: string }
         nis: string
     }
-    quiz: {
+    exam: {
         title: string
         questions: Question[]
     }
 }
 
-export default function GradingPage() {
+export default function ExamGradingPage() {
     const params = useParams()
     const router = useRouter()
-    const quizId = params.id as string
+    const examId = params.id as string
     const submissionId = params.submissionId as string
 
     const [submission, setSubmission] = useState<SubmissionDetail | null>(null)
@@ -59,7 +60,7 @@ export default function GradingPage() {
 
     const fetchData = async () => {
         try {
-            const res = await fetch(`/api/quiz-submissions/${submissionId}`)
+            const res = await fetch(`/api/exam-submissions/${submissionId}`)
             const data = await res.json()
             // Normalize answers to always be an array
             const normalizedData = {
@@ -118,7 +119,7 @@ export default function GradingPage() {
                 }
             })
 
-            await fetch(`/api/quiz-submissions/${submissionId}`, {
+            await fetch(`/api/exam-submissions/${submissionId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -128,9 +129,8 @@ export default function GradingPage() {
                 })
             })
 
-            // Using simple alert as per original code, could be replaced with Toast later
             alert('Penilaian berhasil disimpan!')
-            router.push(`/dashboard/guru/kuis/${quizId}/hasil`)
+            router.push(`/dashboard/guru/ulangan/${examId}/hasil`)
         } catch (error) {
             console.error('Error saving:', error)
             alert('Gagal menyimpan penilaian')
@@ -147,7 +147,7 @@ export default function GradingPage() {
     if (!submission) return <div className="text-center text-text-secondary py-8">Data tidak ditemukan</div>
 
     // Sort questions by order
-    const questions = [...(submission.quiz.questions || [])].sort((a, b) => a.order_index - b.order_index)
+    const questions = [...(submission.exam.questions || [])].sort((a, b) => a.order_index - b.order_index)
     const currentTotalScore = Object.values(grades).reduce((acc, curr) => acc + (curr.score || 0), 0)
 
     return (
@@ -156,8 +156,8 @@ export default function GradingPage() {
             <div className="sticky top-0 z-20 bg-white/95 dark:bg-surface-dark/95 backdrop-blur pt-4 pb-2 -mx-6 px-6 border-b border-secondary/10 dark:border-white/5">
                 <PageHeader
                     title={`Penilaian: ${submission.student.user.full_name}`}
-                    subtitle={submission.quiz.title}
-                    backHref={`/dashboard/guru/kuis/${quizId}/hasil`}
+                    subtitle={`${submission.exam.title} • ${submission.violation_count > 0 ? `⚠️ ${submission.violation_count} Pelanggaran` : ''}`}
+                    backHref={`/dashboard/guru/ulangan/${examId}/hasil`}
                     action={
                         <div className="text-right">
                             <span className="text-3xl font-bold text-primary">
@@ -274,7 +274,7 @@ export default function GradingPage() {
             {/* Save Action Sticky Footer */}
             <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-surface-dark/95 backdrop-blur border-t border-secondary/10 dark:border-white/5 p-4 z-20">
                 <div className="max-w-4xl mx-auto flex items-center justify-end gap-4">
-                    <Link href={`/dashboard/guru/kuis/${quizId}/hasil`}>
+                    <Link href={`/dashboard/guru/ulangan/${examId}/hasil`}>
                         <Button variant="secondary">Batal</Button>
                     </Link>
                     <Button

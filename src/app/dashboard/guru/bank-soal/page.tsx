@@ -54,6 +54,9 @@ interface Passage {
         correct_answer: string | null
         difficulty: 'EASY' | 'MEDIUM' | 'HARD'
         order_in_passage: number
+        status?: string
+        teacher_hots_claim?: boolean
+        admin_review?: any
     }>
     created_at: string
 }
@@ -83,8 +86,6 @@ export default function BankSoalPage() {
     const [deleteTargetLabel, setDeleteTargetLabel] = useState('')
     const [deleting, setDeleting] = useState(false)
 
-    // Duplicate state
-    const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
 
     // Modal & Form Control
     const [showAddModal, setShowAddModal] = useState(false)
@@ -92,6 +93,13 @@ export default function BankSoalPage() {
     const [saving, setSaving] = useState(false)
     const [showRapihAI, setShowRapihAI] = useState(false)
     const [showAddDropdown, setShowAddDropdown] = useState(false)
+
+    // Toast notification state (replacing browser alert)
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+    const showToast = (message: string, type: 'success' | 'error' = 'error') => {
+        setToast({ message, type })
+        setTimeout(() => setToast(null), 4000)
+    }
 
     // Standalone Question Form
     const [questionForm, setQuestionForm] = useState({
@@ -144,10 +152,10 @@ export default function BankSoalPage() {
             })
             const data = await res.json()
             if (res.ok) return data.url
-            alert(data.error || 'Gagal upload gambar')
+            showToast(data.error || 'Gagal upload gambar')
             return null
         } catch {
-            alert('Gagal upload gambar')
+            showToast('Gagal upload gambar')
             return null
         } finally {
             setUploading(false)
@@ -201,34 +209,9 @@ export default function BankSoalPage() {
             setDeleteTargetId(null)
         } catch (error) {
             console.error('Error:', error)
-            alert('Gagal menghapus')
+            showToast('Gagal menghapus')
         } finally {
             setDeleting(false)
-        }
-    }
-
-    const handleDuplicate = async (q: QuestionBankItem) => {
-        setDuplicatingId(q.id)
-        try {
-            await fetch('/api/question-bank', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify([{
-                    question_text: q.question_text,
-                    question_type: q.question_type,
-                    options: q.options,
-                    correct_answer: q.correct_answer,
-                    difficulty: q.difficulty,
-                    subject_id: q.subject?.id || null,
-                    image_url: q.image_url || null
-                }])
-            })
-            await fetchData()
-        } catch (error) {
-            console.error('Error:', error)
-            alert('Gagal menduplikat soal')
-        } finally {
-            setDuplicatingId(null)
         }
     }
 
@@ -244,7 +227,7 @@ export default function BankSoalPage() {
             handleCloseModal()
         } catch (error) {
             console.error('Error:', error)
-            alert('Gagal menyimpan soal')
+            showToast('Gagal menyimpan soal')
         } finally {
             setSaving(false)
         }
@@ -262,7 +245,7 @@ export default function BankSoalPage() {
             handleCloseModal()
         } catch (error) {
             console.error('Error:', error)
-            alert('Gagal menyimpan passage')
+            showToast('Gagal menyimpan passage')
         } finally {
             setSaving(false)
         }
@@ -333,7 +316,8 @@ export default function BankSoalPage() {
                 question_type: q.question_type,
                 options: q.options || ['', '', '', ''],
                 correct_answer: q.correct_answer || '',
-                difficulty: q.difficulty
+                difficulty: q.difficulty,
+                teacher_hots_claim: q.teacher_hots_claim || false
             })) || []
         })
         setShowEditPassageModal(true)
@@ -353,7 +337,7 @@ export default function BankSoalPage() {
             setEditingPassageId(null)
         } catch (error) {
             console.error('Error:', error)
-            alert('Gagal menyimpan perubahan')
+            showToast('Gagal menyimpan perubahan')
         } finally {
             setSaving(false)
         }
@@ -427,7 +411,7 @@ export default function BankSoalPage() {
             setEditingQuestionId(null)
         } catch (error) {
             console.error('Error:', error)
-            alert('Gagal menyimpan perubahan')
+            showToast('Gagal menyimpan perubahan')
         } finally {
             setSaving(false)
         }
@@ -641,10 +625,10 @@ export default function BankSoalPage() {
 
             await fetchData()
             setShowRapihAI(false)
-            alert('Soal berhasil disimpan ke Bank Soal!')
+            showToast('Soal berhasil disimpan ke Bank Soal!', 'success')
         } catch (error) {
             console.error('Error saving AI results to bank:', error)
-            alert('Gagal menyimpan soal ke Bank Soal')
+            showToast('Gagal menyimpan soal ke Bank Soal')
         } finally {
             setSaving(false)
         }
@@ -881,7 +865,20 @@ export default function BankSoalPage() {
                                                                 <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getDifficultyBadge(q.difficulty)}`}>
                                                                     {getDifficultyLabel(q.difficulty)}
                                                                 </span>
+                                                                {getStatusBadge(q.status)}
+                                                                {q.teacher_hots_claim && (
+                                                                    <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-200 dark:text-emerald-400">
+                                                                        🧠 HOTS
+                                                                    </span>
+                                                                )}
                                                             </div>
+                                                            {/* Admin return reason */}
+                                                            {q.status === 'returned' && q.admin_review?.notes && (
+                                                                <div className="mt-2 mb-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                                                    <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mb-0.5">📋 Alasan Admin:</p>
+                                                                    <p className="text-[10px] text-amber-600 dark:text-amber-400">{q.admin_review.notes}</p>
+                                                                </div>
+                                                            )}
                                                             <SmartText text={q.question_text} className="text-text-main dark:text-white text-sm" />
                                                             {q.question_type === 'MULTIPLE_CHOICE' && q.options && (
                                                                 <div className="mt-2 grid grid-cols-2 gap-1 text-xs">
@@ -985,16 +982,6 @@ export default function BankSoalPage() {
                                                     title="Edit"
                                                 >
                                                     <Edit set="bold" primaryColor="currentColor" size={16} />
-                                                </Button>
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={(e: any) => { e.preventDefault(); handleDuplicate(q) }}
-                                                    disabled={duplicatingId === q.id}
-                                                    className="text-teal-500 hover:text-teal-600 hover:bg-teal-50"
-                                                    title="Duplikat"
-                                                >
-                                                    {duplicatingId === q.id ? <span className="animate-spin">⏳</span> : <Copy className="w-4 h-4" />}
                                                 </Button>
                                                 <Button
                                                     variant="secondary"
@@ -1667,6 +1654,26 @@ export default function BankSoalPage() {
                                             ))}
                                         </div>
                                     )}
+                                    {/* HOTS Claim Toggle for Passage Question */}
+                                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl mt-3">
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={q.teacher_hots_claim || false}
+                                                onChange={e => {
+                                                    const newQs = [...editPassageForm.questions]
+                                                    newQs[idx].teacher_hots_claim = e.target.checked
+                                                    setEditPassageForm({ ...editPassageForm, questions: newQs })
+                                                }}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                        </label>
+                                        <div>
+                                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                            <p className="text-xs text-emerald-600 dark:text-emerald-400">Tandai soal ini sebagai Higher-Order Thinking</p>
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -1740,6 +1747,16 @@ export default function BankSoalPage() {
                             targetLabel="Bank Soal"
                         />
                     </div>
+                </div>
+            )}
+
+            {/* Toast notification */}
+            {toast && (
+                <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-lg border text-sm font-medium animate-in fade-in slide-in-from-bottom-3 duration-300 ${toast.type === 'success'
+                    ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-500/30 text-green-700 dark:text-green-300'
+                    : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300'
+                    }`}>
+                    {toast.type === 'success' ? '✅' : '❌'} {toast.message}
                 </div>
             )}
         </div>

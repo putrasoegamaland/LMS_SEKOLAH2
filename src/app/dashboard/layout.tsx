@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 import NotificationBell from '@/components/NotificationBell'
 import BottomNavigation from '@/components/BottomNavigation'
-import { Document as DocumentIcon, Logout } from 'react-iconly'
+import { Logout } from 'react-iconly'
 
 import Sidebar from '@/components/Sidebar'
 
@@ -49,6 +49,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         }
     }
 
+    // Detect if student is actively taking an exam or quiz (hide all navigation)
+    const isExamMode = (() => {
+        // Match /dashboard/siswa/ulangan/[id] or /dashboard/siswa/kuis/[id]
+        // But NOT /hasil pages
+        const examPattern = /^\/dashboard\/siswa\/(ulangan|kuis)\/[^/]+$/
+        return examPattern.test(pathname)
+    })()
+
+    if (isExamMode) {
+        return (
+            <div className="min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">
+                <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 overflow-y-auto animate-in fade-in duration-500" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    <style>{`main::-webkit-scrollbar { display: none; }`}</style>
+                    {children}
+                </main>
+            </div>
+        )
+    }
+
     return (
         <div className="min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">
             {/* Header */}
@@ -57,9 +76,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div className="flex items-center justify-between h-20">
                         {/* Logo */}
                         <Link href="/dashboard" className="flex items-center gap-3 group">
-                            <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform text-white">
-                                <DocumentIcon set="bold" primaryColor="white" size="large" />
-                            </div>
+                            <img src="/logo.png" alt="EDZO Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform object-cover" />
                             <div className="flex flex-col">
                                 <span className="text-xl font-bold text-white leading-none">LMS Sekolah</span>
                                 <span className="text-xs text-slate-400 font-medium tracking-wide">Slate & Mint v2.0</span>

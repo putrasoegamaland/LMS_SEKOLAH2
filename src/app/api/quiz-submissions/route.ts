@@ -301,7 +301,10 @@ export async function POST(request: NextRequest) {
         // Auto-grade multiple choice and calculate scores
         let totalScore = 0
         let maxScore = 0
-        let allGraded = true
+        // Check if there are any essay questions in the quiz
+        // If there's an essay, the quiz can NEVER be fully auto-graded
+        const hasEssays = questions.some(q => q.question_type === 'ESSAY')
+        let allGraded = !hasEssays
         let gradedAnswers: any[] = []
 
         // Only process answers if they exist
@@ -323,7 +326,6 @@ export async function POST(request: NextRequest) {
                     }
                 } else {
                     // Essay needs manual grading
-                    allGraded = false
                     return {
                         ...ans,
                         is_correct: null,

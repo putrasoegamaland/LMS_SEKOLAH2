@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { Modal, PageHeader } from '@/components/ui'
+import Link from 'next/link'
+import { Modal, PageHeader, Button } from '@/components/ui'
 
 interface ExamSubmission {
     id: string
@@ -11,6 +12,7 @@ interface ExamSubmission {
     is_submitted: boolean
     total_score: number
     max_score: number
+    is_graded: boolean
     violation_count: number
     violations_log: Array<{ type: string; timestamp: string }>
     student: {
@@ -149,6 +151,7 @@ export default function GuruExamHasilPage() {
                                 <th className="text-center p-4 text-text-secondary dark:text-zinc-400 font-medium">Nilai</th>
                                 <th className="text-center p-4 text-text-secondary dark:text-zinc-400 font-medium">Durasi</th>
                                 <th className="text-center p-4 text-text-secondary dark:text-zinc-400 font-medium">Pelanggaran</th>
+                                <th className="text-center p-4 text-text-secondary dark:text-zinc-400 font-medium">Status Koreksi</th>
                                 <th className="text-center p-4 text-text-secondary dark:text-zinc-400 font-medium">Aksi</th>
                             </tr>
                         </thead>
@@ -191,12 +194,42 @@ export default function GuruExamHasilPage() {
                                             </span>
                                         </td>
                                         <td className="p-4 text-center">
-                                            <button
-                                                onClick={() => setSelectedSubmission(sub)}
-                                                className="px-3 py-1 bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-500/30 transition-colors text-sm"
-                                            >
-                                                Detail
-                                            </button>
+                                            {sub.is_submitted ? (
+                                                sub.is_graded ? (
+                                                    <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
+                                                        Selesai Dinilai
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs rounded-full animate-pulse">
+                                                        Perlu Koreksi
+                                                    </span>
+                                                )
+                                            ) : (
+                                                <span className="text-text-secondary dark:text-zinc-500 text-xs">-</span>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            {sub.is_submitted ? (
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Link href={`/dashboard/guru/ulangan/${examId}/hasil/${sub.id}`}>
+                                                        <Button
+                                                            size="sm"
+                                                            variant={sub.is_graded ? 'ghost' : 'primary'}
+                                                            className={!sub.is_graded ? 'bg-gradient-to-r from-blue-600 to-cyan-600' : ''}
+                                                        >
+                                                            {sub.is_graded ? 'Lihat' : 'Koreksi'}
+                                                        </Button>
+                                                    </Link>
+                                                    <button
+                                                        onClick={() => setSelectedSubmission(sub)}
+                                                        className="px-3 py-1 bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-500/30 transition-colors text-sm"
+                                                    >
+                                                        Detail
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <span className="text-text-secondary dark:text-zinc-500 text-xs">Mengerjakan</span>
+                                            )}
                                         </td>
                                     </tr>
                                 ))

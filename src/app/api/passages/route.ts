@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { validateSession } from '@/lib/auth'
+import { triggerBulkHOTSAnalysis, type TriggerHOTSInput } from '@/lib/triggerHOTS'
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
             .select(`
                 *,
                 subject:subjects(id, name),
-                questions:question_bank(id, question_text, question_type, options, correct_answer, difficulty, order_in_passage)
+                questions:question_bank(id, question_text, question_type, options, correct_answer, difficulty, order_in_passage, status, teacher_hots_claim)
             `)
             .eq('teacher_id', teacher.id)
             .order('created_at', { ascending: false })
@@ -52,12 +53,33 @@ export async function GET(request: NextRequest) {
 
         if (error) throw error
 
-        // Sort questions by order_in_passage
+        // Sort questions by order_in_passage and fetch admin_reviews
+        let adminReviewMap = new Map()
+        const questionIds = data?.flatMap(p => p.questions?.map((q: any) => q.id) || []) || []
+
+        if (questionIds.length > 0) {
+            const { data: adminReviews } = await supabase
+                .from('admin_reviews')
+                .select('*')
+                .eq('question_source', 'bank')
+                .in('question_id', questionIds)
+                .order('created_at', { ascending: false })
+
+            adminReviews?.forEach((r: any) => {
+                if (!adminReviewMap.has(r.question_id)) {
+                    adminReviewMap.set(r.question_id, r)
+                }
+            })
+        }
+
         const result = data?.map(p => ({
             ...p,
-            questions: p.questions?.sort((a: any, b: any) =>
-                (a.order_in_passage || 0) - (b.order_in_passage || 0)
-            )
+            questions: p.questions
+                ?.sort((a: any, b: any) => (a.order_in_passage || 0) - (b.order_in_passage || 0))
+                .map((q: any) => ({
+                    ...q,
+                    admin_review: adminReviewMap.get(q.id) || null
+                }))
         }))
 
         return NextResponse.json(result || [])
@@ -124,14 +146,40 @@ export async function POST(request: NextRequest) {
             subject_id: subject_id || null,
             teacher_id: teacher.id,
             passage_id: passage.id,
-            order_in_passage: idx + 1
+            order_in_passage: idx + 1,
+            teacher_hots_claim: Boolean(q.teacher_hots_claim)
         }))
 
-        const { error: questionsError } = await supabase
+        const { data: insertedQuestions, error: questionsError } = await supabase
             .from('question_bank')
             .insert(questionsToInsert)
+            .select()
 
         if (questionsError) throw questionsError
+
+        // Trigger HOTS analysis for each saved question (fire-and-forget)
+        if (insertedQuestions && insertedQuestions.length > 0) {
+            // Get subject name for rubric matching
+            let subjectName = ''
+            if (subject_id) {
+                const { data: subjectData } = await supabase
+                    .from('subjects').select('name').eq('id', subject_id).single()
+                subjectName = subjectData?.name || ''
+            }
+
+            const hotsInputs: TriggerHOTSInput[] = insertedQuestions.map((q: any) => ({
+                questionId: q.id,
+                questionSource: 'bank' as const,
+                questionText: q.question_text,
+                questionType: q.question_type,
+                options: q.options,
+                correctAnswer: q.correct_answer,
+                teacherDifficulty: q.difficulty,
+                teacherHotsClaim: Boolean(q.teacher_hots_claim),
+                subjectName
+            }))
+            triggerBulkHOTSAnalysis(hotsInputs)
+        }
 
         // Return created passage with questions
         const { data: result } = await supabase
@@ -215,14 +263,39 @@ export async function PUT(request: NextRequest) {
                 subject_id: subject_id || null,
                 teacher_id: teacher.id,
                 passage_id: id,
-                order_in_passage: idx + 1
+                order_in_passage: idx + 1,
+                teacher_hots_claim: Boolean(q.teacher_hots_claim)
             }))
 
-            const { error: questionsError } = await supabase
+            const { data: updatedQuestions, error: questionsError } = await supabase
                 .from('question_bank')
                 .insert(questionsToInsert)
+                .select()
 
             if (questionsError) throw questionsError
+
+            // Trigger HOTS analysis for newly added or updated questions
+            if (updatedQuestions && updatedQuestions.length > 0) {
+                let subjectName = ''
+                if (subject_id) {
+                    const { data: subjectData } = await supabase
+                        .from('subjects').select('name').eq('id', subject_id).single()
+                    subjectName = subjectData?.name || ''
+                }
+
+                const hotsInputs: TriggerHOTSInput[] = updatedQuestions.map((q: any) => ({
+                    questionId: q.id,
+                    questionSource: 'bank' as const,
+                    questionText: q.question_text,
+                    questionType: q.question_type,
+                    options: q.options,
+                    correctAnswer: q.correct_answer,
+                    teacherDifficulty: q.difficulty,
+                    teacherHotsClaim: Boolean(q.teacher_hots_claim),
+                    subjectName
+                }))
+                triggerBulkHOTSAnalysis(hotsInputs)
+            }
         }
 
         // Return updated passage with questions

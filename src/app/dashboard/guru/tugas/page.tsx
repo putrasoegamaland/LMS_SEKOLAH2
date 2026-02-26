@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Modal, PageHeader, Button, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
-import { Edit as PenTool, Calendar, TimeCircle as Clock, Plus, ChevronDown, Paper, Activity, Search, Delete, Danger } from 'react-iconly'
+import { Edit as PenTool, Calendar, TimeCircle as Clock, Plus, ChevronDown, Paper, Activity, Search, Delete, Danger, Edit } from 'react-iconly'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -23,6 +23,7 @@ interface Assignment {
     created_at: string
     teaching_assignment: TeachingAssignment
     submissions?: { count: number }[]
+    need_grading_count?: number
 }
 
 export default function TugasPage() {
@@ -106,12 +107,19 @@ export default function TugasPage() {
             const url = editingId ? `/api/assignments/${editingId}` : '/api/assignments'
             const method = editingId ? 'PUT' : 'POST'
 
+            // Convert local datetime-local string to UTC for backend
+            let formattedDueDate = null;
+            if (formData.due_date) {
+                const localDate = new Date(formData.due_date);
+                formattedDueDate = localDate.toISOString();
+            }
+
             const res = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
-                    due_date: formData.due_date ? new Date(formData.due_date).toISOString() : null
+                    due_date: formattedDueDate
                 })
             })
 
@@ -128,12 +136,21 @@ export default function TugasPage() {
 
     const openEditModal = (assignment: Assignment) => {
         setEditingId(assignment.id)
+
+        let localDueStr = '';
+        if (assignment.due_date) {
+            const d = new Date(assignment.due_date);
+            // Adjust to local timezone for datetime-local input
+            d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+            localDueStr = d.toISOString().slice(0, 16);
+        }
+
         setFormData({
             teaching_assignment_id: assignment.teaching_assignment.id,
             title: assignment.title,
             description: assignment.description || '',
             type: assignment.type,
-            due_date: assignment.due_date ? new Date(assignment.due_date).toISOString().slice(0, 16) : ''
+            due_date: localDueStr
         })
         setShowModal(true)
     }
@@ -272,6 +289,11 @@ export default function TugasPage() {
                                                         <Danger set="bold" primaryColor="currentColor" size={12} /> Overdue
                                                     </span>
                                                 )}
+                                                {(assignment.need_grading_count || 0) > 0 && (
+                                                    <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-500/20 flex items-center gap-1">
+                                                        <Danger set="bold" primaryColor="currentColor" size={12} /> Perlu Dikoreksi: {assignment.need_grading_count}
+                                                    </span>
+                                                )}
                                             </div>
                                             <h3 className="text-xl font-bold text-text-main dark:text-white mb-1 group-hover:text-primary transition-colors">{assignment.title}</h3>
                                             <p className="text-sm text-text-secondary dark:text-zinc-400 mb-3 line-clamp-2">
@@ -302,9 +324,15 @@ export default function TugasPage() {
                                         </div>
                                         <div className="flex flex-col gap-2 min-w-[120px]">
                                             <Link href={`/dashboard/guru/tugas/${assignment.id}/hasil`}>
-                                                <Button variant="secondary" size="sm" className="w-full justify-center">
-                                                    <span className="text-secondary"><Activity set="bold" primaryColor="currentColor" size={16} /></span> Hasil
-                                                </Button>
+                                                {(assignment.need_grading_count || 0) > 0 ? (
+                                                    <Button variant="primary" size="sm" className="w-full justify-center bg-orange-500 hover:bg-orange-600 text-white border-orange-500">
+                                                        <span className="text-white"><Edit set="bold" primaryColor="currentColor" size={16} /></span> Koreksi ({assignment.need_grading_count})
+                                                    </Button>
+                                                ) : (
+                                                    <Button variant="secondary" size="sm" className="w-full justify-center">
+                                                        <span className="text-secondary"><Activity set="bold" primaryColor="currentColor" size={16} /></span> Hasil
+                                                    </Button>
+                                                )}
                                             </Link>
                                             <Button
                                                 variant="secondary"

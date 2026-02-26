@@ -67,6 +67,27 @@ export async function PUT(
         const body = await request.json()
         const { title, description, duration_minutes, is_randomized, is_active } = body
 
+        let finalIsActive = is_active
+        let isPendingPublish = false
+        let isUnderReview = false
+
+        // If trying to publish, check question statuses first
+        if (is_active === true) {
+            const { data: questions } = await supabase
+                .from('quiz_questions')
+                .select('status')
+                .eq('quiz_id', id)
+
+            if (questions && questions.length > 0) {
+                const allApproved = questions.every(q => q.status === 'approved')
+                if (!allApproved) {
+                    finalIsActive = false // Don't publish yet
+                    isPendingPublish = true
+                    isUnderReview = true
+                }
+            }
+        }
+
         // Construct update object dynamically to avoid overwriting with null/undefined
         const updateData: any = {
             updated_at: new Date().toISOString()
@@ -76,7 +97,12 @@ export async function PUT(
         if (description !== undefined) updateData.description = description
         if (duration_minutes !== undefined) updateData.duration_minutes = duration_minutes
         if (is_randomized !== undefined) updateData.is_randomized = is_randomized
-        if (is_active !== undefined) updateData.is_active = is_active
+        if (finalIsActive !== undefined) updateData.is_active = finalIsActive
+
+        // Update pending_publish status if we tried to publish
+        if (is_active !== undefined) {
+            updateData.pending_publish = isPendingPublish
+        }
 
         const { data, error } = await supabase
             .from('quizzes')
@@ -96,29 +122,42 @@ export async function PUT(
             throw error
         }
 
-        // If quiz was just published, send notifications to students
-        if (is_active === true && data?.teaching_assignment?.class_id) {
+        // If quiz was just published (NOT under review), send notifications to students
+        if (is_active === true && !isUnderReview && data?.teaching_assignment?.class_id) {
             try {
-                const { data: students } = await supabase
-                    .from('students')
-                    .select('user_id')
-                    .eq('class_id', data.teaching_assignment.class_id)
+                // Get the active academic year
+                const { data: activeYear } = await supabase
+                    .from('academic_years')
+                    .select('id')
+                    .eq('is_active', true)
+                    .single()
 
-                if (students && students.length > 0) {
-                    const subjectName = data.teaching_assignment.subject?.name || ''
-                    await supabase.from('notifications').insert(
-                        students.map(s => ({
-                            user_id: s.user_id,
-                            type: 'KUIS_BARU',
-                            title: `Kuis Baru: ${data.title}`,
-                            message: `${subjectName} - ${data.duration_minutes || 0} menit`,
-                            link: '/dashboard/siswa/kuis'
-                        }))
-                    )
+                if (activeYear) {
+                    const { data: enrollments } = await supabase
+                        .from('student_enrollments')
+                        .select('student:students(user_id)')
+                        .eq('academic_year_id', activeYear.id)
+                        .eq('class_id', data.teaching_assignment.class_id)
+
+                    if (enrollments && enrollments.length > 0) {
+                        const subjectName = data.teaching_assignment.subject?.name || ''
+                        await supabase.from('notifications').insert(
+                            enrollments.map((e: any) => ({
+                                user_id: e.student.user_id,
+                                type: 'KUIS_BARU',
+                                title: `Kuis Baru: ${data.title}`,
+                                message: `${subjectName} - ${data.duration_minutes || 0} menit`,
+                                link: '/dashboard/siswa/kuis'
+                            }))
+                        )
+                    }
                 }
             } catch (notifError) {
                 console.error('Error sending quiz notifications:', notifError)
             }
+        }
+        if (isUnderReview) {
+            return NextResponse.json({ ...data, _status: 'under_review' })
         }
 
         return NextResponse.json(data)

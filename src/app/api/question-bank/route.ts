@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
                 teacher:teachers(id, user:users(full_name))
             `)
             .eq('teacher_id', teacher.id)
+            .is('passage_id', null)
             .order('created_at', { ascending: false })
 
         if (subjectId) {
@@ -213,7 +214,9 @@ export async function POST(request: NextRequest) {
                 options: q.options || null,
                 correct_answer: q.correct_answer || null,
                 difficulty: q.difficulty || 'MEDIUM',
-                tags: q.tags || null
+                tags: q.tags || null,
+                image_url: q.image_url || null,
+                teacher_hots_claim: Boolean(q.teacher_hots_claim)
             }))
 
             const { data, error } = await supabase
@@ -250,7 +253,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Single insert
-        const { subject_id, question_text, question_type, options, correct_answer, difficulty, tags } = body
+        const { subject_id, question_text, question_type, options, correct_answer, difficulty, tags, teacher_hots_claim } = body
 
         const { data, error } = await supabase
             .from('question_bank')
@@ -262,7 +265,8 @@ export async function POST(request: NextRequest) {
                 options: options || null,
                 correct_answer: correct_answer || null,
                 difficulty: difficulty || 'MEDIUM',
-                tags: tags || null
+                tags: tags || null,
+                teacher_hots_claim: Boolean(teacher_hots_claim)
             })
             .select()
             .single()

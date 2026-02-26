@@ -184,9 +184,9 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        if (!['approve', 'return', 'archive'].includes(decision)) {
+        if (!['approve', 'return'].includes(decision)) {
             return NextResponse.json(
-                { error: 'decision harus approve, return, atau archive' },
+                { error: 'decision harus approve atau return' },
                 { status: 400 }
             )
         }
@@ -219,8 +219,7 @@ export async function POST(request: NextRequest) {
 
         const statusMap: Record<string, string> = {
             approve: 'approved',
-            return: 'returned',
-            archive: 'archived'
+            return: 'returned'
         }
 
         const { error: updateError } = await supabase
@@ -253,34 +252,68 @@ export async function POST(request: NextRequest) {
                     .eq('id', question_id)
                     .single()
                 const parent = question_source === 'quiz' ? (q as any)?.quiz : (q as any)?.exam
-                teacherUserId = parent?.teaching_assignment?.teacher?.user_id || null
+                const ta = parent?.teaching_assignment
+                const taObj = Array.isArray(ta) ? ta[0] : ta
+                const teacher = taObj?.teacher
+                const teacherObj = Array.isArray(teacher) ? teacher[0] : teacher
+                teacherUserId = teacherObj?.user_id || null
+                console.log(`[NOTIF-DEBUG] review-queue teacher lookup: parent=${JSON.stringify(parent)?.slice(0, 200)}, teacherUserId=${teacherUserId}`)
             }
 
             if (teacherUserId) {
-                const notifTitle = decision === 'approve'
-                    ? '✅ Soal Anda telah disetujui admin'
-                    : decision === 'return'
-                        ? '↩️ Soal Anda dikembalikan oleh admin'
-                        : '📦 Soal Anda telah diarsipkan'
-                const notifMessage = notes
-                    ? `Catatan admin: ${notes}`
-                    : decision === 'approve'
-                        ? 'Soal Anda telah melewati review dan disetujui.'
-                        : decision === 'return'
-                            ? 'Silakan periksa dan perbaiki soal Anda.'
-                            : 'Soal telah dipindahkan ke arsip.'
+                // Skip individual 'approve' notifications for quiz/exam questions
+                // to prevent notification spam. autoPublish handles the aggregated notification.
+                const shouldSend = !(decision === 'approve' && (question_source === 'quiz' || question_source === 'exam'))
 
-                await supabase.from('notifications').insert({
-                    user_id: teacherUserId,
-                    type: 'HOTS_REVIEW',
-                    title: notifTitle,
-                    message: notifMessage,
-                    link: '/dashboard/guru/bank-soal'
-                })
+                if (shouldSend) {
+                    const notifTitle = decision === 'approve'
+                        ? '✅ Soal Anda telah disetujui admin'
+                        : '↩️ Soal Anda dikembalikan oleh admin'
+                    const notifMessage = notes
+                        ? `Catatan admin: ${notes}`
+                        : decision === 'approve'
+                            ? 'Soal Anda telah melewati review dan disetujui.'
+                            : 'Silakan periksa dan perbaiki soal Anda.'
+
+                    let link = '/dashboard/guru/bank-soal'
+                    if (question_source === 'quiz') link = '/dashboard/guru/kuis'
+                    if (question_source === 'exam') link = '/dashboard/guru/ulangan'
+
+                    await supabase.from('notifications').insert({
+                        user_id: teacherUserId,
+                        type: 'HOTS_REVIEW',
+                        title: notifTitle,
+                        message: notifMessage,
+                        link
+                    })
+                }
             }
         } catch (notifError) {
             console.error('Error sending notification:', notifError)
             // Don't fail the main action if notification fails
+        }
+
+        // 4. If approved, check if parent quiz/exam can be auto-published
+        if (decision === 'approve' && (question_source === 'quiz' || question_source === 'exam')) {
+            try {
+                // Get the parent ID from the question
+                const sourceTable = question_source === 'quiz' ? 'quiz_questions' : 'exam_questions'
+                const parentField = question_source === 'quiz' ? 'quiz_id' : 'exam_id'
+                const { data: questionData } = await supabase
+                    .from(sourceTable)
+                    .select(parentField)
+                    .eq('id', question_id)
+                    .single()
+
+                const parentId = (questionData as any)?.[parentField]
+                if (parentId) {
+                    const { checkAndAutoPublish } = await import('@/lib/autoPublish')
+                    await checkAndAutoPublish(question_source as 'quiz' | 'exam', parentId)
+                }
+            } catch (autoPublishError) {
+                console.error('Error checking auto-publish:', autoPublishError)
+                // Don't fail the main action
+            }
         }
 
         return NextResponse.json({

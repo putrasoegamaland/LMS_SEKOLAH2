@@ -44,10 +44,26 @@ export async function GET(request: NextRequest) {
                 .single()
 
             if (activeYear) {
-                const { data: taIds } = await supabase
+                let taQuery = supabase
                     .from('teaching_assignments')
                     .select('id')
                     .eq('academic_year_id', activeYear.id)
+
+                if (user.role === 'GURU') {
+                    const { data: teacher } = await supabase
+                        .from('teachers')
+                        .select('id')
+                        .eq('user_id', user.id)
+                        .single()
+
+                    if (teacher) {
+                        taQuery = taQuery.eq('teacher_id', teacher.id)
+                    } else {
+                        return NextResponse.json([])
+                    }
+                }
+
+                const { data: taIds } = await taQuery
 
                 if (taIds && taIds.length > 0) {
                     query = query.in('teaching_assignment_id', taIds.map(t => t.id))
@@ -64,23 +80,29 @@ export async function GET(request: NextRequest) {
         // Fetch submission counts for all assignments
         if (data && data.length > 0) {
             const assignmentIds = data.map((a: any) => a.id)
-            const { data: subCounts } = await supabase
-                .from('submissions')
-                .select('assignment_id')
+            const { data: subData } = await supabase
+                .from('student_submissions')
+                .select('id, assignment_id, grade:grades(id)')
                 .in('assignment_id', assignmentIds)
 
-            // Count submissions per assignment
-            const countMap: Record<string, number> = {}
-            if (subCounts) {
-                for (const s of subCounts) {
-                    countMap[s.assignment_id] = (countMap[s.assignment_id] || 0) + 1
+            // Count submissions and ungarded ones per assignment
+            const countMap: Record<string, { total: number, ungraded: number }> = {}
+            if (subData) {
+                for (const s of subData) {
+                    const aId = s.assignment_id
+                    if (!countMap[aId]) countMap[aId] = { total: 0, ungraded: 0 }
+                    countMap[aId].total++
+                    if (!s.grade || s.grade.length === 0) {
+                        countMap[aId].ungraded++
+                    }
                 }
             }
 
             // Merge counts into assignments
             const enriched = data.map((a: any) => ({
                 ...a,
-                submissions: [{ count: countMap[a.id] || 0 }]
+                submissions: [{ count: countMap[a.id]?.total || 0 }],
+                need_grading_count: countMap[a.id]?.ungraded || 0
             }))
 
             return NextResponse.json(enriched)
@@ -130,26 +152,35 @@ export async function POST(request: NextRequest) {
                 .single()
 
             if (ta?.class_id) {
-                // Get all students in this class
-                const { data: students } = await supabaseAdmin
-                    .from('students')
-                    .select('user_id')
-                    .eq('class_id', ta.class_id)
+                // Get the active academic year
+                const { data: activeYear } = await supabaseAdmin
+                    .from('academic_years')
+                    .select('id')
+                    .eq('is_active', true)
+                    .single()
 
-                if (students && students.length > 0) {
-                    const userIds = students.map(s => s.user_id)
-                    const notifType = type === 'TUGAS' ? 'TUGAS_BARU' : 'TUGAS_BARU'
-                    const subjectName = (ta.subject as any)?.name || ''
+                if (activeYear) {
+                    const { data: enrollments } = await supabaseAdmin
+                        .from('student_enrollments')
+                        .select('student:students(user_id)')
+                        .eq('academic_year_id', activeYear.id)
+                        .eq('class_id', ta.class_id)
 
-                    await supabaseAdmin.from('notifications').insert(
-                        userIds.map(uid => ({
-                            user_id: uid,
-                            type: notifType,
-                            title: `${type === 'TUGAS' ? 'Tugas' : 'Ulangan'} Baru: ${title}`,
-                            message: `${subjectName}${due_date ? ` - Deadline: ${new Date(due_date).toLocaleDateString('id-ID')}` : ''}`,
-                            link: '/dashboard/siswa/tugas'
-                        }))
-                    )
+                    if (enrollments && enrollments.length > 0) {
+                        const userIds = enrollments.map((e: any) => e.student.user_id)
+                        const notifType = type === 'TUGAS' ? 'TUGAS_BARU' : 'TUGAS_BARU'
+                        const subjectName = (ta.subject as any)?.name || ''
+
+                        await supabaseAdmin.from('notifications').insert(
+                            userIds.map((uid: string) => ({
+                                user_id: uid,
+                                type: notifType,
+                                title: `${type === 'TUGAS' ? 'Tugas' : 'Ulangan'} Baru: ${title}`,
+                                message: `${subjectName}${due_date ? ` - Deadline: ${new Date(due_date).toLocaleDateString('id-ID')}` : ''}`,
+                                link: '/dashboard/siswa/tugas'
+                            }))
+                        )
+                    }
                 }
             }
         } catch (notifError) {

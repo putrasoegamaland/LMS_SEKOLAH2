@@ -15,6 +15,7 @@ interface Quiz {
     description: string | null
     duration_minutes: number
     is_active: boolean
+    pending_publish: boolean
     is_randomized: boolean
     created_at: string
     teaching_assignment: {
@@ -36,8 +37,9 @@ export default function GuruKuisPage() {
     const router = useRouter()
     const [quizzes, setQuizzes] = useState<Quiz[]>([])
     const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([])
-    const [studentCounts, setStudentCounts] = useState<Record<string, number>>({})
     const [submissionCounts, setSubmissionCounts] = useState<Record<string, number>>({})
+    const [pendingGradingCounts, setPendingGradingCounts] = useState<Record<string, number>>({})
+    const [studentCounts, setStudentCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [creating, setCreating] = useState(false)
@@ -116,17 +118,20 @@ export default function GuruKuisPage() {
 
             // Fetch submission counts per quiz
             const subCounts: Record<string, number> = {}
+            const pendingCounts: Record<string, number> = {}
             await Promise.all(myQuizzes.map(async (quiz: Quiz) => {
                 try {
                     const res = await fetch(`/api/quiz-submissions?quiz_id=${quiz.id}`)
                     if (res.ok) {
                         const subs = await res.json()
-                        const submitted = Array.isArray(subs) ? subs.filter((s: any) => s.submitted_at).length : 0
-                        subCounts[quiz.id] = submitted
+                        const subsArr = Array.isArray(subs) ? subs : []
+                        subCounts[quiz.id] = subsArr.filter((s: any) => s.submitted_at).length
+                        pendingCounts[quiz.id] = subsArr.filter((s: any) => s.submitted_at && !s.is_graded).length
                     }
                 } catch { }
             }))
             setSubmissionCounts(subCounts)
+            setPendingGradingCounts(pendingCounts)
         } catch (error) {
             console.error('Quiz Page - Error fetching data:', error)
             setTeachingAssignments([])
@@ -290,7 +295,9 @@ export default function GuruKuisPage() {
                                                 REMEDIAL
                                             </span>
                                         )}
-                                        {quiz.is_active ? (
+                                        {quiz.pending_publish ? (
+                                            <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs rounded-full border border-amber-200 dark:border-amber-500/20 font-bold">🔍 Under Review</span>
+                                        ) : quiz.is_active ? (
                                             <span className="px-2 py-0.5 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 text-xs rounded-full">Aktif</span>
                                         ) : (
                                             <span className="px-2 py-0.5 bg-amber-100 dark:bg-yellow-500/20 text-amber-700 dark:text-yellow-500 text-xs rounded-full border border-amber-200 dark:border-yellow-500/20">Draft</span>
@@ -313,18 +320,29 @@ export default function GuruKuisPage() {
                                         const classId = quiz.teaching_assignment?.class?.id
                                         const total = classId ? (studentCounts[classId] || 0) : 0
                                         const submitted = submissionCounts[quiz.id] || 0
+                                        const pendingGrading = pendingGradingCounts[quiz.id] || 0
                                         return (
-                                            <div className="flex items-center gap-3 mt-2">
-                                                <span className={`text-xs font-bold ${submitted >= total && total > 0 ? 'text-green-600' : 'text-primary'}`}>
-                                                    📨 {submitted}/{total} mengumpulkan
-                                                </span>
-                                                {total > 0 && (
-                                                    <div className="w-20 bg-secondary/20 rounded-full h-1.5 overflow-hidden">
-                                                        <div
-                                                            className={`h-full rounded-full transition-all duration-500 ${submitted >= total ? 'bg-green-500' : submitted > 0 ? 'bg-primary' : 'bg-secondary/30'}`}
-                                                            style={{ width: `${Math.min(100, total > 0 ? (submitted / total) * 100 : 0)}%` }}
-                                                        />
-                                                    </div>
+                                            <div className="mt-2 space-y-1">
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`text-xs font-bold ${submitted >= total && total > 0 ? 'text-green-600' : 'text-primary'}`}>
+                                                        📨 {submitted}/{total} mengumpulkan
+                                                    </span>
+                                                    {total > 0 && (
+                                                        <div className="w-20 bg-secondary/20 rounded-full h-1.5 overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-500 ${submitted >= total ? 'bg-green-500' : submitted > 0 ? 'bg-primary' : 'bg-secondary/30'}`}
+                                                                style={{ width: `${Math.min(100, total > 0 ? (submitted / total) * 100 : 0)}%` }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {pendingGrading > 0 && (
+                                                    <Link href={`/dashboard/guru/kuis/${quiz.id}/hasil`} className="block">
+                                                        <div className="flex items-center justify-between text-xs px-2 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 transition-colors cursor-pointer">
+                                                            <span className="text-amber-600 dark:text-amber-400 font-medium">📝 Perlu Dikoreksi</span>
+                                                            <span className="font-bold text-amber-600 dark:text-amber-400">{pendingGrading}</span>
+                                                        </div>
+                                                    </Link>
                                                 )}
                                             </div>
                                         )

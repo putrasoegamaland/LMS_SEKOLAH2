@@ -62,6 +62,14 @@ export default function RapihAIModal({
     const [editIdx, setEditIdx] = useState<number | null>(null)
     const [isSelectionMode, setIsSelectionMode] = useState(false)
 
+    // Error/confirm states (replacing browser alert/confirm)
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
+    const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false)
+
+    // Save to bank state
+    const [savingBank, setSavingBank] = useState(false)
+    const [savedBank, setSavedBank] = useState(false)
+
     if (!visible) return null
 
     const hasResults = results.length > 0
@@ -74,6 +82,8 @@ export default function RapihAIModal({
         setCleanText('')
         setAiMaterial('')
         setUploadFile(null)
+        setErrorMsg(null)
+        setConfirmDeleteVisible(false)
     }
 
     const handleClose = () => {
@@ -90,7 +100,7 @@ export default function RapihAIModal({
             options: q.options ? q.options.map((opt: string) => opt.replace(/\\n/g, '\n')) : q.options,
             points: 10,
             order_index: idx,
-            difficulty: undefined // Guru harus menentukan sendiri
+            difficulty: q.difficulty || undefined, // Gunakan saran AI, guru bisa edit
         }))
         setResults(processed)
         setSelected(processed.map(() => true))
@@ -110,12 +120,13 @@ export default function RapihAIModal({
             const data = await res.json()
             if (data.questions) {
                 processResults(data.questions)
+                setErrorMsg(null)
             } else if (data.error) {
-                alert('Error: ' + data.error)
+                setErrorMsg('Error: ' + data.error)
             }
         } catch (error) {
             console.error('Clean Error:', error)
-            alert('Gagal merapikan soal')
+            setErrorMsg('Gagal merapikan soal. Coba lagi.')
         } finally {
             setCleanLoading(false)
         }
@@ -140,12 +151,13 @@ export default function RapihAIModal({
             const data = await res.json()
             if (data.questions) {
                 processResults(data.questions)
+                setErrorMsg(null)
             } else if (data.error) {
-                alert('Error: ' + data.error)
+                setErrorMsg('Error: ' + data.error)
             }
         } catch (error) {
             console.error('AI Generate Error:', error)
-            alert('Gagal generate soal')
+            setErrorMsg('Gagal generate soal. Coba lagi.')
         } finally {
             setAiLoading(false)
         }
@@ -166,16 +178,18 @@ export default function RapihAIModal({
             const data = await res.json()
             if (data.questions) {
                 processResults(data.questions)
+                setErrorMsg(null)
             } else if (data.error) {
-                alert('Error: ' + data.error)
+                setErrorMsg('Error: ' + data.error)
             }
         } catch (error) {
             console.error('Upload Error:', error)
-            alert('Gagal mengekstrak soal dari dokumen')
+            setErrorMsg('Gagal mengekstrak soal dari dokumen. Coba lagi.')
         } finally {
             setUploadLoading(false)
         }
     }
+
 
     const handleSave = async () => {
         // Save ALL results (user deletes the ones they don't want)
@@ -184,8 +198,16 @@ export default function RapihAIModal({
     }
 
     const handleSaveBank = async () => {
-        // Save ALL results
-        await onSaveToBank(results)
+        if (savingBank || savedBank) return
+        setSavingBank(true)
+        try {
+            await onSaveToBank(results)
+            setSavedBank(true)
+        } catch {
+            // error handled by parent
+        } finally {
+            setSavingBank(false)
+        }
     }
 
     const tabs: { key: RapihTab; icon: React.ReactNode; label: string; desc: string; color: string; bgActive: string; bgInactive: string; borderActive: string }[] = [
@@ -223,6 +245,14 @@ export default function RapihAIModal({
                             </div>
                         </button>
                     ))}
+                </div>
+            )}
+
+            {/* Error Banner */}
+            {errorMsg && (
+                <div className="flex items-center justify-between p-3 mb-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-lg">
+                    <span className="text-sm text-red-600 dark:text-red-400 font-medium">❌ {errorMsg}</span>
+                    <button onClick={() => setErrorMsg(null)} className="text-red-400 hover:text-red-600 text-lg leading-none cursor-pointer">✕</button>
                 </div>
             )}
 
@@ -387,7 +417,7 @@ A. Jakarta  B. Bandung  C. Surabaya  D. Medan"
                 return (
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <p className="text-sm text-text-secondary dark:text-zinc-400">✅ Ditemukan {results.length} soal. Labeli kesulitan:</p>
+                            <p className="text-sm text-text-secondary dark:text-zinc-400">✅ Ditemukan {results.length} soal. Periksa & sesuaikan kesulitan:</p>
                             <div className="flex items-center gap-2">
                                 {!isSelectionMode ? (
                                     <button
@@ -404,11 +434,7 @@ A. Jakarta  B. Bandung  C. Surabaya  D. Medan"
                                         <button
                                             onClick={() => {
                                                 if (selected.some(Boolean)) {
-                                                    if (!confirm(`Hapus ${selected.filter(Boolean).length} soal yang dipilih?`)) return
-                                                    const newResults = results.filter((_, i) => !selected[i])
-                                                    setResults(newResults)
-                                                    setSelected(new Array(newResults.length).fill(false))
-                                                    // Optional: Exit selection mode after delete? User might want to delete more. Let's keep it on.
+                                                    setConfirmDeleteVisible(true)
                                                 }
                                             }}
                                             disabled={!selected.some(Boolean)}
@@ -477,7 +503,7 @@ A. Jakarta  B. Bandung  C. Surabaya  D. Medan"
                             </label>
                         </div>
 
-                        {(!allValid) && selected.some(Boolean) && (
+                        {(!allValid) && (
                             <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-lg">
                                 <span className="text-sm">⚠️</span>
                                 <span className="text-xs text-red-600 dark:text-red-400 font-medium">
@@ -642,11 +668,17 @@ A. Jakarta  B. Bandung  C. Surabaya  D. Medan"
                         </div>
 
                         <div className="flex gap-3 pt-4">
-                            <Button variant="secondary" onClick={() => { setResults([]); setSelected([]) }}>
+                            <Button variant="secondary" onClick={() => { setResults([]); setSelected([]); setSavedBank(false) }}>
                                 ← Ulangi
                             </Button>
-                            <Button variant="secondary" onClick={() => handleSaveBank()} disabled={!allValid || results.length === 0}>
-                                💾 Simpan ke Bank Soal
+                            <Button
+                                variant={savedBank ? 'secondary' : 'secondary'}
+                                onClick={() => handleSaveBank()}
+                                disabled={!allValid || results.length === 0 || savingBank || savedBank}
+                                loading={savingBank}
+                                className={savedBank ? 'bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400' : ''}
+                            >
+                                {savedBank ? '✅ Tersimpan di Bank Soal' : '💾 Simpan ke Bank Soal'}
                             </Button>
                             <Button
                                 onClick={handleSave}
@@ -662,6 +694,31 @@ A. Jakarta  B. Bandung  C. Surabaya  D. Medan"
                     </div>
                 )
             })()}
+            {/* Confirm Delete Overlay */}
+            {confirmDeleteVisible && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setConfirmDeleteVisible(false)}>
+                    <div className="bg-white dark:bg-zinc-800 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <p className="text-lg font-bold text-text-main dark:text-white mb-2">🗑️ Hapus Soal?</p>
+                        <p className="text-sm text-text-secondary dark:text-zinc-400 mb-6">
+                            Hapus {selected.filter(Boolean).length} soal yang dipilih? Tindakan ini tidak bisa dibatalkan.
+                        </p>
+                        <div className="flex gap-3">
+                            <Button variant="secondary" onClick={() => setConfirmDeleteVisible(false)} className="flex-1">Batal</Button>
+                            <Button
+                                onClick={() => {
+                                    const newResults = results.filter((_, i) => !selected[i])
+                                    setResults(newResults)
+                                    setSelected(new Array(newResults.length).fill(false))
+                                    setConfirmDeleteVisible(false)
+                                }}
+                                className="flex-1 !bg-red-500 hover:!bg-red-600 !text-white"
+                            >
+                                Hapus
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Card>
     )
 }
