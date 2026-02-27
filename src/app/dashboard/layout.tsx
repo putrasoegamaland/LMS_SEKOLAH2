@@ -76,7 +76,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div className="flex items-center justify-between h-20">
                         {/* Logo */}
                         <Link href="/dashboard" className="flex items-center gap-3 group">
-                            <img src="/logo.png" alt="EDZO Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform object-cover" />
+                            <img src="/logoedzo.png" alt="EDZO Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform object-cover" />
                             <div className="flex flex-col">
                                 <span className="text-xl font-bold text-white leading-none">LMS Sekolah</span>
                                 <span className="text-xs text-slate-400 font-medium tracking-wide">Slate & Mint v2.0</span>

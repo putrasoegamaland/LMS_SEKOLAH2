@@ -42,7 +42,7 @@ export default function LoginPage() {
                     {/* Logo/Title */}
                     <div className="text-center mb-10">
                         <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl overflow-hidden mb-6 shadow-lg shadow-emerald-500/20 ring-4 ring-white dark:ring-surface-dark transform rotate-3 hover:rotate-6 transition-transform">
-                            <img src="/logo.png" alt="EDZO Logo" className="w-full h-full object-cover" />
+                            <img src="/logoedzo.png" alt="EDZO Logo" className="w-full h-full object-cover" />
                         </div>
                         <h1 className="text-3xl font-bold text-slate-800 dark:text-white mb-2 tracking-tight">LMS Sekolah</h1>
                         <p className="text-slate-500 dark:text-slate-400">Selamat datang kembali!</p>

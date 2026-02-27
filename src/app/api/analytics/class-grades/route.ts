@@ -91,8 +91,8 @@ export async function GET(request: NextRequest) {
         // Get exam submissions (submitted ones)
         const { data: examSubmissions, error: esError } = await supabase
             .from('exam_submissions')
-            .select('id, student_id, exam_id, score, submitted_at')
-            .not('submitted_at', 'is', null)
+            .select('id, student_id, exam_id, total_score, max_score, submitted_at, is_submitted')
+            .eq('is_submitted', true)
 
         // Get exams to map to teaching assignments
         const { data: exams, error: examsError } = await supabase
@@ -170,7 +170,12 @@ export async function GET(request: NextRequest) {
 
         // Process exam submissions
         examSubmissions?.forEach(es => {
-            if (es.score === null || es.score === undefined) return
+            // Calculate percentage score (total_score / max_score * 100)
+            const examScore = es.max_score > 0
+                ? (es.total_score / es.max_score) * 100
+                : es.total_score
+
+            if (examScore === null || examScore === undefined) return
 
             const exam = exams?.find(e => e.id === es.exam_id)
             if (!exam) return
@@ -181,7 +186,7 @@ export async function GET(request: NextRequest) {
             const student = students?.find(s => s.id === es.student_id)
             if (!student || student.class_id !== ta.class_id) return
 
-            addGrade(ta.class_id, ta.subject_id, es.student_id, es.score)
+            addGrade(ta.class_id, ta.subject_id, es.student_id, examScore)
         })
 
         // Build result
