@@ -41,6 +41,7 @@ interface ClassGroup {
     targetClassName: string
     action: 'PROMOTE' | 'GRADUATE' | 'TRANSITION'
     excludedStudents: Set<string>
+    studentTargetOverrides: Map<string, string> // studentId -> targetClassId
     isCompleted: boolean
     completedCount: number
 }
@@ -255,6 +256,7 @@ export default function KenaikanKelasPage() {
                 targetClassName,
                 action,
                 excludedStudents: new Set(),
+                studentTargetOverrides: new Map(),
                 isCompleted,
                 completedCount: processedInGroup.length
             })
@@ -327,7 +329,28 @@ export default function KenaikanKelasPage() {
         const targetClass = classes.find(c => c.id === targetId)
         setClassGroups(prev => prev.map(g => {
             if (g.sourceClass.id !== classId) return g
-            return { ...g, targetClassId: targetId, targetClassName: targetClass?.name || g.targetClassName }
+            // When updating the main group target, we reset all individual overrides
+            // to ensure everyone gets the new target unless explicitly overridden again
+            return {
+                ...g,
+                targetClassId: targetId,
+                targetClassName: targetClass?.name || g.targetClassName,
+                studentTargetOverrides: new Map()
+            }
+        }))
+    }
+
+    const setStudentTargetOverride = (classId: string, studentId: string, targetId: string) => {
+        setClassGroups(prev => prev.map(g => {
+            if (g.sourceClass.id !== classId) return g
+            const newOverrides = new Map(g.studentTargetOverrides)
+            if (!targetId || targetId === g.targetClassId) {
+                // If set back to default, remove the override
+                newOverrides.delete(studentId)
+            } else {
+                newOverrides.set(studentId, targetId)
+            }
+            return { ...g, studentTargetOverrides: newOverrides }
         }))
     }
 
@@ -381,11 +404,23 @@ export default function KenaikanKelasPage() {
                     try {
                         if (isExcluded) {
                             // "Tinggal Kelas"
+                            // FIX: Use the equivalent class from the NEW target year
+                            const targetClasses = classes.filter(c => c.academic_year_id === targetYear?.id)
+                            const newYearClass = targetClasses.find(c =>
+                                c.name === group.sourceClass.name &&
+                                c.grade_level === group.sourceClass.grade_level &&
+                                c.school_level === group.sourceClass.school_level
+                            ) || targetClasses.find(c =>
+                                c.grade_level === group.sourceClass.grade_level &&
+                                c.school_level === group.sourceClass.school_level
+                            )
+                            const targetRetainedClassId = newYearClass?.id || group.sourceClass.id // Fallback to old class if really nothing matches
+
                             const res = await fetch(`/api/students/${student.id}/promote`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                    to_class_id: group.sourceClass.id,
+                                    to_class_id: targetRetainedClassId,
                                     to_academic_year_id: targetYear?.id,
                                     from_academic_year_id: sourceYear?.id,
                                     notes: `Tinggal di kelas ${group.sourceClass.name} - ${sourceYear?.name}`,
@@ -402,7 +437,8 @@ export default function KenaikanKelasPage() {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                    notes: `Lulus dari ${group.sourceClass.name} - ${sourceYear?.name}`
+                                    notes: `Lulus dari ${group.sourceClass.name} - ${sourceYear?.name}`,
+                                    academic_year_id: sourceYear?.id
                                 })
                             })
                             if (res.ok) { successIds.push(student.id) }
@@ -411,16 +447,24 @@ export default function KenaikanKelasPage() {
                                 errors.push(`Gagal memproses ${student.user.full_name}: ${errData.error}`)
                             }
                         } else if (group.action === 'TRANSITION' || group.action === 'PROMOTE') {
-                            if (group.targetClassId) {
+                            const overrideTargetId = group.studentTargetOverrides.get(student.id)
+                            const finalTargetId = overrideTargetId || group.targetClassId
+
+                            if (finalTargetId) {
+                                const finalTargetClass = overrideTargetId
+                                    ? classes.find(c => c.id === finalTargetId)
+                                    : null
+                                const finalTargetName = finalTargetClass?.name || group.targetClassName
+
                                 const actionName = group.action === 'TRANSITION' ? 'Transisi SMA' : 'Naik kelas'
                                 const res = await fetch(`/api/students/${student.id}/promote`, {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
-                                        to_class_id: group.targetClassId,
+                                        to_class_id: finalTargetId,
                                         to_academic_year_id: targetYear?.id,
                                         from_academic_year_id: sourceYear?.id,
-                                        notes: `${actionName} dari ${group.sourceClass.name} ke ${group.targetClassName} - ${sourceYear?.name}`
+                                        notes: `${actionName} dari ${group.sourceClass.name} ke ${finalTargetName} - ${sourceYear?.name}`
                                     })
                                 })
                                 if (res.ok) { successIds.push(student.id) }
@@ -792,10 +836,25 @@ export default function KenaikanKelasPage() {
                                         <div className="w-4" />
                                     )}
                                     <span className="text-xs text-text-secondary w-6 text-right">{idx + 1}.</span>
-                                    <div className="flex-1">
+                                    <div className="flex-1 flex items-center justify-between pr-4">
                                         <span className={`text-sm ${isExcluded ? 'line-through text-text-secondary' : 'text-text-main dark:text-white'}`}>
                                             {student.user.full_name || student.user.username}
                                         </span>
+                                        {isPending && !isExcluded && (group.action === 'PROMOTE' || group.action === 'TRANSITION') && targetOptions.length > 0 && (
+                                            <div className="w-48 ml-2">
+                                                <select
+                                                    value={group.studentTargetOverrides.get(student.id) || ''}
+                                                    onChange={(e) => setStudentTargetOverride(group.sourceClass.id, student.id, e.target.value)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="w-full px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                >
+                                                    <option value="">(Ikut Kelompok)</option>
+                                                    {targetOptions.map(c => (
+                                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                     <span className="text-xs text-text-secondary">{student.nis || '-'}</span>
                                     {getStudentStatusBadge(student)}

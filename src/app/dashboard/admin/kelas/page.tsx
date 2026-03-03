@@ -27,6 +27,7 @@ export default function KelasPage() {
 
     // Filter state
     const [gradeFilter, setGradeFilter] = useState<number | null>(null)
+    const [yearFilter, setYearFilter] = useState<string>('')
 
     // Students modal state
     const [showStudentsModal, setShowStudentsModal] = useState(false)
@@ -36,12 +37,12 @@ export default function KelasPage() {
 
     const fetchData = async () => {
         try {
-            const classesUrl = gradeFilter
-                ? `/api/classes?grade_level=${gradeFilter}`
-                : '/api/classes'
+            const params = new URLSearchParams()
+            if (gradeFilter) params.set('grade_level', String(gradeFilter))
+            if (yearFilter) params.set('academic_year_id', yearFilter)
 
             const [classesRes, yearsRes] = await Promise.all([
-                fetch(classesUrl),
+                fetch(`/api/classes?${params.toString()}`),
                 fetch('/api/academic-years')
             ])
             const [classesData, yearsData] = await Promise.all([
@@ -50,6 +51,14 @@ export default function KelasPage() {
             ])
             setClasses(classesData)
             setAcademicYears(yearsData)
+
+            // Auto-select active year on first load
+            if (!yearFilter && Array.isArray(yearsData)) {
+                const activeYear = yearsData.find((y: AcademicYear) => y.is_active)
+                if (activeYear) {
+                    setYearFilter(activeYear.id)
+                }
+            }
         } catch (error) {
             console.error('Error:', error)
         } finally {
@@ -64,7 +73,7 @@ export default function KelasPage() {
     useEffect(() => {
         setLoading(true)
         fetchData()
-    }, [gradeFilter])
+    }, [gradeFilter, yearFilter])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -141,38 +150,54 @@ export default function KelasPage() {
 
             {/* Filter Section */}
             <div className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-4 shadow-sm">
-                <div className="flex items-center gap-4">
-                    <label className="text-sm font-bold text-text-main dark:text-white whitespace-nowrap">
-                        Filter Tingkat:
-                    </label>
-                    <div className="relative flex-1 max-w-xs">
-                        <select
-                            value={gradeFilter || ''}
-                            onChange={(e) => setGradeFilter(e.target.value ? parseInt(e.target.value) : null)}
-                            className="w-full px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-                        >
-                            <option value="">Semua Tingkat</option>
-                            <option value="1">Kelas 1</option>
-                            <option value="2">Kelas 2</option>
-                            <option value="3">Kelas 3</option>
-                        </select>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">
-                            ▼
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm font-bold text-text-main dark:text-white whitespace-nowrap">Tahun Ajaran:</label>
+                        <div className="relative">
+                            <select
+                                value={yearFilter}
+                                onChange={(e) => setYearFilter(e.target.value)}
+                                className="px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none pr-8"
+                            >
+                                <option value="">Semua Tahun</option>
+                                {academicYears.map(y => (
+                                    <option key={y.id} value={y.id}>{y.name} {y.is_active && '(Aktif)'}</option>
+                                ))}
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary text-xs">▼</div>
                         </div>
                     </div>
-                    {gradeFilter && (
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm font-bold text-text-main dark:text-white whitespace-nowrap">Tingkat:</label>
+                        <div className="relative">
+                            <select
+                                value={gradeFilter || ''}
+                                onChange={(e) => setGradeFilter(e.target.value ? parseInt(e.target.value) : null)}
+                                className="px-4 py-2.5 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none pr-8"
+                            >
+                                <option value="">Semua Tingkat</option>
+                                <option value="1">Kelas 1</option>
+                                <option value="2">Kelas 2</option>
+                                <option value="3">Kelas 3</option>
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary text-xs">▼</div>
+                        </div>
+                    </div>
+                    {(gradeFilter || (yearFilter && yearFilter !== academicYears.find(y => y.is_active)?.id)) && (
                         <button
-                            onClick={() => setGradeFilter(null)}
-                            className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-main dark:hover:text-white transition-colors"
+                            onClick={() => {
+                                setGradeFilter(null)
+                                const activeYear = academicYears.find(y => y.is_active)
+                                setYearFilter(activeYear?.id || '')
+                            }}
+                            className="text-sm font-medium text-text-secondary hover:text-text-main dark:hover:text-white transition-colors"
                         >
                             Reset Filter
                         </button>
                     )}
-                    {gradeFilter && (
-                        <div className="text-sm text-text-secondary dark:text-zinc-400">
-                            Menampilkan: <span className="font-bold text-primary">Kelas {gradeFilter}</span> ({classes.length} kelas)
-                        </div>
-                    )}
+                    <div className="text-sm text-text-secondary dark:text-zinc-400 ml-auto">
+                        Menampilkan: <span className="font-bold text-primary">{classes.length} kelas</span>
+                    </div>
                 </div>
             </div>
 
@@ -209,7 +234,7 @@ export default function KelasPage() {
                                         <td className="px-6 py-4">
                                             {cls.school_level ? (
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${cls.school_level === 'SMP' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                                                        'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                    'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                                     }`}>
                                                     {cls.school_level}
                                                 </span>
@@ -220,12 +245,12 @@ export default function KelasPage() {
                                         <td className="px-6 py-4">
                                             {cls.grade_level ? (
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${cls.school_level === 'SMP' && cls.grade_level === 1 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                                                        cls.school_level === 'SMP' && cls.grade_level === 2 ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' :
-                                                            cls.school_level === 'SMP' && cls.grade_level === 3 ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' :
-                                                                cls.school_level === 'SMA' && cls.grade_level === 1 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                                                    cls.school_level === 'SMA' && cls.grade_level === 2 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                                                                        cls.school_level === 'SMA' && cls.grade_level === 3 ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' :
-                                                                            'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                                    cls.school_level === 'SMP' && cls.grade_level === 2 ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' :
+                                                        cls.school_level === 'SMP' && cls.grade_level === 3 ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' :
+                                                            cls.school_level === 'SMA' && cls.grade_level === 1 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                                cls.school_level === 'SMA' && cls.grade_level === 2 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                                    cls.school_level === 'SMA' && cls.grade_level === 3 ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' :
+                                                                        'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
                                                     }`}>
                                                     {cls.school_level === 'SMP' ? `MP${cls.grade_level}` : cls.school_level === 'SMA' ? `MA${cls.grade_level}` : `Tingkat ${cls.grade_level}`}
                                                 </span>

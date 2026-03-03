@@ -6,6 +6,7 @@ import { Modal, Button, PageHeader, EmptyState } from '@/components/ui'
 import SmartText from '@/components/SmartText'
 import Card from '@/components/ui/Card'
 import RapihAIModal from '@/components/RapihAIModal'
+import MathTextarea from '@/components/MathTextarea'
 import { Folder, Plus, Document, Delete, Edit, Discovery, Paper, ShieldDone, TickSquare, InfoCircle, CloseSquare, Download, Search, Danger } from 'react-iconly'
 import { Copy, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link' // Keep this import as it's used later
@@ -1151,12 +1152,11 @@ export default function BankSoalPage() {
 
                             <div>
                                 <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Pertanyaan *</label>
-                                <textarea
+                                <MathTextarea
                                     value={questionForm.question_text}
-                                    onChange={(e) => setQuestionForm({ ...questionForm, question_text: e.target.value })}
+                                    onChange={(val) => setQuestionForm({ ...questionForm, question_text: val })}
                                     rows={3}
                                     placeholder="Tulis soal..."
-                                    className="w-full px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white"
                                 />
                             </div>
 
@@ -1324,16 +1324,15 @@ export default function BankSoalPage() {
                                                 </select>
                                             </div>
 
-                                            <textarea
+                                            <MathTextarea
                                                 value={pq.question_text}
-                                                onChange={(e) => {
+                                                onChange={(val) => {
                                                     const newQuestions = [...passageForm.questions]
-                                                    newQuestions[idx].question_text = e.target.value
+                                                    newQuestions[idx].question_text = val
                                                     setPassageForm({ ...passageForm, questions: newQuestions })
                                                 }}
                                                 rows={2}
                                                 placeholder="Tulis pertanyaan..."
-                                                className="w-full px-3 py-2 bg-white dark:bg-surface-dark border border-secondary/20 rounded-lg text-sm mb-3 resize-none"
                                             />
 
                                             {pq.question_type === 'MULTIPLE_CHOICE' && (
@@ -1463,10 +1462,10 @@ export default function BankSoalPage() {
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-text-main dark:text-white mb-1">Pertanyaan</label>
-                        <textarea
+                        <MathTextarea
                             value={editQuestionForm.question_text}
-                            onChange={(e) => setEditQuestionForm({ ...editQuestionForm, question_text: e.target.value })}
-                            className="w-full p-3 border border-secondary/30 rounded-xl bg-secondary/10 text-text-main min-h-[100px]"
+                            onChange={(val) => setEditQuestionForm({ ...editQuestionForm, question_text: val })}
+                            rows={4}
                             placeholder="Tulis pertanyaan..."
                         />
                     </div>

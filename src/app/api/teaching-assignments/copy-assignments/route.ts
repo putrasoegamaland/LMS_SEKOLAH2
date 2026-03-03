@@ -88,10 +88,11 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Filter out duplicates and remap class_ids
+        // Filter out duplicates and remap class_ids (skip if no mapped class found)
         const newAssignments = sourceAssignments
+            .filter(a => classMapping[a.class_id])
             .map(a => {
-                const mappedClassId = classMapping[a.class_id] || a.class_id
+                const mappedClassId = classMapping[a.class_id]
                 return {
                     teacher_id: a.teacher_id,
                     subject_id: a.subject_id,

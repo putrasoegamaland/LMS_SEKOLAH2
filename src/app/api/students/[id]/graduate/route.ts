@@ -29,7 +29,7 @@ export async function PUT(
             return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
         }
 
-        const { notes } = await request.json()
+        const { notes, academic_year_id } = await request.json()
 
         // Get current student data with active enrollment
         const { data: student, error: studentError } = await supabase
@@ -40,6 +40,7 @@ export async function PUT(
                 enrollments:student_enrollments!student_enrollments_student_id_fkey(
                     id,
                     class_id,
+                    academic_year_id,
                     status
                 )
             `)
@@ -51,7 +52,9 @@ export async function PUT(
         }
 
         // Find active enrollment
-        const activeEnrollment = (student.enrollments as any[])?.find((e: any) => e.status === 'ACTIVE')
+        const activeEnrollment = academic_year_id
+            ? (student.enrollments as any[])?.find((e: any) => e.status === 'ACTIVE' && e.academic_year_id === academic_year_id)
+            : (student.enrollments as any[])?.find((e: any) => e.status === 'ACTIVE')
 
         if (!activeEnrollment) {
             return NextResponse.json({

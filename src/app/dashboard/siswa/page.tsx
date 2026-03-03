@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import { TimeCircle as Clock, Danger, Calendar, Document, Edit, ArrowRight } from 'react-iconly'
-import { PartyPopper, GraduationCap, Loader2 } from 'lucide-react'
+import { TimeCircle as Clock, Danger, Calendar, Document, Edit, ArrowRight, Notification } from 'react-iconly'
+import { PartyPopper, GraduationCap, Loader2, Megaphone } from 'lucide-react'
 
 interface StudentData {
     id: string
@@ -44,6 +44,7 @@ export default function SiswaDashboard() {
     // Dashboard Data State
     const [upcomingDeadlines, setUpcomingDeadlines] = useState<DeadlineItem[]>([])
     const [todaySchedule, setTodaySchedule] = useState<ScheduleEntry[]>([])
+    const [announcements, setAnnouncements] = useState<any[]>([])
 
     // Resume Modal State
     const [resumeItem, setResumeItem] = useState<{
@@ -118,6 +119,15 @@ export default function SiswaDashboard() {
                     const scheduleData = await scheduleRes.json()
 
                     setTodaySchedule(Array.isArray(scheduleData) ? scheduleData : [])
+
+                    // Fetch announcements
+                    try {
+                        const annRes = await fetch(`/api/announcements?class_id=${myStudent.class.id}&limit=5`)
+                        const annData = await annRes.json()
+                        setAnnouncements(Array.isArray(annData) ? annData : [])
+                    } catch (err) {
+                        console.error('Error fetching announcements:', err)
+                    }
 
                     const assignments = Array.isArray(assignmentsData) ? assignmentsData : []
                     const exams = Array.isArray(examsData) ? examsData : []
@@ -611,6 +621,58 @@ export default function SiswaDashboard() {
                     )}
                 </div>
             </div>
+
+            {/* Announcements Section */}
+            {!loading && announcements.length > 0 && (
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between border-b-2 border-purple-500/20 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl text-white shadow-lg shadow-purple-500/20">
+                                <Megaphone className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-text-main dark:text-white tracking-tight">Pengumuman</h2>
+                        </div>
+                        <div className="bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 text-xs font-bold px-3 py-1.5 rounded-full border border-purple-200 dark:border-purple-800">
+                            {announcements.length} Pengumuman
+                        </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {announcements.map((ann: any) => (
+                            <div key={ann.id} className="bg-white/70 dark:bg-surface-dark/70 backdrop-blur-xl border border-purple-200/50 dark:border-purple-800/30 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+                                {/* Decorative glow */}
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-bl-full -z-10"></div>
+
+                                <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
+                                            <Notification set="bold" primaryColor="currentColor" size={16} />
+                                        </div>
+                                        <h3 className="font-bold text-text-main dark:text-white line-clamp-1">{ann.title}</h3>
+                                    </div>
+                                    {ann.is_global && (
+                                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 whitespace-nowrap">
+                                            Semua Kelas
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-sm text-text-secondary dark:text-zinc-400 line-clamp-3 mb-3 leading-relaxed">{ann.content}</p>
+                                <div className="flex items-center justify-between text-xs text-text-secondary dark:text-zinc-500">
+                                    <span className="flex items-center gap-1">
+                                        <Calendar set="bold" size={12} />
+                                        {new Date(ann.published_at || ann.created_at).toLocaleDateString('id-ID', {
+                                            day: 'numeric', month: 'long', year: 'numeric'
+                                        })}
+                                    </span>
+                                    {ann.created_by_user && (
+                                        <span className="font-medium">oleh {ann.created_by_user.full_name}</span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Global Resume Modal (unchanged) */}
             {showResumeModal && resumeItem && (

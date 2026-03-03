@@ -121,7 +121,7 @@ export async function POST(
         // Trigger HOTS analysis only for questions NOT already approved from bank soal
         if (data && data.length > 0) {
             // Track which indices came from bank soal (already analyzed)
-            const bankIndices = new Set(body.map((q: any, i: number) => q.bank_status === 'approved' ? i : -1).filter((i: number) => i >= 0))
+            const bankIndices = new Set(questions.map((q: any, i: number) => q.bank_status === 'approved' ? i : -1).filter((i: number) => i >= 0))
             const questionsNeedingAnalysis = data.filter((_: any, i: number) => !bankIndices.has(i))
             if (questionsNeedingAnalysis.length > 0) {
                 const { data: exam } = await supabase

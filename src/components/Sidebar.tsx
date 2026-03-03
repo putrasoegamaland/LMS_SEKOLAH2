@@ -40,6 +40,7 @@ export const adminNav: NavItem[] = [
     { icon: Work, label: 'Guru', path: '/dashboard/admin/guru' },
     { icon: Category, label: 'Kelas', path: '/dashboard/admin/kelas' },
     { icon: Graph, label: 'Kenaikan', path: '/dashboard/admin/kenaikan-kelas' },
+    { icon: Folder, label: 'Alumni', path: '/dashboard/admin/alumni' },
     { icon: Bookmark, label: 'Mapel', path: '/dashboard/admin/mapel' },
     { icon: Calendar, label: 'Tahun', path: '/dashboard/admin/tahun-ajaran' },
     { icon: Chart, label: 'Analitik', path: '/dashboard/admin/analitik' },
