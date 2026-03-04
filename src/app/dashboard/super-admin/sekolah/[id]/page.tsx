@@ -169,12 +169,20 @@ export default function SekolahDetailPage() {
                     <h1 className="text-2xl font-bold text-text-main dark:text-white">{school.name}</h1>
                     <p className="text-text-secondary text-sm">{school.code} • {school.school_level || '-'}</p>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${school.is_active
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                    }`}>
-                    {school.is_active ? 'Aktif' : 'Nonaktif'}
-                </span>
+                <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${school.is_active
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        }`}>
+                        {school.is_active ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                    <a
+                        href={`/dashboard/super-admin/sekolah/${schoolId}/edit`}
+                        className="px-4 py-1.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-colors"
+                    >
+                        ✏️ Edit
+                    </a>
+                </div>
             </div>
 
             {/* Stats */}
