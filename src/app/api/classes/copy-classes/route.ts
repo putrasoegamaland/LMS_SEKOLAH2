@@ -31,22 +31,26 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Source and target year cannot be the same' }, { status: 400 })
         }
 
-        // Verify both years exist
-        const { data: years, error: yearsError } = await supabase
+        // Verify both years exist and belong to this school
+        let yearsQuery = supabase
             .from('academic_years')
             .select('id, name')
             .in('id', [from_year_id, to_year_id])
+        if (schoolId) yearsQuery = yearsQuery.eq('school_id', schoolId)
+        const { data: years, error: yearsError } = await yearsQuery
 
         if (yearsError) throw yearsError
         if (!years || years.length !== 2) {
             return NextResponse.json({ error: 'One or both academic years not found' }, { status: 404 })
         }
 
-        // Fetch source classes
-        const { data: sourceClasses, error: sourceError } = await supabase
+        // Fetch source classes (scoped by school)
+        let sourceQuery = supabase
             .from('classes')
             .select('id, name, grade_level, school_level, homeroom_teacher_id')
             .eq('academic_year_id', from_year_id)
+        if (schoolId) sourceQuery = sourceQuery.eq('school_id', schoolId)
+        const { data: sourceClasses, error: sourceError } = await sourceQuery
             .order('school_level')
             .order('grade_level')
 
@@ -63,11 +67,13 @@ export async function POST(request: NextRequest) {
             })
         }
 
-        // Check existing classes in target year to avoid duplicates (by name + grade_level + school_level)
-        const { data: existingClasses, error: existingError } = await supabase
+        // Check existing classes in target year
+        let existingQuery = supabase
             .from('classes')
             .select('id, name, grade_level, school_level')
             .eq('academic_year_id', to_year_id)
+        if (schoolId) existingQuery = existingQuery.eq('school_id', schoolId)
+        const { data: existingClasses, error: existingError } = await existingQuery
 
         if (existingError) throw existingError
 
@@ -93,6 +99,7 @@ export async function POST(request: NextRequest) {
                 name: c.name,
                 grade_level: c.grade_level,
                 school_level: c.school_level,
+                school_id: schoolId,
                 academic_year_id: to_year_id,
                 ...(copy_homeroom && c.homeroom_teacher_id ? { homeroom_teacher_id: c.homeroom_teacher_id } : {})
             }))

@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
             teacher_id,
             subject_id,
             academic_year_id,
-            class_id: classId
+            class_id: classId,
+            school_id: schoolId
         }))
 
         const { data, error } = await supabase
@@ -89,10 +90,12 @@ export async function DELETE(request: NextRequest) {
         // Option 1: Delete by assignment IDs (for specific deletions)
         if (assignment_ids?.length) {
             deleteQuery = deleteQuery.in('id', assignment_ids)
+            if (schoolId) deleteQuery = deleteQuery.eq('school_id', schoolId)
         }
         // Option 2: Delete by teacher + optional subject + academic year
         else {
             deleteQuery = deleteQuery.eq('teacher_id', teacher_id)
+            if (schoolId) deleteQuery = deleteQuery.eq('school_id', schoolId)
 
             if (academic_year_id) {
                 deleteQuery = deleteQuery.eq('academic_year_id', academic_year_id)

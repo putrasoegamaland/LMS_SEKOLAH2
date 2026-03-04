@@ -26,12 +26,13 @@ export async function GET(request: NextRequest) {
             return NextResponse.json([])
         }
 
-        // Get active academic year
-        const { data: activeYear } = await supabase
+        // Get active academic year (scoped by school)
+        let yearQuery = supabase
             .from('academic_years')
             .select('id')
             .eq('is_active', true)
-            .single()
+        if (schoolId) yearQuery = yearQuery.eq('school_id', schoolId)
+        const { data: activeYear } = await yearQuery.single()
 
         if (!activeYear) {
             return NextResponse.json([])

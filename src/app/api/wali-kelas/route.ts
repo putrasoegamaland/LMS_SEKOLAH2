@@ -20,25 +20,28 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Get teacher ID
-        const { data: teacher } = await supabase
+        // Get teacher ID (scoped by school)
+        let teacherQuery = supabase
             .from('teachers')
             .select('id')
             .eq('user_id', user.id)
-            .single()
+        if (schoolId) teacherQuery = teacherQuery.eq('school_id', schoolId)
+        const { data: teacher } = await teacherQuery.single()
 
         if (!teacher) {
             return NextResponse.json({ error: 'Teacher not found' }, { status: 404 })
         }
 
-        // Get class(es) where this teacher is wali kelas
-        const { data: classes, error: classError } = await supabase
+        // Get class(es) where this teacher is wali kelas (scoped by school)
+        let classQuery = supabase
             .from('classes')
             .select(`
                 id, name, grade_level, school_level,
                 academic_year:academic_years(id, name, is_active)
             `)
             .eq('homeroom_teacher_id', teacher.id)
+        if (schoolId) classQuery = classQuery.eq('school_id', schoolId)
+        const { data: classes, error: classError } = await classQuery
 
         if (classError) throw classError
 
