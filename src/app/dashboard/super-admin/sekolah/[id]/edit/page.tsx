@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 
 export default function EditSekolahPage() {
@@ -11,6 +11,9 @@ export default function EditSekolahPage() {
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+    const [logoUrl, setLogoUrl] = useState<string | null>(null)
+    const [logoUploading, setLogoUploading] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const [form, setForm] = useState({
         name: '',
         code: '',
@@ -40,6 +43,7 @@ export default function EditSekolahPage() {
                         max_teachers: data.max_teachers || 50,
                         is_active: data.is_active ?? true,
                     })
+                    setLogoUrl(data.logo_url || null)
                 } else {
                     router.push('/dashboard/super-admin/sekolah')
                 }
@@ -82,6 +86,35 @@ export default function EditSekolahPage() {
 
     const updateForm = (field: string, value: string | number | boolean) => {
         setForm(prev => ({ ...prev, [field]: value }))
+    }
+
+    const handleLogoUpload = async (file: File) => {
+        setLogoUploading(true)
+        setError('')
+
+        try {
+            const formData = new FormData()
+            formData.append('logo', file)
+
+            const res = await fetch(`/api/schools/${schoolId}/logo`, {
+                method: 'POST',
+                body: formData
+            })
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                setError(data.error || 'Gagal upload logo')
+            } else {
+                setLogoUrl(data.logo_url)
+                setSuccess('Logo berhasil diupload!')
+                setTimeout(() => setSuccess(''), 3000)
+            }
+        } catch {
+            setError('Gagal upload logo')
+        }
+
+        setLogoUploading(false)
     }
 
     if (loading) {
@@ -140,6 +173,43 @@ export default function EditSekolahPage() {
                     >
                         <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${form.is_active ? 'left-6' : 'left-0.5'}`} />
                     </button>
+                </div>
+
+                {/* Logo Upload */}
+                <div>
+                    <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Logo Sekolah</label>
+                    <div className="flex items-center gap-5">
+                        {/* Preview */}
+                        <div className="flex-shrink-0 w-24 h-24 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden">
+                            {logoUrl ? (
+                                <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
+                            ) : (
+                                <span className="text-3xl">🏫</span>
+                            )}
+                        </div>
+                        {/* Upload */}
+                        <div className="flex-1">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                className="hidden"
+                                onChange={e => {
+                                    const file = e.target.files?.[0]
+                                    if (file) handleLogoUpload(file)
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={logoUploading}
+                                className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-text-main dark:text-white text-sm font-bold rounded-xl transition-colors disabled:opacity-50"
+                            >
+                                {logoUploading ? 'Mengupload...' : logoUrl ? '🔄 Ganti Logo' : '📤 Upload Logo'}
+                            </button>
+                            <p className="text-xs text-text-secondary mt-1.5">PNG, JPG, WebP, SVG • Maks 2MB</p>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Nama */}
