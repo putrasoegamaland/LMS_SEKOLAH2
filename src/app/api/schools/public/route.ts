@@ -10,7 +10,7 @@ export async function GET() {
     try {
         const { data, error } = await supabase
             .from('schools')
-            .select('id, name, code, logo_url')
+            .select('id, name, code, logo_url, address, phone, email, school_level')
             .eq('is_active', true)
             .order('name')
 
