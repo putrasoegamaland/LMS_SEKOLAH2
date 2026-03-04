@@ -10,15 +10,9 @@ import { BatchGraduateRequest, BatchPromotionResult } from '@/lib/types'
 export async function POST(request: NextRequest) {
     try {
         // Verify authentication
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const session = await validateSession(token)
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         // Only admins can perform batch operations
         if (session.role !== 'ADMIN') {

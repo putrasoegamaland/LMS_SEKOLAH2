@@ -10,13 +10,11 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'GURU') {
+        if (user.role !== 'GURU') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 

@@ -5,15 +5,9 @@ import { validateSession } from '@/lib/auth'
 // GET all teaching assignments
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         const academicYearId = request.nextUrl.searchParams.get('academic_year_id')
         const allYears = request.nextUrl.searchParams.get('all_years')
@@ -62,13 +56,11 @@ export async function GET(request: NextRequest) {
 // POST new teaching assignment
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'ADMIN') {
+        if (user.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 

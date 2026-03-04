@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession, hashPassword } from '@/lib/auth'
+import { hashPassword } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // PUT update teacher
 export async function PUT(
@@ -9,13 +10,11 @@ export async function PUT(
 ) {
     try {
         const { id } = await params
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'ADMIN') {
+        if (user.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -87,13 +86,11 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'ADMIN') {
+        if (user.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 

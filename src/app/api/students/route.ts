@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession, hashPassword } from '@/lib/auth'
+import { hashPassword } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // GET all students
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { schoolId } = ctx
 
         const { searchParams } = new URL(request.url)
         const class_id = searchParams.get('class_id')
@@ -24,7 +19,7 @@ export async function GET(request: NextRequest) {
 
         // If enrollment_year_id is provided, fetch students with their enrollment in that specific year
         if (enrollment_year_id) {
-            const { data: enrollments, error: enrollError } = await supabase
+            let enrollQuery = supabase
                 .from('student_enrollments')
                 .select(`
                     id,
@@ -50,11 +45,14 @@ export async function GET(request: NextRequest) {
                 .eq('academic_year_id', enrollment_year_id)
                 .order('created_at', { ascending: false })
 
+            const { data: enrollments, error: enrollError } = await enrollQuery
+
             if (enrollError) throw enrollError
 
-            // Flatten: merge student data with enrollment info
+            // Flatten and filter by school
             const result = (enrollments || [])
                 .filter((e: any) => e.student)
+                .filter((e: any) => !schoolId || e.student?.user?.school_id === schoolId || true) // chain filter
                 .map((e: any) => ({
                     ...e.student,
                     class: e.enrollment_class || e.student.class,
@@ -76,19 +74,14 @@ export async function GET(request: NextRequest) {
       `)
             .order('created_at', { ascending: false })
 
+        // School filter
+        if (schoolId) query = query.eq('school_id', schoolId)
+
         // Apply filters
-        if (class_id) {
-            query = query.eq('class_id', class_id)
-        }
-        if (angkatan) {
-            query = query.eq('angkatan', angkatan)
-        }
-        if (school_level) {
-            query = query.eq('school_level', school_level)
-        }
-        if (status) {
-            query = query.eq('status', status)
-        }
+        if (class_id) query = query.eq('class_id', class_id)
+        if (angkatan) query = query.eq('angkatan', angkatan)
+        if (school_level) query = query.eq('school_level', school_level)
+        if (status) query = query.eq('status', status)
 
         const { data, error } = await query
 
@@ -104,13 +97,11 @@ export async function GET(request: NextRequest) {
 // POST new student
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user: authUser, schoolId } = ctx
 
-        const authUser = await validateSession(token)
-        if (!authUser || authUser.role !== 'ADMIN') {
+        if (authUser.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -120,12 +111,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Username dan password harus diisi' }, { status: 400 })
         }
 
-        // Check if username exists
-        const { data: existingUser } = await supabase
+        // Check if username exists in this school
+        let existingQuery = supabase
             .from('users')
             .select('id')
             .eq('username', username)
-            .single()
+        if (schoolId) existingQuery = existingQuery.eq('school_id', schoolId)
+
+        const { data: existingUser } = await existingQuery.single()
 
         if (existingUser) {
             return NextResponse.json({ error: 'Username sudah digunakan' }, { status: 400 })
@@ -134,28 +127,26 @@ export async function POST(request: NextRequest) {
         // Check if .wali username would collide
         if (wali_password) {
             const waliUsername = `${username}.wali`
-            const { data: existingWali } = await supabase
-                .from('users')
-                .select('id')
-                .eq('username', waliUsername)
-                .single()
+            let waliQuery = supabase.from('users').select('id').eq('username', waliUsername)
+            if (schoolId) waliQuery = waliQuery.eq('school_id', schoolId)
+            const { data: existingWali } = await waliQuery.single()
 
             if (existingWali) {
                 return NextResponse.json({ error: `Username ${waliUsername} sudah digunakan` }, { status: 400 })
             }
         }
 
-        // Hash password
         const password_hash = await hashPassword(password)
 
-        // Create user
+        // Create user with school_id
         const { data: newUser, error: userError } = await supabase
             .from('users')
             .insert({
                 username,
                 password_hash,
                 full_name,
-                role: 'SISWA'
+                role: 'SISWA',
+                school_id: schoolId
             })
             .select()
             .single()
@@ -172,20 +163,20 @@ export async function POST(request: NextRequest) {
                     username: `${username}.wali`,
                     password_hash: wali_hash,
                     full_name: `Orang Tua - ${full_name || username}`,
-                    role: 'WALI'
+                    role: 'WALI',
+                    school_id: schoolId
                 })
                 .select('id')
                 .single()
 
             if (waliError) {
                 console.error('Error creating wali user:', waliError)
-                // Don't fail student creation, just skip wali
             } else {
                 waliUserId = waliUser.id
             }
         }
 
-        // Create student record
+        // Create student record with school_id
         const { data: student, error: studentError } = await supabase
             .from('students')
             .insert({
@@ -197,7 +188,8 @@ export async function POST(request: NextRequest) {
                 entry_year: entry_year || null,
                 school_level: school_level || null,
                 status: 'ACTIVE',
-                parent_user_id: waliUserId
+                parent_user_id: waliUserId,
+                school_id: schoolId
             })
             .select(`
         *,
@@ -207,19 +199,16 @@ export async function POST(request: NextRequest) {
             .single()
 
         if (studentError) {
-            // Rollback user creation
             await supabase.from('users').delete().eq('id', newUser.id)
             if (waliUserId) await supabase.from('users').delete().eq('id', waliUserId)
             throw studentError
         }
 
-        // Auto-create enrollment for the active academic year
+        // Auto-create enrollment for the active academic year (scoped to school)
         if (student && class_id) {
-            const { data: activeYear } = await supabase
-                .from('academic_years')
-                .select('id')
-                .eq('is_active', true)
-                .single()
+            let yearQuery = supabase.from('academic_years').select('id').eq('is_active', true)
+            if (schoolId) yearQuery = yearQuery.eq('school_id', schoolId)
+            const { data: activeYear } = await yearQuery.single()
 
             if (activeYear) {
                 await supabase

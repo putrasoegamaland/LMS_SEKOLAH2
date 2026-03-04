@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession, hashPassword } from '@/lib/auth'
+import { hashPassword } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user: authUser, schoolId } = ctx
 
-        const authUser = await validateSession(token)
-        if (!authUser || authUser.role !== 'ADMIN') {
+        if (authUser.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 

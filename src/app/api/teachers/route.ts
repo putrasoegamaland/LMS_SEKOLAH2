@@ -1,23 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession, hashPassword } from '@/lib/auth'
+import { hashPassword } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // GET all teachers
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            console.error('API Teachers: No session_token cookie found')
-            return NextResponse.json({ error: 'Unauthorized: No token' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user) {
-            console.error('API Teachers: Session invalid or expired')
-            return NextResponse.json({ error: 'Unauthorized: Invalid session' }, { status: 401 })
-        }
-
-        const { data, error } = await supabase
+        let query = supabase
             .from('teachers')
             .select(`
         *,
@@ -25,32 +18,27 @@ export async function GET(request: NextRequest) {
       `)
             .order('created_at', { ascending: false })
 
+        // School filter
+        if (schoolId) query = query.eq('school_id', schoolId)
+
+        const { data, error } = await query
         if (error) throw error
 
         return NextResponse.json(data)
     } catch (error: any) {
-        console.error('Error fetching teachers (Detailed):', {
-            message: error.message,
-            stack: error.stack,
-            details: error
-        })
-        return NextResponse.json({
-            error: 'Server error',
-            details: error.message
-        }, { status: 500 })
+        console.error('Error fetching teachers:', error.message)
+        return NextResponse.json({ error: 'Server error', details: error.message }, { status: 500 })
     }
 }
 
 // POST new teacher (creates user + teacher record)
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user: authUser, schoolId } = ctx
 
-        const authUser = await validateSession(token)
-        if (!authUser || authUser.role !== 'ADMIN') {
+        if (authUser.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -60,41 +48,40 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Username dan password harus diisi' }, { status: 400 })
         }
 
-        // Check if username exists
-        const { data: existingUser } = await supabase
-            .from('users')
-            .select('id')
-            .eq('username', username)
-            .single()
+        // Check if username exists in this school
+        let existingQuery = supabase.from('users').select('id').eq('username', username)
+        if (schoolId) existingQuery = existingQuery.eq('school_id', schoolId)
+        const { data: existingUser } = await existingQuery.single()
 
         if (existingUser) {
             return NextResponse.json({ error: 'Username sudah digunakan' }, { status: 400 })
         }
 
-        // Hash password
         const password_hash = await hashPassword(password)
 
-        // Create user
+        // Create user with school_id
         const { data: newUser, error: userError } = await supabase
             .from('users')
             .insert({
                 username,
                 password_hash,
                 full_name,
-                role: 'GURU'
+                role: 'GURU',
+                school_id: schoolId
             })
             .select()
             .single()
 
         if (userError) throw userError
 
-        // Create teacher record
+        // Create teacher record with school_id
         const { data: teacher, error: teacherError } = await supabase
             .from('teachers')
             .insert({
                 user_id: newUser.id,
                 nip,
-                gender
+                gender,
+                school_id: schoolId
             })
             .select(`
         *,
@@ -103,7 +90,6 @@ export async function POST(request: NextRequest) {
             .single()
 
         if (teacherError) {
-            // Rollback user creation
             await supabase.from('users').delete().eq('id', newUser.id)
             throw teacherError
         }

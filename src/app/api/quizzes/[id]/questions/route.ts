@@ -10,15 +10,9 @@ export async function GET(
 ) {
     try {
         const { id } = await params
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         const { data, error } = await supabase
             .from('quiz_questions')
@@ -68,13 +62,11 @@ export async function POST(
 ) {
     try {
         const { id } = await params
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'GURU') {
+        if (user.role !== 'GURU') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -200,13 +192,11 @@ export async function PUT(
 ) {
     try {
         const { id } = await params
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'GURU') {
+        if (user.role !== 'GURU') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -249,13 +239,11 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'GURU') {
+        if (user.role !== 'GURU') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 

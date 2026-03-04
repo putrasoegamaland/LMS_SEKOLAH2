@@ -5,15 +5,9 @@ import { validateSession } from '@/lib/auth'
 // GET notifications for current user
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         const unreadOnly = request.nextUrl.searchParams.get('unread') === 'true'
         const limit = parseInt(request.nextUrl.searchParams.get('limit') || '20')
@@ -138,15 +132,9 @@ export async function GET(request: NextRequest) {
 // POST create notification (for internal use / triggers)
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         // C4 Security Fix: Only teachers and admins can create notifications
         if (user.role !== 'GURU' && user.role !== 'ADMIN') {
@@ -190,15 +178,9 @@ export async function POST(request: NextRequest) {
 // PUT mark as read
 export async function PUT(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         const body = await request.json()
         const { notification_id, mark_all } = body

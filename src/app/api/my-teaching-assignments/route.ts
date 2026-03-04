@@ -5,15 +5,9 @@ import { validateSession } from '@/lib/auth'
 // GET teaching assignments for current logged-in user
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         console.log('[My TA] User ID:', user.id)
 

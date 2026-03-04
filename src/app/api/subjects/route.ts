@@ -1,23 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // GET subjects (filtered by teacher assignments for GURU role)
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         // If user is a teacher, only return their assigned subjects
         if (user.role === 'GURU') {
-            // Get teacher record
             const { data: teacher } = await supabase
                 .from('teachers')
                 .select('id')
@@ -25,7 +18,6 @@ export async function GET(request: NextRequest) {
                 .single()
 
             if (teacher) {
-                // Get unique subjects from teaching assignments
                 const { data: assignments, error } = await supabase
                     .from('teaching_assignments')
                     .select('subject:subjects(id, name)')
@@ -33,10 +25,8 @@ export async function GET(request: NextRequest) {
 
                 if (error) throw error
 
-                // Deduplicate subjects
                 const subjectMap = new Map<string, { id: string; name: string }>()
                 assignments?.forEach((a: any) => {
-                    // Handle potential array return from join
                     const subj = Array.isArray(a.subject) ? a.subject[0] : a.subject
                     if (subj) subjectMap.set(subj.id, subj)
                 })
@@ -45,16 +35,18 @@ export async function GET(request: NextRequest) {
                 return NextResponse.json(subjects)
             }
 
-            // Teacher not found — return empty
             return NextResponse.json([])
         }
 
-        // Admin or other roles: return all subjects
-        const { data, error } = await supabase
+        // Admin or SUPER_ADMIN: return all subjects (scoped to school)
+        let query = supabase
             .from('subjects')
             .select('*')
             .order('name')
 
+        if (schoolId) query = query.eq('school_id', schoolId)
+
+        const { data, error } = await query
         if (error) throw error
 
         return NextResponse.json(data)
@@ -67,11 +59,11 @@ export async function GET(request: NextRequest) {
 // POST new subject
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        if (user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const { name } = await request.json()
 
@@ -79,7 +71,7 @@ export async function POST(request: NextRequest) {
 
         const { data, error } = await supabase
             .from('subjects')
-            .insert({ name })
+            .insert({ name, school_id: schoolId })
             .select()
             .single()
 
@@ -95,12 +87,9 @@ export async function POST(request: NextRequest) {
 // PUT update subject (e.g. KKM)
 export async function PUT(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-        const user = await validateSession(token)
-        // Allowing API for GURU or ADMIN to update KKM, though mostly ADMIN handles master data
-        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { schoolId } = ctx
 
         const { id, name, kkm } = await request.json()
         if (!id) return NextResponse.json({ error: 'ID mata pelajaran harus diisi' }, { status: 400 })
@@ -109,12 +98,14 @@ export async function PUT(request: NextRequest) {
         if (name !== undefined) updateData.name = name
         if (kkm !== undefined) updateData.kkm = kkm
 
-        const { data, error } = await supabase
+        let query = supabase
             .from('subjects')
             .update(updateData)
             .eq('id', id)
-            .select()
-            .single()
+
+        if (schoolId) query = query.eq('school_id', schoolId)
+
+        const { data, error } = await query.select().single()
 
         if (error) throw error
         return NextResponse.json(data)

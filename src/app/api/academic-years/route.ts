@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // GET all academic years
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
+
+        if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN' && user.role !== 'GURU') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const user = await validateSession(token)
-        if (!user || (user.role !== 'ADMIN' && user.role !== 'GURU')) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const { data, error } = await supabase
+        let query = supabase
             .from('academic_years')
             .select('*')
             .order('created_at', { ascending: false })
 
+        if (schoolId) query = query.eq('school_id', schoolId)
+
+        const { data, error } = await query
         if (error) throw error
 
         return NextResponse.json(data)
@@ -32,13 +33,11 @@ export async function GET(request: NextRequest) {
 // POST new academic year
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'ADMIN') {
+        if (user.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -48,18 +47,19 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Nama tahun ajaran harus diisi' }, { status: 400 })
         }
 
-        // Determine status and is_active values
-        // If status is ACTIVE, set is_active = true
-        // If is_active is true, set status = ACTIVE
         const finalStatus = status || (is_active ? 'ACTIVE' : 'PLANNED')
         const finalIsActive = is_active || status === 'ACTIVE'
 
-        // If setting as active, deactivate others first
+        // If setting as active, deactivate others in the SAME school
         if (finalIsActive) {
-            await supabase
+            let deactivateQuery = supabase
                 .from('academic_years')
                 .update({ is_active: false, status: 'COMPLETED' })
                 .eq('is_active', true)
+
+            if (schoolId) deactivateQuery = deactivateQuery.eq('school_id', schoolId)
+
+            await deactivateQuery
         }
 
         const { data, error } = await supabase
@@ -69,7 +69,8 @@ export async function POST(request: NextRequest) {
                 start_date: start_date || null,
                 end_date: end_date || null,
                 status: finalStatus,
-                is_active: finalIsActive
+                is_active: finalIsActive,
+                school_id: schoolId
             })
             .select()
             .single()

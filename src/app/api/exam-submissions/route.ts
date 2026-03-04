@@ -36,15 +36,9 @@ async function notifyTeacherExamSubmission(examId: string, studentName: string, 
 // GET exam submissions
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         const examId = request.nextUrl.searchParams.get('exam_id')
         const studentId = request.nextUrl.searchParams.get('student_id')
@@ -241,13 +235,11 @@ export async function GET(request: NextRequest) {
 // POST start exam (create submission)
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'SISWA') {
+        if (user.role !== 'SISWA') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -346,15 +338,9 @@ export async function POST(request: NextRequest) {
 // PUT update submission (submit answers, log violations)
 export async function PUT(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         const body = await request.json()
         const { submission_id, answers, submit, violation } = body

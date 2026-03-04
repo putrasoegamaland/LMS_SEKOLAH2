@@ -5,15 +5,9 @@ import { validateSession } from '@/lib/auth'
 // Diagnostic endpoint to check user's teacher and teaching assignment data
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         // H3 Security Fix: Debug routes restricted to ADMIN only
         if (user.role !== 'ADMIN') {

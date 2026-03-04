@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // GET all classes
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        // Get optional filter parameters
         const url = new URL(request.url)
         const grade_level = url.searchParams.get('grade_level')
         const academic_year_id = url.searchParams.get('academic_year_id')
@@ -32,22 +25,28 @@ export async function GET(request: NextRequest) {
         )
       `)
 
-        // Apply filters if specified
-        if (grade_level) {
-            query = query.eq('grade_level', parseInt(grade_level))
-        }
-        if (academic_year_id) {
-            query = query.eq('academic_year_id', academic_year_id)
+        // School filter: classes → academic_years.school_id
+        // We filter via academic_year's school_id
+        if (schoolId) {
+            query = query.eq('academic_year.school_id', schoolId)
         }
 
-        // Order by grade_level first (nulls last), then name
+        if (grade_level) query = query.eq('grade_level', parseInt(grade_level))
+        if (academic_year_id) query = query.eq('academic_year_id', academic_year_id)
+
         const { data, error } = await query
             .order('grade_level', { ascending: true, nullsFirst: false })
             .order('name', { ascending: true })
 
         if (error) throw error
 
-        return NextResponse.json(data)
+        // If we filtered by school via academic_year, remove classes with null academic_year
+        let filtered = data || []
+        if (schoolId) {
+            filtered = filtered.filter((c: any) => c.academic_year !== null)
+        }
+
+        return NextResponse.json(filtered)
     } catch (error) {
         console.error('Error fetching classes:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -57,13 +56,11 @@ export async function GET(request: NextRequest) {
 // POST new class
 export async function POST(request: NextRequest) {
     try {
-        const token = request.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'ADMIN') {
+        if (user.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
@@ -73,14 +70,26 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Nama kelas dan tahun ajaran harus diisi' }, { status: 400 })
         }
 
-        // Validate grade_level if provided
+        // Verify academic year belongs to this school
+        if (schoolId) {
+            const { data: ay } = await supabase
+                .from('academic_years')
+                .select('id')
+                .eq('id', academic_year_id)
+                .eq('school_id', schoolId)
+                .single()
+
+            if (!ay) {
+                return NextResponse.json({ error: 'Tahun ajaran tidak valid' }, { status: 400 })
+            }
+        }
+
         if (grade_level !== null && grade_level !== undefined) {
             if (![1, 2, 3].includes(grade_level)) {
                 return NextResponse.json({ error: 'Tingkat kelas harus 1, 2, atau 3' }, { status: 400 })
             }
         }
 
-        // Validate school_level if provided
         if (school_level !== null && school_level !== undefined) {
             if (!['SMP', 'SMA'].includes(school_level)) {
                 return NextResponse.json({ error: 'Jenjang sekolah harus SMP atau SMA' }, { status: 400 })

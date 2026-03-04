@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // GET /api/announcements - Fetch announcements
 export async function GET(req: NextRequest) {
     try {
-        const token = req.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        const user = await validateSession(token)
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(req)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
         const { searchParams } = new URL(req.url)
         const classId = searchParams.get('class_id')
@@ -29,9 +23,11 @@ export async function GET(req: NextRequest) {
             .order('published_at', { ascending: false })
             .limit(limit)
 
+        // School filter
+        if (schoolId) query = query.eq('school_id', schoolId)
+
         // Filter by class for students
         if (user.role === 'SISWA' && classId) {
-            // Get announcements that are global OR target this class
             query = query.or(`is_global.eq.true,class_ids.cs.{${classId}}`)
         }
 
@@ -55,13 +51,11 @@ export async function GET(req: NextRequest) {
 // POST /api/announcements - Create announcement (Admin only)
 export async function POST(req: NextRequest) {
     try {
-        const token = req.cookies.get('session_token')?.value
-        if (!token) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        const ctx = await getSchoolContextOrError(req)
+        if (isErrorResponse(ctx)) return ctx
+        const { user, schoolId } = ctx
 
-        const user = await validateSession(token)
-        if (!user || user.role !== 'ADMIN') {
+        if (user.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 
@@ -81,7 +75,8 @@ export async function POST(req: NextRequest) {
                 class_ids: is_global ? [] : (class_ids || []),
                 created_by: user.id,
                 expires_at: expires_at || null,
-                is_active: true
+                is_active: true,
+                school_id: schoolId
             })
             .select()
             .single()
@@ -91,13 +86,14 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
-        // Send notifications to students
+        // Send notifications to students (scoped to same school)
         try {
             let studentsQuery = supabase
                 .from('students')
                 .select('user_id, class_id')
 
-            // If global, notify all students; otherwise only target classes
+            if (schoolId) studentsQuery = studentsQuery.eq('school_id', schoolId)
+
             if (!is_global && class_ids && class_ids.length > 0) {
                 studentsQuery = studentsQuery.in('class_id', class_ids)
             }
@@ -117,7 +113,6 @@ export async function POST(req: NextRequest) {
             }
         } catch (notifError) {
             console.error('Error sending notifications:', notifError)
-            // Don't fail the request if notifications fail
         }
 
         return NextResponse.json(data, { status: 201 })
@@ -126,5 +121,3 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
 }
-
-
