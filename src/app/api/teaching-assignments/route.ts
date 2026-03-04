@@ -15,11 +15,12 @@ export async function GET(request: NextRequest) {
         // Auto-filter by active year if no specific year requested
         let filterYearId = academicYearId
         if (!filterYearId && allYears !== 'true') {
-            const { data: activeYear } = await supabase
+            let yearQuery = supabase
                 .from('academic_years')
                 .select('id')
                 .eq('is_active', true)
-                .single()
+            if (schoolId) yearQuery = yearQuery.eq('school_id', schoolId)
+            const { data: activeYear } = await yearQuery.single()
             if (activeYear) filterYearId = activeYear.id
         }
 

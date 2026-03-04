@@ -29,22 +29,24 @@ export async function POST(request: NextRequest) {
             }, { status: 400 })
         }
 
-        // Verify academic years exist
-        const { data: yearFrom, error: yearFromError } = await supabase
+        // Verify academic years exist (scoped to school)
+        let yearFromQuery = supabase
             .from('academic_years')
             .select('id, name')
             .eq('id', academic_year_from)
-            .single()
+        if (schoolId) yearFromQuery = yearFromQuery.eq('school_id', schoolId)
+        const { data: yearFrom, error: yearFromError } = await yearFromQuery.single()
 
         if (yearFromError || !yearFrom) {
             return NextResponse.json({ error: 'Source academic year not found' }, { status: 404 })
         }
 
-        const { data: yearTo, error: yearToError } = await supabase
+        let yearToQuery = supabase
             .from('academic_years')
             .select('id, name')
             .eq('id', academic_year_to)
-            .single()
+        if (schoolId) yearToQuery = yearToQuery.eq('school_id', schoolId)
+        const { data: yearTo, error: yearToError } = await yearToQuery.single()
 
         if (yearToError || !yearTo) {
             return NextResponse.json({ error: 'Target academic year not found' }, { status: 404 })

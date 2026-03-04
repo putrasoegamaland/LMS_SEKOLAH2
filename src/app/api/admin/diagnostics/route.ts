@@ -12,7 +12,9 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Run all diagnostic checks in parallel
+        // Run all diagnostic checks in parallel (scoped to school)
+        const schoolFilter = (query: any) => schoolId ? query.eq('school_id', schoolId) : query
+
         const [
             usersResult,
             studentsResult,
@@ -27,30 +29,31 @@ export async function GET(request: NextRequest) {
             noClassStudentsResult,
             academicYearsResult,
         ] = await Promise.all([
-            // Total users by role
-            supabase.from('users').select('id, role'),
-            // Total students
-            supabase.from('students').select('id, user_id, class_id, status'),
-            // Total teachers
-            supabase.from('teachers').select('id, user_id'),
-            // Active sessions
-            supabase.from('sessions').select('id, expires_at'),
-            // Orphaned students (students without matching user)
-            supabase.from('students').select('id, user_id, user:users!students_user_id_fkey(id)'),
-            // Orphaned teachers (teachers without matching user)
-            supabase.from('teachers').select('id, user_id, user:users(id)'),
-            // Quizzes with no questions
-            supabase.from('quizzes').select('id, title, quiz_questions(id)').eq('is_active', true),
-            // Exams with no questions
-            supabase.from('exams').select('id, title, exam_questions(id)').eq('is_active', true),
-            // Ungraded submissions (tugas)
+            // Total users by role (scoped)
+            schoolFilter(supabase.from('users').select('id, role')),
+            // Total students (scoped)
+            schoolFilter(supabase.from('students').select('id, user_id, class_id, status')),
+            // Total teachers (scoped)
+            schoolFilter(supabase.from('teachers').select('id, user_id')),
+            // Active sessions (join through users for school scope)
+            supabase.from('sessions').select('id, expires_at, user:users!inner(school_id)')
+                .eq('users.school_id', schoolId || ''),
+            // Orphaned students (scoped)
+            schoolFilter(supabase.from('students').select('id, user_id, user:users!students_user_id_fkey(id)')),
+            // Orphaned teachers (scoped)
+            schoolFilter(supabase.from('teachers').select('id, user_id, user:users(id)')),
+            // Quizzes with no questions (chain-filtered via TA → academic_year)
+            supabase.from('quizzes').select('id, title, quiz_questions(id), teaching_assignment:teaching_assignments!inner(academic_year:academic_years!inner(school_id))').eq('is_active', true).eq('teaching_assignments.academic_years.school_id', schoolId || ''),
+            // Exams with no questions (similar chain)
+            supabase.from('exams').select('id, title, exam_questions(id), teaching_assignment:teaching_assignments!inner(academic_year:academic_years!inner(school_id))').eq('is_active', true).eq('teaching_assignments.academic_years.school_id', schoolId || ''),
+            // Ungraded submissions
             supabase.from('student_submissions').select('id, graded_at').is('graded_at', null),
-            // Classes
-            supabase.from('classes').select('id, name'),
-            // Students without class
-            supabase.from('students').select('id').is('class_id', null).eq('status', 'ACTIVE'),
-            // Academic years
-            supabase.from('academic_years').select('id, year, is_active'),
+            // Classes (scoped via academic year)
+            supabase.from('classes').select('id, name, academic_year:academic_years!inner(school_id)').eq('academic_years.school_id', schoolId || ''),
+            // Students without class (scoped)
+            schoolFilter(supabase.from('students').select('id').is('class_id', null).eq('status', 'ACTIVE')),
+            // Academic years (scoped)
+            schoolFilter(supabase.from('academic_years').select('id, year, is_active')),
         ])
 
         const now = new Date()
@@ -68,11 +71,11 @@ export async function GET(request: NextRequest) {
         const emptyExams = (emptyExamsResult.data || []).filter((e: any) => !e.exam_questions || e.exam_questions.length === 0)
 
         // User stats
-        const adminCount = users.filter(u => u.role === 'ADMIN').length
-        const guruCount = users.filter(u => u.role === 'GURU').length
-        const siswaCount = users.filter(u => u.role === 'SISWA').length
-        const waliCount = users.filter(u => u.role === 'WALI').length
-        const noRoleCount = users.filter(u => !u.role).length
+        const adminCount = users.filter((u: any) => u.role === 'ADMIN').length
+        const guruCount = users.filter((u: any) => u.role === 'GURU').length
+        const siswaCount = users.filter((u: any) => u.role === 'SISWA').length
+        const waliCount = users.filter((u: any) => u.role === 'WALI').length
+        const noRoleCount = users.filter((u: any) => !u.role).length
 
         const diagnostics = {
             timestamp: now.toISOString(),

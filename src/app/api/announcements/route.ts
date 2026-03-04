@@ -66,6 +66,21 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Title and content are required' }, { status: 400 })
         }
 
+        // Validate class_ids belong to this school
+        if (!is_global && class_ids && class_ids.length > 0 && schoolId) {
+            const { data: validClasses } = await supabase
+                .from('classes')
+                .select('id, academic_year:academic_years!inner(school_id)')
+                .in('id', class_ids)
+
+            const invalidIds = class_ids.filter((cid: string) =>
+                !validClasses?.some((vc: any) => vc.id === cid && vc.academic_year?.school_id === schoolId)
+            )
+            if (invalidIds.length > 0) {
+                return NextResponse.json({ error: 'Beberapa kelas tidak ditemukan di sekolah ini' }, { status: 400 })
+            }
+        }
+
         const { data, error } = await supabase
             .from('announcements')
             .insert({
