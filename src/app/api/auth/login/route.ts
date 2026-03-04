@@ -28,16 +28,16 @@ setInterval(() => {
 
 export async function POST(request: NextRequest) {
     try {
-        // M1: Rate limit check
+        // M1: Rate limit check — key by IP + school to avoid cross-school collision
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown'
-        if (!checkRateLimit(ip)) {
+        const { username, password, school_id } = await request.json()
+        const rateLimitKey = `${ip}:${school_id || 'super'}`
+        if (!checkRateLimit(rateLimitKey)) {
             return NextResponse.json(
                 { error: 'Terlalu banyak percobaan login. Coba lagi dalam 1 menit.' },
                 { status: 429 }
             )
         }
-
-        const { username, password } = await request.json()
 
         if (!username || !password) {
             return NextResponse.json(
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const user = await authenticateUser(username, password)
+        const user = await authenticateUser(username, password, school_id || undefined)
 
         if (!user) {
             return NextResponse.json(
@@ -70,7 +70,9 @@ export async function POST(request: NextRequest) {
                 id: user.id,
                 username: user.username,
                 full_name: user.full_name,
-                role: user.role
+                role: user.role,
+                school_id: user.role === 'SUPER_ADMIN' ? null : user.school_id,
+                school_name: null // Will be populated by /api/auth/me
             }
         })
 

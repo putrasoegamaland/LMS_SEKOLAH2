@@ -41,6 +41,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     const getRoleLabel = (role: string) => {
         switch (role) {
+            case 'SUPER_ADMIN': return 'Super Admin'
             case 'ADMIN': return 'Administrator'
             case 'GURU': return 'Guru'
             case 'SISWA': return 'Siswa'
@@ -78,8 +79,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         <Link href="/dashboard" className="flex items-center gap-3 group">
                             <img src="/logoedzo.png" alt="EDZO Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform object-cover" />
                             <div className="flex flex-col">
-                                <span className="text-xl font-bold text-white leading-none">LMS Sekolah</span>
-                                <span className="text-xs text-slate-400 font-medium tracking-wide">Slate & Mint v2.0</span>
+                                <span className="text-xl font-bold text-white leading-none">{user?.school_name || 'LMS Sekolah'}</span>
+                                <span className="text-xs text-slate-400 font-medium tracking-wide">Learning Management System</span>
                             </div>
                         </Link>
 

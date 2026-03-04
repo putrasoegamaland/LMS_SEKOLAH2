@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/debug']
 const ROLE_PATHS: Record<string, string[]> = {
+    '/dashboard/super-admin': ['SUPER_ADMIN'],
     '/dashboard/admin': ['ADMIN'],
     '/dashboard/guru': ['GURU'],
     '/dashboard/siswa': ['SISWA'],

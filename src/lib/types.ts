@@ -1,5 +1,5 @@
 // User roles
-export type UserRole = 'ADMIN' | 'GURU' | 'SISWA' | 'WALI'
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'GURU' | 'SISWA' | 'WALI'
 
 // School levels
 export type SchoolLevel = 'SMP' | 'SMA'
@@ -22,6 +22,23 @@ export type StudentStatus =
     | 'TRANSFERRED_OUT'  // Left school
     | 'INACTIVE'         // Suspended or other
 
+// School types
+export interface School {
+    id: string
+    name: string
+    code: string
+    logo_url: string | null
+    address: string | null
+    phone: string | null
+    email: string | null
+    school_level: 'SMP' | 'SMA' | 'BOTH' | null
+    is_active: boolean
+    settings: Record<string, unknown>
+    max_students: number
+    max_teachers: number
+    created_at: string
+}
+
 // Database types
 export interface User {
     id: string
@@ -29,7 +46,9 @@ export interface User {
     password_hash: string
     full_name: string | null
     role: UserRole
+    school_id: string
     created_at: string
+    school?: School
 }
 
 export interface Session {
@@ -44,6 +63,7 @@ export interface Teacher {
     id: string
     user_id: string
     nip: string | null
+    school_id: string
     created_at: string
     user?: User
 }
@@ -53,6 +73,7 @@ export interface Student {
     user_id: string
     nis: string | null
     class_id: string | null
+    school_id: string
     angkatan: string | null          // Cohort year, e.g., "2020", "2021"
     entry_year: number | null        // Year when student entered school
     school_level: SchoolLevel | null // Current school level (SMP/SMA)
@@ -178,6 +199,8 @@ export interface AuthUser {
     username: string
     full_name: string | null
     role: UserRole
+    school_id: string | null  // null for SUPER_ADMIN
+    school_name?: string | null
 }
 
 // Quiz types

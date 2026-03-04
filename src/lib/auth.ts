@@ -54,7 +54,7 @@ export async function validateSession(token: string): Promise<AuthUser | null> {
         .from('sessions')
         .select(`
       *,
-      user:users(id, username, full_name, role)
+      user:users(id, username, full_name, role, school_id, school:schools(id, name))
     `)
         .eq('token', token)
         .gt('expires_at', new Date().toISOString())
@@ -79,7 +79,9 @@ export async function validateSession(token: string): Promise<AuthUser | null> {
         id: session.user.id,
         username: session.user.username,
         full_name: session.user.full_name,
-        role: session.user.role
+        role: session.user.role,
+        school_id: session.user.role === 'SUPER_ADMIN' ? null : session.user.school_id,
+        school_name: session.user.school?.name || null
     }
 }
 
@@ -100,15 +102,28 @@ export async function deleteExpiredSessions(): Promise<void> {
 }
 
 // User authentication
-export async function authenticateUser(username: string, password: string): Promise<User | null> {
-    const { data: user, error } = await supabase
+export async function authenticateUser(username: string, password: string, schoolId?: string): Promise<User | null> {
+    let query = supabase
         .from('users')
         .select('*')
         .eq('username', username)
-        .single()
 
-    if (error || !user) {
+    // SUPER_ADMIN logs in without school_id
+    if (schoolId) {
+        query = query.eq('school_id', schoolId)
+    }
+
+    const { data: users, error } = await query
+
+    if (error || !users || users.length === 0) {
         return null
+    }
+
+    // If no schoolId provided, only allow SUPER_ADMIN
+    let user = users[0]
+    if (!schoolId) {
+        user = users.find((u: User) => u.role === 'SUPER_ADMIN') || null
+        if (!user) return null
     }
 
     const isValid = await verifyPassword(password, user.password_hash)

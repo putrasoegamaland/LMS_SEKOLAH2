@@ -6,7 +6,7 @@ import { AuthUser } from '@/lib/types'
 interface AuthContextType {
     user: AuthUser | null
     loading: boolean
-    login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>
+    login: (username: string, password: string, schoolId?: string) => Promise<{ success: boolean; error?: string }>
     logout: () => Promise<void>
     refreshUser: () => Promise<void>
 }
@@ -37,12 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshUser()
     }, [])
 
-    const login = async (username: string, password: string) => {
+    const login = async (username: string, password: string, schoolId?: string) => {
         try {
             const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ username, password, school_id: schoolId })
             })
 
             const data = await res.json()
