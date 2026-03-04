@@ -111,14 +111,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Username dan password harus diisi' }, { status: 400 })
         }
 
-        // Check if username exists in this school
-        let existingQuery = supabase
+        // Check if username already exists (globally unique)
+        const { data: existingUser } = await supabase
             .from('users')
             .select('id')
             .eq('username', username)
-        if (schoolId) existingQuery = existingQuery.eq('school_id', schoolId)
-
-        const { data: existingUser } = await existingQuery.single()
+            .single()
 
         if (existingUser) {
             return NextResponse.json({ error: 'Username sudah digunakan' }, { status: 400 })
@@ -127,9 +125,11 @@ export async function POST(request: NextRequest) {
         // Check if .wali username would collide
         if (wali_password) {
             const waliUsername = `${username}.wali`
-            let waliQuery = supabase.from('users').select('id').eq('username', waliUsername)
-            if (schoolId) waliQuery = waliQuery.eq('school_id', schoolId)
-            const { data: existingWali } = await waliQuery.single()
+            const { data: existingWali } = await supabase
+                .from('users')
+                .select('id')
+                .eq('username', waliUsername)
+                .single()
 
             if (existingWali) {
                 return NextResponse.json({ error: `Username ${waliUsername} sudah digunakan` }, { status: 400 })

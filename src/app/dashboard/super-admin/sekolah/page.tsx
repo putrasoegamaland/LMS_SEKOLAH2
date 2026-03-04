@@ -55,6 +55,12 @@ export default function SekolahListPage() {
                     <h1 className="text-2xl font-bold text-text-main dark:text-white">Manajemen Sekolah</h1>
                     <p className="text-text-secondary text-sm mt-1">Kelola semua sekolah yang terdaftar</p>
                 </div>
+                <a
+                    href="/dashboard/super-admin/sekolah/baru"
+                    className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white font-bold text-sm rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center gap-2"
+                >
+                    <span className="text-lg">+</span> Tambah Sekolah
+                </a>
             </div>
 
             {/* Search */}

@@ -48,10 +48,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Username dan password harus diisi' }, { status: 400 })
         }
 
-        // Check if username exists in this school
-        let existingQuery = supabase.from('users').select('id').eq('username', username)
-        if (schoolId) existingQuery = existingQuery.eq('school_id', schoolId)
-        const { data: existingUser } = await existingQuery.single()
+        // Check if username already exists (globally unique)
+        const { data: existingUser } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .single()
 
         if (existingUser) {
             return NextResponse.json({ error: 'Username sudah digunakan' }, { status: 400 })

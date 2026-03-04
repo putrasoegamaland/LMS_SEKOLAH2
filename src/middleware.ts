@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/debug']
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/schools/public', '/api/debug']
 const ROLE_PATHS: Record<string, string[]> = {
     '/dashboard/super-admin': ['SUPER_ADMIN'],
     '/dashboard/admin': ['ADMIN'],
@@ -36,6 +36,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        '/((?!_next/static|_next/image|favicon.ico|api/auth/logout).*)',
+        '/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.svg$|.*\\.ico$).*)',
     ],
 }

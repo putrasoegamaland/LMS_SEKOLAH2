@@ -28,11 +28,10 @@ setInterval(() => {
 
 export async function POST(request: NextRequest) {
     try {
-        // M1: Rate limit check — key by IP + school to avoid cross-school collision
+        // M1: Rate limit check by IP
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown'
-        const { username, password, school_id } = await request.json()
-        const rateLimitKey = `${ip}:${school_id || 'super'}`
-        if (!checkRateLimit(rateLimitKey)) {
+        const { username, password } = await request.json()
+        if (!checkRateLimit(ip)) {
             return NextResponse.json(
                 { error: 'Terlalu banyak percobaan login. Coba lagi dalam 1 menit.' },
                 { status: 429 }
@@ -46,7 +45,7 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const user = await authenticateUser(username, password, school_id || undefined)
+        const user = await authenticateUser(username, password)
 
         if (!user) {
             return NextResponse.json(

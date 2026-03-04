@@ -101,29 +101,16 @@ export async function deleteExpiredSessions(): Promise<void> {
         .lt('expires_at', new Date().toISOString())
 }
 
-// User authentication
-export async function authenticateUser(username: string, password: string, schoolId?: string): Promise<User | null> {
-    let query = supabase
+// User authentication — username is globally unique
+export async function authenticateUser(username: string, password: string): Promise<User | null> {
+    const { data: user, error } = await supabase
         .from('users')
         .select('*')
         .eq('username', username)
+        .single()
 
-    // SUPER_ADMIN logs in without school_id
-    if (schoolId) {
-        query = query.eq('school_id', schoolId)
-    }
-
-    const { data: users, error } = await query
-
-    if (error || !users || users.length === 0) {
+    if (error || !user) {
         return null
-    }
-
-    // If no schoolId provided, only allow SUPER_ADMIN
-    let user = users[0]
-    if (!schoolId) {
-        user = users.find((u: User) => u.role === 'SUPER_ADMIN') || null
-        if (!user) return null
     }
 
     const isValid = await verifyPassword(password, user.password_hash)
