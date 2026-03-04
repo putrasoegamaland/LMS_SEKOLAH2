@@ -11,12 +11,43 @@ export async function GET(request: NextRequest) {
 
         const teacherId = request.nextUrl.searchParams.get('teacher_id')
         const limit = parseInt(request.nextUrl.searchParams.get('limit') || '1000') // Fetch more for aggregation
+        const schoolId = request.nextUrl.searchParams.get('school_id')
+        if (!schoolId) {
+            return NextResponse.json({ error: 'school_id parameter is required' }, { status: 400 })
+        }
 
-        // We need to fetch grades and link them back to assignments and teachers
-        // Path: grades -> student_submissions -> assignments -> teaching_assignments -> teacher_id
+        // Get school's teaching assignments first for scoping
+        let taQuery = supabase
+            .from('teaching_assignments')
+            .select('id')
+            .eq('school_id', schoolId)
+        if (teacherId) taQuery = taQuery.eq('teacher_id', teacherId)
+        const { data: tas } = await taQuery
+        const taIds = tas?.map(t => t.id) || []
 
-        // 1. Fetch grades with relations
-        let query = supabase
+        if (taIds.length === 0) {
+            return NextResponse.json({
+                meta: { total_processed: 0, avg_grading_time_hours: 0, sla_compliance_rate_percent: 0, avg_feedback_word_count: 0 },
+                data: []
+            })
+        }
+
+        // Get assignments linked to these TAs
+        const { data: assignmentsList } = await supabase
+            .from('assignments')
+            .select('id')
+            .in('teaching_assignment_id', taIds)
+        const assignmentIds = assignmentsList?.map(a => a.id) || []
+
+        if (assignmentIds.length === 0) {
+            return NextResponse.json({
+                meta: { total_processed: 0, avg_grading_time_hours: 0, sla_compliance_rate_percent: 0, avg_feedback_word_count: 0 },
+                data: []
+            })
+        }
+
+        // Fetch grades scoped to this school's assignments
+        const { data: rawGrades, error } = await supabase
             .from('grades')
             .select(`
                 id,
@@ -39,14 +70,13 @@ export async function GET(request: NextRequest) {
                     )
                 )
             `)
+            .in('submission.assignment_id', assignmentIds)
             .order('graded_at', { ascending: false })
             .limit(limit)
 
-        const { data: rawGrades, error } = await query
-
         if (error) throw error
 
-        // 2. Filter by teacher in memory (due to nested relation filtering limitations)
+        // Filter by teacher in memory if needed (for deep nested filtering)
         let filteredGrades = rawGrades || []
         if (teacherId) {
             filteredGrades = filteredGrades.filter((g: any) =>

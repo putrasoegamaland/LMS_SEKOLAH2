@@ -12,9 +12,14 @@ export async function GET(request: NextRequest) {
         const teacherId = request.nextUrl.searchParams.get('teacher_id')
         const classId = request.nextUrl.searchParams.get('class_id')
         const academicYearId = request.nextUrl.searchParams.get('academic_year_id')
+        const schoolId = request.nextUrl.searchParams.get('school_id')
+        if (!schoolId) {
+            return NextResponse.json({ error: 'school_id parameter is required' }, { status: 400 })
+        }
 
-        // 1. Get relevant teaching assignments based on filters
+        // 1. Get relevant teaching assignments based on filters (scoped by school)
         let taQuery = supabase.from('teaching_assignments').select('id, teacher_id, subject_id, class_id')
+            .eq('school_id', schoolId)
 
         if (teacherId) taQuery = taQuery.eq('teacher_id', teacherId)
         if (classId) taQuery = taQuery.eq('class_id', classId)

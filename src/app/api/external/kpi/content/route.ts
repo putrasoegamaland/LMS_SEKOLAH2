@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
         const teacherId = request.nextUrl.searchParams.get('teacher_id')
         const academicYearId = request.nextUrl.searchParams.get('academic_year_id')
         const month = request.nextUrl.searchParams.get('month') // Optional filter by month (1-12)
+        const schoolId = request.nextUrl.searchParams.get('school_id')
+        if (!schoolId) {
+            return NextResponse.json({ error: 'school_id parameter is required' }, { status: 400 })
+        }
 
         // Base filter setup
         const applyFilters = (query: any, tablePrefix: string = '') => {
@@ -24,15 +28,27 @@ export async function GET(request: NextRequest) {
             return query
         }
 
-        // 1. Get Teaching Assignment IDs for filtering if teacherId provided
+        // 1. Get Teaching Assignment IDs for filtering (always scoped by school)
         let teachingAssignmentIds: string[] = []
+        let taQuery = supabase
+            .from('teaching_assignments')
+            .select('id')
+            .eq('school_id', schoolId)
         if (teacherId) {
-            const { data: tas } = await supabase
-                .from('teaching_assignments')
-                .select('id')
-                .eq('teacher_id', teacherId)
-
-            if (tas) teachingAssignmentIds = tas.map(t => t.id)
+            taQuery = taQuery.eq('teacher_id', teacherId)
+        }
+        const { data: tas } = await taQuery
+        if (tas) teachingAssignmentIds = tas.map(t => t.id)
+        if (teachingAssignmentIds.length === 0) {
+            return NextResponse.json({
+                teacher_id: teacherId || 'all',
+                kpi_metrics: {
+                    a1_materials: { count: 0, details: [] },
+                    a2_assignments: { count: 0, details: [] },
+                    a3_exams: { count: 0, details: [] },
+                    a4_quizzes: { count: 0, details: [] }
+                }
+            })
         }
 
         // Helper to query count

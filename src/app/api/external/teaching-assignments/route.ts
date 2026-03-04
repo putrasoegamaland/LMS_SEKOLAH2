@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
         const limit = parseInt(request.nextUrl.searchParams.get('limit') || '100')
         const offset = parseInt(request.nextUrl.searchParams.get('offset') || '0')
         const academicYearId = request.nextUrl.searchParams.get('academic_year_id')
+        const schoolId = request.nextUrl.searchParams.get('school_id')
+        if (!schoolId) {
+            return NextResponse.json({ error: 'school_id parameter is required' }, { status: 400 })
+        }
 
         let query = supabase
             .from('teaching_assignments')
@@ -27,6 +31,7 @@ export async function GET(request: NextRequest) {
                 class:classes(id, name, school_level),
                 academic_year:academic_years(id, name, status)
             `, { count: 'exact' })
+            .eq('school_id', schoolId)
             .range(offset, offset + limit - 1)
 
         if (academicYearId) {

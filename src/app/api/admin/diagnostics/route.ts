@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
             supabase.from('quizzes').select('id, title, quiz_questions(id), teaching_assignment:teaching_assignments!inner(academic_year:academic_years!inner(school_id))').eq('is_active', true).eq('teaching_assignments.academic_years.school_id', schoolId || ''),
             // Exams with no questions (similar chain)
             supabase.from('exams').select('id, title, exam_questions(id), teaching_assignment:teaching_assignments!inner(academic_year:academic_years!inner(school_id))').eq('is_active', true).eq('teaching_assignments.academic_years.school_id', schoolId || ''),
-            // Ungraded submissions
-            supabase.from('student_submissions').select('id, graded_at').is('graded_at', null),
+            // Ungraded submissions (scoped via assignment → TA → academic year)
+            supabase.from('student_submissions').select('id, graded_at, assignment:assignments!inner(teaching_assignment:teaching_assignments!inner(academic_year:academic_years!inner(school_id)))').is('graded_at', null).eq('assignments.teaching_assignments.academic_years.school_id', schoolId || ''),
             // Classes (scoped via academic year)
             supabase.from('classes').select('id, name, academic_year:academic_years!inner(school_id)').eq('academic_years.school_id', schoolId || ''),
             // Students without class (scoped)
