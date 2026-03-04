@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { validateSession } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // M2: Service Role Key required because app uses custom auth (not Supabase Auth),
 // so RLS policies depending on auth.uid() won't work. Role checks enforce authorization.

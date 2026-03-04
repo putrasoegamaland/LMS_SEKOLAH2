@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // DELETE teaching assignment
 export async function DELETE(

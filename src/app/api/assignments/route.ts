@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase, supabaseAdmin } from '@/lib/supabase'
-import { validateSession } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // GET all assignments
 export async function GET(request: NextRequest) {

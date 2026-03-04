@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // Helper: Supabase single-relation selects sometimes type as array
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

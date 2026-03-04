@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
-import { validateSession } from '@/lib/auth'
+import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
 // Helper: send notification to teacher when student submits exam
 async function notifyTeacherExamSubmission(examId: string, studentName: string, isForceSubmit: boolean = false) {
