@@ -39,10 +39,12 @@ export async function PUT(
             updateData.homeroom_teacher_id = homeroom_teacher_id || null
         }
 
-        const { data, error } = await supabase
+        let updateQuery = supabase
             .from('classes')
             .update(updateData)
             .eq('id', id)
+        if (schoolId) updateQuery = updateQuery.eq('school_id', schoolId)
+        const { data, error } = await updateQuery
             .select()
             .single()
 
@@ -70,10 +72,12 @@ export async function DELETE(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { error } = await supabase
+        let deleteQuery = supabase
             .from('classes')
             .delete()
             .eq('id', id)
+        if (schoolId) deleteQuery = deleteQuery.eq('school_id', schoolId)
+        const { error } = await deleteQuery
 
         if (error) throw error
 

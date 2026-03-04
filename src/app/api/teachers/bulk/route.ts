@@ -52,7 +52,8 @@ export async function POST(request: NextRequest) {
                         username,
                         password_hash,
                         full_name,
-                        role: 'GURU'
+                        role: 'GURU',
+                        school_id: schoolId
                     })
                     .select()
                     .single()
@@ -65,7 +66,8 @@ export async function POST(request: NextRequest) {
                     .insert({
                         user_id: newUser.id,
                         nip: nip || null,
-                        gender: gender === 'L' || gender === 'P' ? gender : null
+                        gender: gender === 'L' || gender === 'P' ? gender : null,
+                        school_id: schoolId
                     })
 
                 if (teacherError) {

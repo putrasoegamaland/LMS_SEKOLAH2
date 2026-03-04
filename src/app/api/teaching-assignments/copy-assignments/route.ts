@@ -29,22 +29,26 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Source and target year cannot be the same' }, { status: 400 })
         }
 
-        // Verify both years exist
-        const { data: years, error: yearsError } = await supabase
+        // Verify both years exist and belong to this school
+        let yearsQuery = supabase
             .from('academic_years')
             .select('id, name')
             .in('id', [from_year_id, to_year_id])
+        if (schoolId) yearsQuery = yearsQuery.eq('school_id', schoolId)
+        const { data: years, error: yearsError } = await yearsQuery
 
         if (yearsError) throw yearsError
         if (!years || years.length !== 2) {
             return NextResponse.json({ error: 'One or both academic years not found' }, { status: 404 })
         }
 
-        // Fetch all assignments from source year
-        const { data: sourceAssignments, error: sourceError } = await supabase
+        // Fetch all assignments from source year (scoped by school)
+        let sourceQuery = supabase
             .from('teaching_assignments')
             .select('teacher_id, subject_id, class_id')
             .eq('academic_year_id', from_year_id)
+        if (schoolId) sourceQuery = sourceQuery.eq('school_id', schoolId)
+        const { data: sourceAssignments, error: sourceError } = await sourceQuery
 
         if (sourceError) throw sourceError
 
@@ -95,7 +99,8 @@ export async function POST(request: NextRequest) {
                     teacher_id: a.teacher_id,
                     subject_id: a.subject_id,
                     class_id: mappedClassId,
-                    academic_year_id: to_year_id
+                    academic_year_id: to_year_id,
+                    school_id: schoolId
                 }
             })
             .filter(a => !existingKeys.has(`${a.teacher_id}_${a.subject_id}_${a.class_id}`))

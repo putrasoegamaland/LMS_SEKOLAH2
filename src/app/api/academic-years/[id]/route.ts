@@ -17,11 +17,12 @@ export async function GET(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { data, error } = await supabase
+        let query = supabase
             .from('academic_years')
             .select('*')
             .eq('id', id)
-            .single()
+        if (schoolId) query = query.eq('school_id', schoolId)
+        const { data, error } = await query.single()
 
         if (error) throw error
 
@@ -53,13 +54,15 @@ export async function PUT(
         const finalStatus = status || (is_active ? 'ACTIVE' : undefined)
         const finalIsActive = is_active !== undefined ? is_active : (status === 'ACTIVE')
 
-        // If setting as active, deactivate others first
+        // If setting as active, deactivate others in same school first
         if (finalIsActive) {
-            await supabase
+            let deactivateQuery = supabase
                 .from('academic_years')
                 .update({ is_active: false, status: 'COMPLETED' })
                 .neq('id', id)
                 .eq('is_active', true)
+            if (schoolId) deactivateQuery = deactivateQuery.eq('school_id', schoolId)
+            await deactivateQuery
         }
 
         // Build update object with only provided fields
@@ -70,10 +73,12 @@ export async function PUT(
         if (finalStatus !== undefined) updateData.status = finalStatus
         if (finalIsActive !== undefined) updateData.is_active = finalIsActive
 
-        const { data, error } = await supabase
+        let updateQuery = supabase
             .from('academic_years')
             .update(updateData)
             .eq('id', id)
+        if (schoolId) updateQuery = updateQuery.eq('school_id', schoolId)
+        const { data, error } = await updateQuery
             .select()
             .single()
 
@@ -99,6 +104,19 @@ export async function DELETE(
 
         if (user.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // Verify ownership: check year belongs to school
+        if (schoolId) {
+            const { data: yearCheck } = await supabase
+                .from('academic_years')
+                .select('id')
+                .eq('id', id)
+                .eq('school_id', schoolId)
+                .single()
+            if (!yearCheck) {
+                return NextResponse.json({ error: 'Tahun ajaran tidak ditemukan' }, { status: 404 })
+            }
         }
 
         // Get all classes in this academic year
