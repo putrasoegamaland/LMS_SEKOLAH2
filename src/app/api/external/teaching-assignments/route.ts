@@ -16,6 +16,16 @@ export async function GET(request: NextRequest) {
         if (!schoolId) {
             return NextResponse.json({ error: 'school_id parameter is required' }, { status: 400 })
         }
+        // teaching_assignments doesn't have school_id directly, scope via academic_years
+        const { data: schoolYears } = await supabase
+            .from('academic_years')
+            .select('id')
+            .eq('school_id', schoolId)
+        const yearIds = schoolYears?.map(y => y.id) || []
+
+        if (yearIds.length === 0) {
+            return NextResponse.json({ data: [], total: 0 })
+        }
 
         let query = supabase
             .from('teaching_assignments')
@@ -31,7 +41,7 @@ export async function GET(request: NextRequest) {
                 class:classes(id, name, school_level),
                 academic_year:academic_years(id, name, status)
             `, { count: 'exact' })
-            .eq('school_id', schoolId)
+            .in('academic_year_id', yearIds)
             .range(offset, offset + limit - 1)
 
         if (academicYearId) {

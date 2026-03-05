@@ -52,12 +52,11 @@ export async function GET(request: NextRequest) {
 
         if (studentsError) throw studentsError
 
-        // Get teaching assignments for this academic year (already school-scoped via academic_year)
+        // Get teaching assignments for this academic year (scoped by school via academic_year)
         const { data: teachingAssignments, error: taError } = await supabase
             .from('teaching_assignments')
             .select('id, class_id, subject_id')
             .eq('academic_year_id', academicYearId)
-            .eq('school_id', schoolId)
 
         if (taError) throw taError
 

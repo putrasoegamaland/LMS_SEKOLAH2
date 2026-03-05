@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
         if (teachersError) throw teachersError
 
-        // Get all assignments for this academic year (scoped by school)
+        // Get all assignments for this academic year (scoped by school via academic year)
         let assignmentsQuery = supabase
             .from('teaching_assignments')
             .select(`
@@ -38,7 +38,6 @@ export async function GET(request: NextRequest) {
                 subject:subjects(id, name),
                 class:classes(id, name, school_level, grade_level)
             `)
-        if (schoolId) assignmentsQuery = assignmentsQuery.eq('school_id', schoolId)
 
         if (academicYearId) {
             assignmentsQuery = assignmentsQuery.eq('academic_year_id', academicYearId)

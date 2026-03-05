@@ -17,9 +17,19 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'school_id parameter is required' }, { status: 400 })
         }
 
-        // 1. Get relevant teaching assignments based on filters (scoped by school)
-        let taQuery = supabase.from('teaching_assignments').select('id, teacher_id, subject_id, class_id')
+        // 1. Get relevant teaching assignments (scoped by school via academic_years)
+        const { data: schoolYears } = await supabase
+            .from('academic_years')
+            .select('id')
             .eq('school_id', schoolId)
+        const yearIds = schoolYears?.map(y => y.id) || []
+
+        let taQuery = supabase.from('teaching_assignments').select('id, teacher_id, subject_id, class_id')
+        if (yearIds.length > 0) {
+            taQuery = taQuery.in('academic_year_id', yearIds)
+        } else {
+            return NextResponse.json([])
+        }
 
         if (teacherId) taQuery = taQuery.eq('teacher_id', teacherId)
         if (classId) taQuery = taQuery.eq('class_id', classId)

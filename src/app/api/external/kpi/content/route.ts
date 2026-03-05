@@ -28,17 +28,26 @@ export async function GET(request: NextRequest) {
             return query
         }
 
-        // 1. Get Teaching Assignment IDs for filtering (always scoped by school)
-        let teachingAssignmentIds: string[] = []
-        let taQuery = supabase
-            .from('teaching_assignments')
+        // 1. Get Teaching Assignment IDs for filtering (scoped by school via academic_years)
+        // teaching_assignments doesn't have school_id directly
+        const { data: schoolYears } = await supabase
+            .from('academic_years')
             .select('id')
             .eq('school_id', schoolId)
-        if (teacherId) {
-            taQuery = taQuery.eq('teacher_id', teacherId)
+        const yearIds = schoolYears?.map(y => y.id) || []
+
+        let teachingAssignmentIds: string[] = []
+        if (yearIds.length > 0) {
+            let taQuery = supabase
+                .from('teaching_assignments')
+                .select('id')
+                .in('academic_year_id', yearIds)
+            if (teacherId) {
+                taQuery = taQuery.eq('teacher_id', teacherId)
+            }
+            const { data: tas } = await taQuery
+            if (tas) teachingAssignmentIds = tas.map(t => t.id)
         }
-        const { data: tas } = await taQuery
-        if (tas) teachingAssignmentIds = tas.map(t => t.id)
         if (teachingAssignmentIds.length === 0) {
             return NextResponse.json({
                 teacher_id: teacherId || 'all',

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
             .from('classes')
             .select('id, name, grade_level, school_level, homeroom_teacher_id')
             .eq('academic_year_id', from_year_id)
-        if (schoolId) sourceQuery = sourceQuery.eq('school_id', schoolId)
+        // classes scoped via academic_year_id (which is already verified above)
         const { data: sourceClasses, error: sourceError } = await sourceQuery
             .order('school_level')
             .order('grade_level')
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
             .from('classes')
             .select('id, name, grade_level, school_level')
             .eq('academic_year_id', to_year_id)
-        if (schoolId) existingQuery = existingQuery.eq('school_id', schoolId)
+        // classes scoped via academic_year_id (which is already verified above)
         const { data: existingClasses, error: existingError } = await existingQuery
 
         if (existingError) throw existingError

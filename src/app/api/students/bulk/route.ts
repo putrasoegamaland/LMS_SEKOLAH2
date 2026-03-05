@@ -18,11 +18,20 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Payload harus berupa array' }, { status: 400 })
         }
 
-        // Fetch all classes to map class names to IDs
-        const { data: classesData, error: classesError } = await supabase
-            .from('classes')
-            .select('id, name')
+        // Fetch all classes to map class names to IDs (scoped via academic year)
+        // classes don't have school_id directly - scope via academic_years
+        const { data: schoolYears } = await supabase
+            .from('academic_years')
+            .select('id')
             .eq('school_id', schoolId)
+        const yearIds = schoolYears?.map(y => y.id) || []
+
+        const { data: classesData, error: classesError } = yearIds.length > 0
+            ? await supabase
+                .from('classes')
+                .select('id, name')
+                .in('academic_year_id', yearIds)
+            : { data: [] as any[], error: null }
 
         if (classesError) throw classesError
 

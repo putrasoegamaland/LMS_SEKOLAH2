@@ -69,12 +69,11 @@ export async function PUT(
             }, { status: 400 })
         }
 
-        // Verify target class exists (scoped by school)
+        // Verify target class exists
         let classQuery = supabase
             .from('classes')
             .select('id, name, academic_year_id, school_level')
             .eq('id', to_class_id)
-        if (schoolId) classQuery = classQuery.eq('school_id', schoolId)
         const { data: targetClass, error: classError } = await classQuery.single()
 
         if (classError || !targetClass) {
