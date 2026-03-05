@@ -449,44 +449,56 @@ export async function PUT(request: NextRequest) {
         }
 
         // Handle saving/submitting answers
-        if (answers && Array.isArray(answers)) {
-            for (const ans of answers) {
-                // Get question to check answer
-                const { data: question } = await supabase
-                    .from('exam_questions')
-                    .select('correct_answer, points')
-                    .eq('id', ans.question_id)
-                    .single()
+        if (answers && Array.isArray(answers) && answers.length > 0) {
+            // BATCH OPTIMIZATION: Fetch ALL exam questions in 1 query instead of N
+            const { data: allQuestions } = await supabase
+                .from('exam_questions')
+                .select('id, correct_answer, points, question_type')
+                .eq('exam_id', currentSubmission.exam_id)
 
+            // Build a lookup map for instant grading
+            const questionMap = new Map<string, { correct_answer: string; points: number; question_type: string }>()
+            allQuestions?.forEach(q => questionMap.set(q.id, q))
+
+            // Grade all answers in memory
+            const gradedAnswers = answers.map((ans: { question_id: string; answer: string }) => {
+                const question = questionMap.get(ans.question_id)
                 const isCorrect = question?.correct_answer === ans.answer
                 const pointsEarned = isCorrect ? (question?.points || 1) : 0
 
-                // Upsert answer
-                await supabase
-                    .from('exam_answers')
-                    .upsert({
-                        submission_id,
-                        question_id: ans.question_id,
-                        answer: ans.answer,
-                        is_correct: isCorrect,
-                        points_earned: pointsEarned
-                    }, {
-                        onConflict: 'submission_id,question_id'
-                    })
+                return {
+                    submission_id,
+                    question_id: ans.question_id,
+                    answer: ans.answer,
+                    is_correct: isCorrect,
+                    points_earned: pointsEarned
+                }
+            })
+
+            // BATCH UPSERT: 1 query instead of N
+            const { error: upsertError } = await supabase
+                .from('exam_answers')
+                .upsert(gradedAnswers, {
+                    onConflict: 'submission_id,question_id'
+                })
+
+            if (upsertError) {
+                console.error('Error batch upserting answers:', upsertError)
+                throw upsertError
             }
         }
 
         // Handle final submission
         if (submit) {
-            // Calculate total score and check if there are any essay questions
+            // Fetch all saved answers to compute final score
             const { data: allAnswers } = await supabase
                 .from('exam_answers')
-                .select('points_earned, question:exam_questions(question_type)')
+                .select('points_earned')
                 .eq('submission_id', submission_id)
 
             const totalScore = allAnswers?.reduce((sum, a) => sum + (a.points_earned || 0), 0) || 0
 
-            // If there are no essay questions in the exam, it's fully auto-graded
+            // Check if there are essay questions in the exam
             const { data: examQuestions } = await supabase
                 .from('exam_questions')
                 .select('question_type')

@@ -80,17 +80,21 @@ export async function PUT(
         const id = params.id
         const { answers, total_score, is_graded } = await request.json()
 
-        // Update individual exam_answers rows with scores and feedback
-        if (answers && Array.isArray(answers)) {
-            for (const ans of answers) {
-                await supabase
-                    .from('exam_answers')
-                    .update({
-                        points_earned: ans.score ?? ans.points_earned ?? 0
-                    })
-                    .eq('submission_id', id)
-                    .eq('question_id', ans.question_id)
-            }
+        // BATCH UPDATE: Update all exam_answers scores at once instead of one-by-one
+        if (answers && Array.isArray(answers) && answers.length > 0) {
+            const updates = answers.map((ans: any) => ({
+                submission_id: id,
+                question_id: ans.question_id,
+                points_earned: ans.score ?? ans.points_earned ?? 0,
+                // Preserve existing fields by including them
+                answer: ans.answer,
+                is_correct: ans.is_correct,
+                feedback: ans.feedback || null
+            }))
+
+            await supabase
+                .from('exam_answers')
+                .upsert(updates, { onConflict: 'submission_id,question_id' })
         }
 
         // Update the submission record with total_score and is_graded

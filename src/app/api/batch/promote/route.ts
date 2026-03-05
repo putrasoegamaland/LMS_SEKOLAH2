@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
             }, { status: 404 })
         }
 
-        // Process each student promotion
+        // BATCH OPTIMIZATION: Validate all students in memory, then batch DB operations
         const result: BatchPromotionResult = {
             success: true,
             promoted_count: 0,
@@ -120,81 +120,89 @@ export async function POST(request: NextRequest) {
 
         const now = new Date().toISOString()
 
+        // 1. Validate all students and prepare batch data in memory
+        const enrollmentIdsToEnd: string[] = []
+        const newEnrollments: any[] = []
+        const studentClassUpdates: { id: string; to_class_id: string }[] = []
+
         for (const student of students) {
-            try {
-                // Find active enrollment
-                const activeEnrollment = student.enrollments?.find((e: any) =>
-                    e.status === 'ACTIVE' && e.academic_year_id === academic_year_from
-                )
+            const activeEnrollment = student.enrollments?.find((e: any) =>
+                e.status === 'ACTIVE' && e.academic_year_id === academic_year_from
+            )
 
-                if (!activeEnrollment) {
-                    result.failed_count++
-                    const userName = (student.user as { full_name?: string } | null)?.full_name || 'Unknown'
-                    result.errors.push({
-                        student_id: student.id,
-                        student_name: userName,
-                        error: 'No active enrollment in source academic year'
-                    })
-                    continue
-                }
-
-                // Find target class from mapping
-                const mapping = class_mappings.find(m => m.from_class_id === student.class_id)
-                if (!mapping) {
-                    result.failed_count++
-                    const userName = (student.user as { full_name?: string } | null)?.full_name || 'Unknown'
-                    result.errors.push({
-                        student_id: student.id,
-                        student_name: userName,
-                        error: 'No class mapping found'
-                    })
-                    continue
-                }
-
-                // 1. End current enrollment
-                const { error: endError } = await supabase
-                    .from('student_enrollments')
-                    .update({
-                        status: 'PROMOTED',
-                        ended_at: now,
-                        updated_at: now,
-                        notes: `Batch promoted to ${yearTo.name}`
-                    })
-                    .eq('id', activeEnrollment.id)
-
-                if (endError) throw endError
-
-                // 2. Create new enrollment
-                const { error: createError } = await supabase
-                    .from('student_enrollments')
-                    .insert({
-                        student_id: student.id,
-                        class_id: mapping.to_class_id,
-                        academic_year_id: academic_year_to,
-                        status: 'ACTIVE',
-                        notes: `Batch promoted from ${yearFrom.name}`
-                    })
-
-                if (createError) throw createError
-
-                // 3. Update student's current class
-                const { error: updateError } = await supabase
-                    .from('students')
-                    .update({ class_id: mapping.to_class_id })
-                    .eq('id', student.id)
-
-                if (updateError) throw updateError
-
-                result.promoted_count++
-
-            } catch (error: any) {
+            if (!activeEnrollment) {
                 result.failed_count++
                 const userName = (student.user as { full_name?: string } | null)?.full_name || 'Unknown'
                 result.errors.push({
                     student_id: student.id,
                     student_name: userName,
-                    error: error.message || 'Unknown error'
+                    error: 'No active enrollment in source academic year'
                 })
+                continue
+            }
+
+            const mapping = class_mappings.find(m => m.from_class_id === student.class_id)
+            if (!mapping) {
+                result.failed_count++
+                const userName = (student.user as { full_name?: string } | null)?.full_name || 'Unknown'
+                result.errors.push({
+                    student_id: student.id,
+                    student_name: userName,
+                    error: 'No class mapping found'
+                })
+                continue
+            }
+
+            // Collect batch data
+            enrollmentIdsToEnd.push(activeEnrollment.id)
+            newEnrollments.push({
+                student_id: student.id,
+                class_id: mapping.to_class_id,
+                academic_year_id: academic_year_to,
+                status: 'ACTIVE',
+                notes: `Batch promoted from ${yearFrom.name}`
+            })
+            studentClassUpdates.push({ id: student.id, to_class_id: mapping.to_class_id })
+            result.promoted_count++
+        }
+
+        // 2. Execute batch DB operations (3 queries instead of 3 × N)
+        if (enrollmentIdsToEnd.length > 0) {
+            // Batch end old enrollments
+            const { error: endError } = await supabase
+                .from('student_enrollments')
+                .update({
+                    status: 'PROMOTED',
+                    ended_at: now,
+                    updated_at: now,
+                    notes: `Batch promoted to ${yearTo.name}`
+                })
+                .in('id', enrollmentIdsToEnd)
+
+            if (endError) throw endError
+
+            // Batch create new enrollments
+            const { error: createError } = await supabase
+                .from('student_enrollments')
+                .insert(newEnrollments)
+
+            if (createError) throw createError
+
+            // Batch update student class_ids (group by target class for efficiency)
+            const classGroups = new Map<string, string[]>()
+            for (const update of studentClassUpdates) {
+                const ids = classGroups.get(update.to_class_id) || []
+                ids.push(update.id)
+                classGroups.set(update.to_class_id, ids)
+            }
+
+            for (const [toClassId, studentIds] of classGroups) {
+                const { error: updateError } = await supabase
+                    .from('students')
+                    .update({ class_id: toClassId })
+                    .in('id', studentIds)
+
+                if (updateError) throw updateError
             }
         }
 

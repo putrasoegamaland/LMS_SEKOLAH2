@@ -78,62 +78,63 @@ export async function POST(request: NextRequest) {
             errors: []
         }
 
+        // BATCH OPTIMIZATION: Validate all students in memory, then batch DB operations
         const now = new Date().toISOString()
         const graduationNotes = notes || 'Batch graduation processed'
 
+        // 1. Validate and prepare batch data
+        const enrollmentIdsToEnd: { id: string; className: string }[] = []
+        const studentIdsToGraduate: string[] = []
+
         for (const student of students) {
-            try {
-                // Find active enrollment
-                const activeEnrollment = student.enrollments?.find((e: any) =>
-                    e.status === 'ACTIVE' && e.academic_year_id === academic_year_id
-                )
+            const activeEnrollment = student.enrollments?.find((e: any) =>
+                e.status === 'ACTIVE' && e.academic_year_id === academic_year_id
+            )
 
-                if (!activeEnrollment) {
-                    result.failed_count++
-                    const userName = (student.user as { full_name?: string } | null)?.full_name || 'Unknown'
-                    result.errors.push({
-                        student_id: student.id,
-                        student_name: userName,
-                        error: 'No active enrollment in specified academic year'
-                    })
-                    continue
-                }
-
-                // 1. End enrollment as GRADUATED
-                const { error: endError } = await supabase
-                    .from('student_enrollments')
-                    .update({
-                        status: 'GRADUATED',
-                        ended_at: now,
-                        updated_at: now,
-                        notes: `${graduationNotes} - Graduated from ${(student.class as { name?: string } | null)?.name || 'class'}`
-                    })
-                    .eq('id', activeEnrollment.id)
-
-                if (endError) throw endError
-
-                // 2. Update student status
-                const { error: updateError } = await supabase
-                    .from('students')
-                    .update({
-                        class_id: null,
-                        status: 'GRADUATED'
-                    })
-                    .eq('id', student.id)
-
-                if (updateError) throw updateError
-
-                result.promoted_count++ // Count as promoted (graduated)
-
-            } catch (error: any) {
+            if (!activeEnrollment) {
                 result.failed_count++
                 const userName = (student.user as { full_name?: string } | null)?.full_name || 'Unknown'
                 result.errors.push({
                     student_id: student.id,
                     student_name: userName,
-                    error: error.message || 'Unknown error'
+                    error: 'No active enrollment in specified academic year'
                 })
+                continue
             }
+
+            enrollmentIdsToEnd.push({
+                id: activeEnrollment.id,
+                className: (student.class as { name?: string } | null)?.name || 'class'
+            })
+            studentIdsToGraduate.push(student.id)
+            result.promoted_count++
+        }
+
+        // 2. Execute batch DB operations (2 queries instead of 2 × N)
+        if (enrollmentIdsToEnd.length > 0) {
+            // Batch end enrollments
+            const { error: endError } = await supabase
+                .from('student_enrollments')
+                .update({
+                    status: 'GRADUATED',
+                    ended_at: now,
+                    updated_at: now,
+                    notes: graduationNotes
+                })
+                .in('id', enrollmentIdsToEnd.map(e => e.id))
+
+            if (endError) throw endError
+
+            // Batch update student status
+            const { error: updateError } = await supabase
+                .from('students')
+                .update({
+                    class_id: null,
+                    status: 'GRADUATED'
+                })
+                .in('id', studentIdsToGraduate)
+
+            if (updateError) throw updateError
         }
 
         // Determine overall success
