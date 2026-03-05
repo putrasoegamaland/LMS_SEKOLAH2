@@ -21,7 +21,6 @@ export async function DELETE(
             .from('teaching_assignments')
             .delete()
             .eq('id', id)
-        if (schoolId) deleteQuery = deleteQuery.eq('school_id', schoolId)
         const { error } = await deleteQuery
 
         if (error) throw error

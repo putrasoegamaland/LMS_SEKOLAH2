@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
                 class:classes(*),
                 academic_year:academic_years(*)
             `)
-        if (schoolId) assignmentsQuery = assignmentsQuery.eq('school_id', schoolId)
+        // teaching_assignments scoped via teacher (already school-scoped above)
         const { data: assignments, error: assignmentsError } = await assignmentsQuery
 
         const myAssignments = myTeacher

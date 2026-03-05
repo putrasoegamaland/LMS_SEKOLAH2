@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
                 academic_year:academic_years(id, name, is_active)
             `)
             .eq('homeroom_teacher_id', teacher.id)
-        if (schoolId) classQuery = classQuery.eq('school_id', schoolId)
+        // classes scoped via academic_year (no school_id column on classes)
         const { data: classes, error: classError } = await classQuery
 
         if (classError) throw classError

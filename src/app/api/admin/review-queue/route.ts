@@ -109,11 +109,21 @@ export async function GET(request: NextRequest) {
         // For quiz/exam questions, get teaching_assignment IDs belonging to this school
         let schoolTAIds: string[] | null = null
         if (schoolId && (!source || source === 'quiz' || source === 'exam')) {
-            const { data: schoolTAs } = await supabase
-                .from('teaching_assignments')
+            // teaching_assignments doesn't have school_id — scope via academic_years
+            const { data: schoolYears } = await supabase
+                .from('academic_years')
                 .select('id')
                 .eq('school_id', schoolId)
-            schoolTAIds = schoolTAs?.map(ta => ta.id) || []
+            const yearIds = schoolYears?.map(y => y.id) || []
+            if (yearIds.length > 0) {
+                const { data: schoolTAs } = await supabase
+                    .from('teaching_assignments')
+                    .select('id')
+                    .in('academic_year_id', yearIds)
+                schoolTAIds = schoolTAs?.map(ta => ta.id) || []
+            } else {
+                schoolTAIds = []
+            }
         }
 
         if (!source || source === 'quiz') {

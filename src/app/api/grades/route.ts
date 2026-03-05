@@ -39,18 +39,25 @@ export async function GET(request: NextRequest) {
                         .from('teaching_assignments')
                         .select('id')
                         .eq('academic_year_id', filterYearId)
-                    if (schoolId) taQuery = taQuery.eq('school_id', schoolId)
+                    // teaching_assignments scoped via academic_year_id (no school_id column)
                     const { data: tas } = await taQuery
                     taIds = tas?.map(t => t.id) || []
                 }
             } else {
                 // allYears = true: still scope to this school's teaching assignments
                 if (schoolId) {
-                    const { data: tas } = await supabase
-                        .from('teaching_assignments')
+                    const { data: schoolYears } = await supabase
+                        .from('academic_years')
                         .select('id')
                         .eq('school_id', schoolId)
-                    taIds = tas?.map(t => t.id) || []
+                    const yearIds = schoolYears?.map(y => y.id) || []
+                    if (yearIds.length > 0) {
+                        const { data: tas } = await supabase
+                            .from('teaching_assignments')
+                            .select('id')
+                            .in('academic_year_id', yearIds)
+                        taIds = tas?.map(t => t.id) || []
+                    }
                 }
             }
 

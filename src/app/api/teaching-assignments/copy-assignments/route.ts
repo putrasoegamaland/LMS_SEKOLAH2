@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
             .from('teaching_assignments')
             .select('teacher_id, subject_id, class_id')
             .eq('academic_year_id', from_year_id)
-        if (schoolId) sourceQuery = sourceQuery.eq('school_id', schoolId)
+        // teaching_assignments scoped via academic_year_id (already verified above)
         const { data: sourceAssignments, error: sourceError } = await sourceQuery
 
         if (sourceError) throw sourceError

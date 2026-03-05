@@ -69,13 +69,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'class_id, academic_year_id, dan entries harus diisi' }, { status: 400 })
         }
 
-        // Validate class belongs to this school
+        // Validate class belongs to this school (classes don't have school_id — use academic_year chain)
         if (schoolId) {
             const { data: cls } = await supabase
                 .from('classes')
-                .select('id')
+                .select('id, academic_year:academic_years!inner(school_id)')
                 .eq('id', class_id)
-                .eq('school_id', schoolId)
+                .eq('academic_years.school_id', schoolId)
                 .single()
             if (!cls) {
                 return NextResponse.json({ error: 'Kelas tidak ditemukan di sekolah ini' }, { status: 403 })
