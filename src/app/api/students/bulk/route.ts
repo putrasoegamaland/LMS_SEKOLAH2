@@ -52,19 +52,41 @@ export async function POST(request: NextRequest) {
         const results = []
 
         // BATCH OPTIMIZATION: Pre-fetch all existing usernames in ONE query
-        const usernames = payload.filter((item: any) => item.username).map((item: any) => String(item.username))
+        // NIS is used as username if no explicit username provided
+        const resolvedUsernames = payload.map((item: any) => {
+            const explicitUsername = item.username ? String(item.username).trim() : ''
+            const nis = item.nis ? String(item.nis).trim() : ''
+            return explicitUsername || nis  // fallback to NIS
+        }).filter(Boolean)
+
         const { data: existingUsers } = await supabase
             .from('users')
             .select('username')
-            .in('username', usernames)
+            .in('username', resolvedUsernames)
         const existingUsernames = new Set(existingUsers?.map(u => u.username) || [])
+
+        // Track usernames added within this batch to detect duplicates
+        const usedInBatch = new Set<string>()
 
         // Process sequentially (inserts need IDs from previous steps)
         for (const item of payload) {
             const { full_name, gender, nis, angkatan, kelas, username, password } = item
 
-            if (!username || !password || !full_name) {
-                results.push({ item, success: false, error: 'Nama, Username, dan Password harus diisi' })
+            // Resolve username: explicit username > NIS
+            const resolvedUsername = (username ? String(username).trim() : '') || (nis ? String(nis).trim() : '')
+
+            if (!full_name) {
+                results.push({ item, success: false, error: 'Nama Lengkap harus diisi' })
+                continue
+            }
+
+            if (!resolvedUsername) {
+                results.push({ item, success: false, error: 'NIS atau Username harus diisi (NIS akan digunakan sebagai username login)' })
+                continue
+            }
+
+            if (!password) {
+                results.push({ item, success: false, error: 'Password harus diisi' })
                 continue
             }
 
@@ -80,20 +102,21 @@ export async function POST(request: NextRequest) {
             }
 
             try {
-                // Check existing username from pre-fetched set (0ms vs 700ms)
-                if (existingUsernames.has(String(username))) {
-                    results.push({ item, success: false, error: 'Username sudah digunakan' })
+                // Check existing username from pre-fetched set + current batch
+                if (existingUsernames.has(resolvedUsername) || usedInBatch.has(resolvedUsername)) {
+                    results.push({ item, success: false, error: `Username/NIS '${resolvedUsername}' sudah digunakan` })
                     continue
                 }
+                usedInBatch.add(resolvedUsername)
 
                 // Hash password
                 const password_hash = await hashPassword(String(password))
 
-                // Create user
+                // Create user (username = NIS or explicit username)
                 const { data: newUser, error: userError } = await supabase
                     .from('users')
                     .insert({
-                        username: String(username),
+                        username: resolvedUsername,
                         password_hash,
                         full_name: String(full_name),
                         role: 'SISWA',

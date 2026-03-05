@@ -268,10 +268,10 @@ export default function SiswaPage() {
     }
 
     const downloadTemplate = () => {
-        const headers = ['Nama Lengkap', 'L/P', 'NIS', 'Angkatan', 'Kelas', 'Username', 'Password']
+        const headers = ['Nama Lengkap', 'L/P', 'NIS', 'Angkatan', 'Kelas', 'Password']
         const csvContent = headers.join(',') + '\n' +
-            'Muhammad Rizki,L,221001,2022,X IPA 1,rizki_siswa,pass123\n' +
-            'Siti Hawa,P,221002,2022,X IPS 1,siti_siswa,pass123'
+            'Muhammad Rizki,L,0012345001,2022,X IPA 1,pass123\n' +
+            'Siti Hawa,P,0012345002,2022,X IPS 1,pass123'
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
         const link = document.createElement('a')
@@ -298,10 +298,10 @@ export default function SiswaPage() {
                     const payload = results.data.map((row: any) => ({
                         full_name: row['Nama Lengkap'] || row['nama lengkap'] || '',
                         gender: row['L/P']?.toUpperCase() === 'L' || row['L/P']?.toUpperCase() === 'P' ? row['L/P'].toUpperCase() : null,
-                        nis: row['NIS'] || row['nis'] || '',
+                        nis: row['NIS'] || row['nis'] || row['NISN'] || row['nisn'] || '',
                         angkatan: row['Angkatan'] || row['angkatan'] || '',
                         kelas: row['Kelas'] || row['kelas'] || '',
-                        username: row['Username'] || row['username'] || '',
+                        username: row['Username'] || row['username'] || '',  // optional, NIS used if empty
                         password: row['Password'] || row['password'] || ''
                     }))
 
@@ -323,7 +323,7 @@ export default function SiswaPage() {
                         if (r.success) successCount++
                         else {
                             failedCount++
-                            errors.push({ name: r.item.full_name || r.item.username, error: r.error })
+                            errors.push({ name: r.item.full_name || r.item.nis || r.item.username, error: r.error })
                         }
                     })
 
@@ -767,7 +767,8 @@ export default function SiswaPage() {
                                 <li>File harus berupa format <b>.csv</b></li>
                                 <li>Pastikan menggunakan template yang telah disediakan</li>
                                 <li>Nama Kelas harus <b>sama persis</b> dengan nama kelas di sistem (tidak case-sensitive)</li>
-                                <li>Kolom <b>Nama Lengkap</b>, <b>Username</b>, dan <b>Password</b> wajib diisi</li>
+                                <li>Kolom <b>Nama Lengkap</b>, <b>NIS</b>, dan <b>Password</b> wajib diisi</li>
+                                <li><b>NIS/NISN</b> akan otomatis digunakan sebagai <b>username login</b> siswa</li>
                             </ul>
                             <div className="mt-4">
                                 <Button variant="secondary" onClick={downloadTemplate} size="sm" icon={<FileDown className="w-4 h-4" />}>
