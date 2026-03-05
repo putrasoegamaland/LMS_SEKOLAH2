@@ -100,9 +100,10 @@ export default function PenugasanPage() {
         try {
             const res = await fetch(`/api/teaching-assignments/by-teacher?academic_year_id=${selectedYearId}`)
             const data = await res.json()
-            setTeacherGroups(data)
+            setTeacherGroups(Array.isArray(data) ? data : [])
         } catch (error) {
             console.error('Error fetching assignments:', error)
+            setTeacherGroups([])
         }
     }
 
