@@ -37,6 +37,8 @@ export default function AdminDashboard() {
         totalSubjects: 0
     })
     const [school, setSchool] = useState<SchoolInfo | null>(null)
+    const [aiReviewEnabled, setAiReviewEnabled] = useState(true)
+    const [aiToggleLoading, setAiToggleLoading] = useState(false)
 
     useEffect(() => {
         if (user && user.role !== 'ADMIN') {
@@ -88,6 +90,40 @@ export default function AdminDashboard() {
             fetchSchool()
         }
     }, [user])
+
+    // Fetch school settings (AI review toggle)
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const res = await fetch('/api/school-settings')
+                if (res.ok) {
+                    const data = await res.json()
+                    setAiReviewEnabled(data.ai_review_enabled !== false)
+                }
+            } catch (err) {
+                console.error('Error fetching settings:', err)
+            }
+        }
+        if (user) fetchSettings()
+    }, [user])
+
+    const handleToggleAIReview = async () => {
+        setAiToggleLoading(true)
+        try {
+            const res = await fetch('/api/school-settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ai_review_enabled: !aiReviewEnabled })
+            })
+            if (res.ok) {
+                setAiReviewEnabled(!aiReviewEnabled)
+            }
+        } catch (err) {
+            console.error('Error toggling AI review:', err)
+        } finally {
+            setAiToggleLoading(false)
+        }
+    }
 
     const menuItems = [
         {
@@ -247,7 +283,11 @@ export default function AdminDashboard() {
             <div>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-6">Menu Kelola</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {menuItems.map((item, i) => (
+                    {menuItems.filter(item => {
+                        // Hide Review Soal when AI review is off
+                        if (item.href.includes('review-soal') && !aiReviewEnabled) return false
+                        return true
+                    }).map((item, i) => (
                         <Link
                             key={i}
                             href={item.href}
@@ -286,6 +326,34 @@ export default function AdminDashboard() {
                             </Card>
                         </Link>
                     ))}
+                </div>
+            </div>
+
+            {/* AI Review Toggle Section */}
+            <div className="bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-primary/10 p-6">
+                <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">⚙️ Pengaturan Fitur</h2>
+                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700">
+                    <div className="flex-1">
+                        <p className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                            🤖 AI Review Soal
+                        </p>
+                        <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1">
+                            {aiReviewEnabled
+                                ? 'Soal yang dibuat guru akan dianalisis AI secara otomatis untuk HOTS, Bloom, dan kualitas.'
+                                : 'Soal yang dibuat guru akan langsung disetujui tanpa analisis AI.'}
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleToggleAIReview}
+                        disabled={aiToggleLoading}
+                        className={`relative ml-4 w-14 h-7 rounded-full transition-all duration-300 flex-shrink-0 ${aiReviewEnabled
+                                ? 'bg-emerald-500 hover:bg-emerald-600'
+                                : 'bg-slate-300 dark:bg-zinc-600 hover:bg-slate-400'
+                            } ${aiToggleLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                        <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${aiReviewEnabled ? 'translate-x-7' : 'translate-x-0'
+                            }`} />
+                    </button>
                 </div>
             </div>
         </div>

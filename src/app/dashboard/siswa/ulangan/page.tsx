@@ -36,10 +36,19 @@ export default function SiswaUlanganPage() {
     const [exams, setExams] = useState<Exam[]>([])
     const [submissions, setSubmissions] = useState<ExamSubmission[]>([])
     const [loading, setLoading] = useState(true)
+    const [currentTime, setCurrentTime] = useState(new Date())
 
     useEffect(() => {
         if (user) fetchData()
     }, [user])
+
+    // Update current time every second for active countdowns
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date())
+        }, 1000)
+        return () => clearInterval(timer)
+    }, [])
 
     const fetchData = async () => {
         try {
@@ -61,7 +70,6 @@ export default function SiswaUlanganPage() {
     }
 
     const getExamStatus = (exam: Exam) => {
-        const now = new Date()
         const startTime = new Date(exam.start_time)
         // Default strict end time (if no submission)
         const strictEndTime = new Date(startTime.getTime() + exam.duration_minutes * 60000)
@@ -77,7 +85,7 @@ export default function SiswaUlanganPage() {
             const subStartedAt = new Date(submission.started_at).getTime()
             const durationMs = exam.duration_minutes * 60000
             // Allow 1 min buffer
-            const isExpired = now.getTime() > (subStartedAt + durationMs + 60000)
+            const isExpired = currentTime.getTime() > (subStartedAt + durationMs + 60000)
 
             if (isExpired) {
                 return { status: 'expired_open', label: 'Waktu Habis', icon: TimeCircle, color: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300' }
@@ -85,14 +93,21 @@ export default function SiswaUlanganPage() {
             return { status: 'in_progress', label: 'Lanjutkan', icon: Play, color: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' }
         }
 
-        if (now < startTime) {
-            const diff = startTime.getTime() - now.getTime()
+        if (currentTime < startTime) {
+            const diff = startTime.getTime() - currentTime.getTime()
             const hours = Math.floor(diff / 3600000)
             const mins = Math.floor((diff % 3600000) / 60000)
-            return { status: 'scheduled', label: `Mulai dalam ${hours}j ${mins}m`, icon: TimeCircle, color: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' }
+            const secs = Math.floor((diff % 60000) / 1000)
+
+            let label = 'Mulai dalam '
+            if (hours > 0) label += `${hours}j `
+            if (mins > 0 || hours > 0) label += `${mins}m `
+            label += `${secs}d`
+
+            return { status: 'scheduled', label, icon: TimeCircle, color: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' }
         }
 
-        if (now >= startTime && now <= strictEndTime) {
+        if (currentTime >= startTime && currentTime <= strictEndTime) {
             return { status: 'available', label: 'Mulai Sekarang', icon: Play, color: 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' }
         }
 

@@ -107,6 +107,7 @@ export default function EditQuizPage() {
     const [publishing, setPublishing] = useState(false)
     const [showSuccessModal, setShowSuccessModal] = useState(false)
     const [alertInfo, setAlertInfo] = useState<{ type: 'info' | 'warning' | 'error' | 'success', title: string, message: string } | null>(null)
+    const [aiReviewEnabled, setAiReviewEnabled] = useState(true)
 
     const fetchQuiz = useCallback(async () => {
         try {
@@ -124,6 +125,12 @@ export default function EditQuizPage() {
     useEffect(() => {
         fetchQuiz()
     }, [fetchQuiz])
+
+    useEffect(() => {
+        fetch('/api/school-settings').then(r => r.ok ? r.json() : null).then(d => {
+            if (d) setAiReviewEnabled(d.ai_review_enabled !== false)
+        }).catch(() => { })
+    }, [])
 
     const handlePublishClick = () => {
         if (questions.length === 0) {
@@ -708,9 +715,9 @@ export default function EditQuizPage() {
                                                 </span>
                                             )}
                                             {q.status === 'approved' && <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 flex items-center gap-1"><TickSquare set="bold" primaryColor="currentColor" size={10} /></span>}
-                                            {q.status === 'admin_review' && <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 flex items-center gap-1"><InfoCircle set="bold" primaryColor="currentColor" size={10} /> Review</span>}
+                                            {aiReviewEnabled && q.status === 'admin_review' && <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 flex items-center gap-1"><InfoCircle set="bold" primaryColor="currentColor" size={10} /> Review</span>}
                                             {q.status === 'returned' && <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 flex items-center gap-1"><CloseSquare set="bold" primaryColor="currentColor" size={10} /> Returned</span>}
-                                            {q.status === 'ai_reviewing' && <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-pulse flex items-center gap-1"><Discovery set="bold" primaryColor="currentColor" size={10} /></span>}
+                                            {aiReviewEnabled && q.status === 'ai_reviewing' && <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-pulse flex items-center gap-1"><Discovery set="bold" primaryColor="currentColor" size={10} /></span>}
                                         </div>
 
                                         {/* Show passage only for standalone (non-grouped) questions */}
@@ -948,19 +955,21 @@ export default function EditQuizPage() {
                             )}
 
                             {/* HOTS Toggle */}
-                            <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
-                                <input
-                                    type="checkbox"
-                                    id="hots-edit-kuis"
-                                    checked={editForm.teacher_hots_claim || false}
-                                    onChange={e => setEditForm({ ...editForm, teacher_hots_claim: e.target.checked })}
-                                    className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500"
-                                />
-                                <label htmlFor="hots-edit-kuis" className="flex-1 cursor-pointer">
-                                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
-                                    <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Tandai soal ini sebagai Higher Order Thinking Skills</p>
-                                </label>
-                            </div>
+                            {aiReviewEnabled && (
+                                <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
+                                    <input
+                                        type="checkbox"
+                                        id="hots-edit-kuis"
+                                        checked={editForm.teacher_hots_claim || false}
+                                        onChange={e => setEditForm({ ...editForm, teacher_hots_claim: e.target.checked })}
+                                        className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <label htmlFor="hots-edit-kuis" className="flex-1 cursor-pointer">
+                                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                        <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Tandai soal ini sebagai Higher Order Thinking Skills</p>
+                                    </label>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-secondary/20">
@@ -1183,22 +1192,24 @@ export default function EditQuizPage() {
                                                 )}
 
                                                 {/* HOTS Toggle */}
-                                                <div className="mt-3 flex items-center gap-3 p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-lg">
-                                                    <input
-                                                        type="checkbox"
-                                                        id={`hots-passage-kuis-${pqIdx}`}
-                                                        checked={pq.teacher_hots_claim || false}
-                                                        onChange={e => {
-                                                            const updated = [...passageQuestions]
-                                                            updated[pqIdx] = { ...updated[pqIdx], teacher_hots_claim: e.target.checked }
-                                                            setPassageQuestions(updated)
-                                                        }}
-                                                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
-                                                    />
-                                                    <label htmlFor={`hots-passage-kuis-${pqIdx}`} className="cursor-pointer">
-                                                        <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
-                                                    </label>
-                                                </div>
+                                                {aiReviewEnabled && (
+                                                    <div className="mt-3 flex items-center gap-3 p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-lg">
+                                                        <input
+                                                            type="checkbox"
+                                                            id={`hots-passage-kuis-${pqIdx}`}
+                                                            checked={pq.teacher_hots_claim || false}
+                                                            onChange={e => {
+                                                                const updated = [...passageQuestions]
+                                                                updated[pqIdx] = { ...updated[pqIdx], teacher_hots_claim: e.target.checked }
+                                                                setPassageQuestions(updated)
+                                                            }}
+                                                            className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                                                        />
+                                                        <label htmlFor={`hots-passage-kuis-${pqIdx}`} className="cursor-pointer">
+                                                            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                                        </label>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -1298,19 +1309,21 @@ export default function EditQuizPage() {
                                 </div>
 
                                 {/* HOTS Toggle */}
-                                <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                    <input
-                                        type="checkbox"
-                                        id="hots-claim-kuis"
-                                        checked={manualForm.teacher_hots_claim || false}
-                                        onChange={e => setManualForm({ ...manualForm, teacher_hots_claim: e.target.checked })}
-                                        className="w-5 h-5 accent-emerald-600 rounded"
-                                    />
-                                    <label htmlFor="hots-claim-kuis" className="flex-1 cursor-pointer">
-                                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
-                                        <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Centang jika soal ini membutuhkan kemampuan berpikir tingkat tinggi (Analisis, Evaluasi, atau Kreasi)</p>
-                                    </label>
-                                </div>
+                                {aiReviewEnabled && (
+                                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                        <input
+                                            type="checkbox"
+                                            id="hots-claim-kuis"
+                                            checked={manualForm.teacher_hots_claim || false}
+                                            onChange={e => setManualForm({ ...manualForm, teacher_hots_claim: e.target.checked })}
+                                            className="w-5 h-5 accent-emerald-600 rounded"
+                                        />
+                                        <label htmlFor="hots-claim-kuis" className="flex-1 cursor-pointer">
+                                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                            <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Centang jika soal ini membutuhkan kemampuan berpikir tingkat tinggi (Analisis, Evaluasi, atau Kreasi)</p>
+                                        </label>
+                                    </div>
+                                )}
 
                                 <div className="flex gap-3 pt-4">
                                     <Button variant="secondary" onClick={() => setMode('list')} className="flex-1">
@@ -1339,6 +1352,7 @@ export default function EditQuizPage() {
                 onSaveToBank={handleSaveToBank}
                 saving={saving}
                 targetLabel="Kuis"
+                aiReviewEnabled={aiReviewEnabled}
             />
 
             {/* Bank Soal Mode */}

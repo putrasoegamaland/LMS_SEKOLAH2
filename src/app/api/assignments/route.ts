@@ -56,6 +56,18 @@ export async function GET(request: NextRequest) {
                     } else {
                         return NextResponse.json([])
                     }
+                } else if (user.role === 'SISWA') {
+                    const { data: student } = await supabase
+                        .from('students')
+                        .select('class_id')
+                        .eq('user_id', user.id)
+                        .single()
+
+                    if (student?.class_id) {
+                        taQuery = taQuery.eq('class_id', student.class_id)
+                    } else {
+                        return NextResponse.json([])
+                    }
                 }
 
                 const { data: taIds } = await taQuery

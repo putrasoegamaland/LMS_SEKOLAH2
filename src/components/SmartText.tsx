@@ -19,6 +19,71 @@ function containsRawLatex(text: string): boolean {
     return /\\(?:frac|sqrt|log|ln|sin|cos|tan|sec|csc|cot|int|sum|prod|lim|infty|alpha|beta|gamma|delta|theta|pi|sigma|omega|times|div|pm|mp|leq|geq|neq|approx|cdot|ldots|vec|hat|bar|overline|underline|text|mathrm|mathbf|binom|left|right|begin|end)\b/.test(text)
 }
 
+// Check for math notation without backslash commands (e.g., x^2, a^{n+1})
+// Safe: ^ is rarely used in natural language (Bahasa Indonesia, IPS, etc.)
+function containsMathNotation(text: string): boolean {
+    // Caret exponent: x^2, a^{n}, 2^3, (x+1)^2
+    return /[a-zA-Z0-9)}\]]\^[0-9a-zA-Z{(]/.test(text)
+}
+
+// Known math function names (won't be treated as natural language words)
+const MATH_FUNCTIONS = new Set([
+    'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+    'log', 'ln', 'exp', 'max', 'min', 'lim', 'mod', 'gcd', 'det', 'abs'
+])
+
+// Check if text looks like a pure math expression (not natural language)
+// This prevents rendering "Proklamasi kemerdekaan" or "Fotosintesis menghasilkan O2" as math
+function looksLikePureMath(text: string): boolean {
+    // Safety: skip very long text (paragraphs are not math expressions)
+    if (text.length > 200) return false
+
+    // Split by math operators and whitespace to get "tokens"
+    const tokens = text.split(/[\s+\-*/=<>≤≥≠±×÷(),^_{}[\]|:!]+/).filter(t => t.length > 0)
+
+    for (const token of tokens) {
+        // Numbers (including decimals): OK
+        if (/^[0-9]+\.?[0-9]*$/.test(token)) continue
+        // Single or double-letter variables (x, y, ab, xy): OK
+        if (/^[a-zA-Z]{1,2}$/.test(token)) continue
+        // Known math functions (sin, cos, log): OK
+        if (MATH_FUNCTIONS.has(token.toLowerCase())) continue
+        // LaTeX commands (\frac, \pi): OK
+        if (token.startsWith('\\')) continue
+        // 3+ letter word that's NOT a math function → natural language detected
+        if (/^[a-zA-Z]{3,}$/.test(token)) return false
+    }
+
+    return true
+}
+
+// Render text that contains math notation (like x^2 + 3x - 10)
+function renderMathNotation(text: string): string {
+    if (looksLikePureMath(text)) {
+        // Pure math expression — render the whole thing
+        try {
+            return katex.renderToString(text.trim(), { displayMode: false, throwOnError: false })
+        } catch {
+            return text
+        }
+    }
+
+    // Mixed text (e.g., "Hasil dari x^2 + 3"): find and render math segments
+    // Match sequences that contain ^ with surrounding math context
+    const result = text.replace(
+        /(?:[a-zA-Z0-9()\[\]{}]+\s*[+\-*/=<>]*\s*)*[a-zA-Z0-9)}\]]\^[0-9a-zA-Z{(][^\s,;:!?]*(?:\s*[+\-*/=<>]\s*[a-zA-Z0-9(^_][^\s,;:!?]*)*/g,
+        (match) => {
+            try {
+                return katex.renderToString(match.trim(), { displayMode: false, throwOnError: false })
+            } catch {
+                return match
+            }
+        }
+    )
+
+    return result
+}
+
 // Render LaTeX expressions in text, returning HTML string
 function renderLatexInText(text: string): string {
     // First handle block math ($$...$$)
@@ -93,11 +158,13 @@ export default function SmartText({ text, className = '', as: Tag = 'p' }: Smart
     const isArabic = useMemo(() => containsArabic(text), [text])
     const hasExplicitLatex = useMemo(() => /\$\$.+?\$\$|\$.+?\$/.test(text), [text])
     const hasRawLatex = useMemo(() => containsRawLatex(text), [text])
+    const hasMathNotation = useMemo(() => containsMathNotation(text), [text])
     const hasLatex = hasExplicitLatex || hasRawLatex
 
     const arabicClasses = isArabic ? 'arabic-text' : ''
     const combinedClassName = `${className} ${arabicClasses}`.trim()
 
+    // Path 1: Explicit LaTeX ($...$) or raw LaTeX commands (\frac, \pi, etc.)
     if (hasLatex) {
         let html: string
         if (hasExplicitLatex) {
@@ -130,6 +197,23 @@ export default function SmartText({ text, className = '', as: Tag = 'p' }: Smart
         )
     }
 
+    // Path 2: Math notation without LaTeX commands (e.g., x^2 + 3x - 10)
+    // Safe: only triggers on ^ patterns, validated by looksLikePureMath
+    if (hasMathNotation) {
+        const html = renderMathNotation(text)
+        // Only use rendered HTML if it actually changed (i.e., KaTeX processed something)
+        if (html !== text) {
+            return (
+                <Tag
+                    className={combinedClassName}
+                    dangerouslySetInnerHTML={{ __html: html }}
+                    dir="auto"
+                />
+            )
+        }
+    }
+
+    // Path 3: Plain text
     // Replace literal \n with real newlines for whitespace-pre-wrap to work
     const cleanedText = text.replace(/\\n/g, '\n')
 
@@ -142,4 +226,5 @@ export default function SmartText({ text, className = '', as: Tag = 'p' }: Smart
         </Tag>
     )
 }
+
 

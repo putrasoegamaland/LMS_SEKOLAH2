@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
-import { triggerHOTSAnalysis, triggerBulkHOTSAnalysis, type TriggerHOTSInput } from '@/lib/triggerHOTS'
+import { triggerHOTSAnalysis, triggerBulkHOTSAnalysis, isAIReviewEnabled, type TriggerHOTSInput } from '@/lib/triggerHOTS'
 
 // GET question bank
 export async function GET(request: NextRequest) {
@@ -130,8 +130,13 @@ export async function PUT(request: NextRequest) {
         if (teacher_hots_claim !== undefined) updateData.teacher_hots_claim = teacher_hots_claim
         if (image_url !== undefined) updateData.image_url = image_url || null
 
-        // Reset status to trigger re-analysis
-        updateData.status = 'ai_reviewing'
+        // Check if AI review is enabled
+        const aiEnabled = await isAIReviewEnabled(schoolId)
+        if (aiEnabled) {
+            updateData.status = 'ai_reviewing'
+        } else {
+            updateData.status = 'approved'
+        }
 
         const { data, error } = await supabase
             .from('question_bank')
@@ -146,8 +151,8 @@ export async function PUT(request: NextRequest) {
 
         if (error) throw error
 
-        // Trigger HOTS re-analysis after edit (fire-and-forget)
-        if (data) {
+        // Trigger HOTS re-analysis after edit (fire-and-forget) — only if AI enabled
+        if (data && aiEnabled) {
             let subjectName = ''
             if (data.subject_id) {
                 const { data: subjectData } = await supabase
@@ -222,25 +227,31 @@ export async function POST(request: NextRequest) {
 
             // Trigger HOTS analysis for each saved question (fire-and-forget)
             if (data && data.length > 0) {
-                // Get subject name for rubric matching
-                let subjectName = ''
-                if (data[0]?.subject_id) {
-                    const { data: subjectData } = await supabase
-                        .from('subjects').select('name').eq('id', data[0].subject_id).single()
-                    subjectName = subjectData?.name || ''
+                const aiEnabled = await isAIReviewEnabled(schoolId)
+                if (aiEnabled) {
+                    let subjectName = ''
+                    if (data[0]?.subject_id) {
+                        const { data: subjectData } = await supabase
+                            .from('subjects').select('name').eq('id', data[0].subject_id).single()
+                        subjectName = subjectData?.name || ''
+                    }
+                    const hotsInputs: TriggerHOTSInput[] = data.map((q: any) => ({
+                        questionId: q.id,
+                        questionSource: 'bank' as const,
+                        questionText: q.question_text,
+                        questionType: q.question_type,
+                        options: q.options,
+                        correctAnswer: q.correct_answer,
+                        teacherDifficulty: q.difficulty,
+                        teacherHotsClaim: q.teacher_hots_claim || false,
+                        subjectName
+                    }))
+                    triggerBulkHOTSAnalysis(hotsInputs)
+                } else {
+                    // AI Review OFF — direct approve
+                    const ids = data.map((q: any) => q.id)
+                    await supabase.from('question_bank').update({ status: 'approved' }).in('id', ids)
                 }
-                const hotsInputs: TriggerHOTSInput[] = data.map((q: any) => ({
-                    questionId: q.id,
-                    questionSource: 'bank' as const,
-                    questionText: q.question_text,
-                    questionType: q.question_type,
-                    options: q.options,
-                    correctAnswer: q.correct_answer,
-                    teacherDifficulty: q.difficulty,
-                    teacherHotsClaim: q.teacher_hots_claim || false,
-                    subjectName
-                }))
-                triggerBulkHOTSAnalysis(hotsInputs)
             }
 
             return NextResponse.json(data)
@@ -269,23 +280,29 @@ export async function POST(request: NextRequest) {
 
         // Trigger HOTS analysis for single question (fire-and-forget)
         if (data) {
-            let subjectName = ''
-            if (data.subject_id) {
-                const { data: subjectData } = await supabase
-                    .from('subjects').select('name').eq('id', data.subject_id).single()
-                subjectName = subjectData?.name || ''
+            const aiEnabled = await isAIReviewEnabled(schoolId)
+            if (aiEnabled) {
+                let subjectName = ''
+                if (data.subject_id) {
+                    const { data: subjectData } = await supabase
+                        .from('subjects').select('name').eq('id', data.subject_id).single()
+                    subjectName = subjectData?.name || ''
+                }
+                triggerHOTSAnalysis({
+                    questionId: data.id,
+                    questionSource: 'bank',
+                    questionText: data.question_text,
+                    questionType: data.question_type,
+                    options: data.options,
+                    correctAnswer: data.correct_answer,
+                    teacherDifficulty: data.difficulty,
+                    teacherHotsClaim: data.teacher_hots_claim || false,
+                    subjectName
+                }).catch(err => console.error('HOTS trigger error:', err))
+            } else {
+                // AI Review OFF — direct approve
+                await supabase.from('question_bank').update({ status: 'approved' }).eq('id', data.id)
             }
-            triggerHOTSAnalysis({
-                questionId: data.id,
-                questionSource: 'bank',
-                questionText: data.question_text,
-                questionType: data.question_type,
-                options: data.options,
-                correctAnswer: data.correct_answer,
-                teacherDifficulty: data.difficulty,
-                teacherHotsClaim: data.teacher_hots_claim || false,
-                subjectName
-            }).catch(err => console.error('HOTS trigger error:', err))
         }
 
         return NextResponse.json(data)

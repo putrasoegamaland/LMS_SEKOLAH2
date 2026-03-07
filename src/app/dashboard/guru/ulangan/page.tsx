@@ -144,10 +144,20 @@ export default function GuruUlanganPage() {
         if (!form.teaching_assignment_id || !form.title || !form.start_time) return
         setCreating(true)
         try {
+            // Convert local datetime-local string to UTC for backend
+            let formattedStartTime = null;
+            if (form.start_time) {
+                const localDate = new Date(form.start_time);
+                formattedStartTime = localDate.toISOString();
+            }
+
             const res = await fetch('/api/exams', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form)
+                body: JSON.stringify({
+                    ...form,
+                    start_time: formattedStartTime
+                })
             })
             if (res.ok) {
                 const newExam = await res.json()
@@ -227,11 +237,18 @@ export default function GuruUlanganPage() {
         if (!remedialExam || selectedStudentIds.length === 0 || !remedialStartTime) return
         setCreating(true)
         try {
+            // Convert local datetime-local string to UTC for backend
+            let formattedRemedialStartTime = null;
+            if (remedialStartTime) {
+                const localDate = new Date(remedialStartTime);
+                formattedRemedialStartTime = localDate.toISOString();
+            }
+
             const payload = {
                 teaching_assignment_id: remedialExam.teaching_assignment.id,
                 title: `[Remedial] ${remedialExam.title}`,
                 description: `Remedial untuk ulangan: ${remedialExam.title}`,
-                start_time: remedialStartTime,
+                start_time: formattedRemedialStartTime,
                 duration_minutes: remedialExam.duration_minutes,
                 is_randomized: remedialExam.is_randomized,
                 max_violations: remedialExam.max_violations,

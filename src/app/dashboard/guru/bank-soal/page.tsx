@@ -80,6 +80,7 @@ export default function BankSoalPage() {
     const [selectedStatus, setSelectedStatus] = useState('')
     const [currentPage, setCurrentPage] = useState(1)
     const ITEMS_PER_PAGE = 20
+    const [aiReviewEnabled, setAiReviewEnabled] = useState(true)
 
     // Selection state for export
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -175,6 +176,12 @@ export default function BankSoalPage() {
     useEffect(() => {
         if (user) fetchData()
     }, [user])
+
+    useEffect(() => {
+        fetch('/api/school-settings').then(r => r.ok ? r.json() : null).then(d => {
+            if (d) setAiReviewEnabled(d.ai_review_enabled !== false)
+        }).catch(() => { })
+    }, [])
 
     const fetchData = async () => {
         try {
@@ -485,9 +492,9 @@ export default function BankSoalPage() {
             case 'approved':
                 return <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-medium flex items-center gap-1"><TickSquare set="bold" primaryColor="currentColor" size={12} /> Approved</span>
             case 'ai_reviewing':
-                return <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium animate-pulse flex items-center gap-1"><Discovery set="bold" primaryColor="currentColor" size={12} /> AI Review...</span>
+                return aiReviewEnabled ? <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium animate-pulse flex items-center gap-1"><Discovery set="bold" primaryColor="currentColor" size={12} /> AI Review...</span> : null
             case 'admin_review':
-                return <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 font-medium flex items-center gap-1"><InfoCircle set="bold" primaryColor="currentColor" size={12} /> Perlu Review</span>
+                return aiReviewEnabled ? <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 font-medium flex items-center gap-1"><InfoCircle set="bold" primaryColor="currentColor" size={12} /> Perlu Review</span> : null
             case 'returned':
                 return <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 font-medium flex items-center gap-1"><CloseSquare set="bold" primaryColor="currentColor" size={12} /> Dikembalikan</span>
             case 'draft':
@@ -768,8 +775,8 @@ export default function BankSoalPage() {
                     >
                         <option value="">Semua Status</option>
                         <option value="approved">✅ Approved</option>
-                        <option value="ai_reviewing">🤖 AI Review</option>
-                        <option value="admin_review">⚠️ Perlu Review</option>
+                        {aiReviewEnabled && <option value="ai_reviewing">🤖 AI Review</option>}
+                        {aiReviewEnabled && <option value="admin_review">⚠️ Perlu Review</option>}
                         <option value="returned">❌ Dikembalikan</option>
                         <option value="draft">📝 Draft</option>
                     </select>
@@ -884,7 +891,7 @@ export default function BankSoalPage() {
                                                                     {getDifficultyLabel(q.difficulty)}
                                                                 </span>
                                                                 {getStatusBadge(q.status)}
-                                                                {q.teacher_hots_claim && (
+                                                                {aiReviewEnabled && q.teacher_hots_claim && (
                                                                     <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-200 dark:text-emerald-400">
                                                                         🧠 HOTS
                                                                     </span>
@@ -1216,21 +1223,23 @@ export default function BankSoalPage() {
                             )}
 
                             {/* HOTS Claim Toggle */}
-                            <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={questionForm.teacher_hots_claim}
-                                        onChange={e => setQuestionForm({ ...questionForm, teacher_hots_claim: e.target.checked })}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                                </label>
-                                <div>
-                                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
-                                    <p className="text-xs text-emerald-600 dark:text-emerald-400">Tandai soal ini sebagai Higher-Order Thinking</p>
+                            {aiReviewEnabled && (
+                                <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={questionForm.teacher_hots_claim}
+                                            onChange={e => setQuestionForm({ ...questionForm, teacher_hots_claim: e.target.checked })}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    </label>
+                                    <div>
+                                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                        <p className="text-xs text-emerald-600 dark:text-emerald-400">Tandai soal ini sebagai Higher-Order Thinking</p>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             <div className="flex gap-3 pt-4">
                                 <Button variant="secondary" onClick={handleCloseModal} className="flex-1">Batal</Button>
@@ -1548,21 +1557,23 @@ export default function BankSoalPage() {
                         </div>
                     )}
                     {/* HOTS Claim Toggle */}
-                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={editQuestionForm.teacher_hots_claim}
-                                onChange={e => setEditQuestionForm({ ...editQuestionForm, teacher_hots_claim: e.target.checked })}
-                                className="sr-only peer"
-                            />
-                            <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                        </label>
-                        <div>
-                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
-                            <p className="text-xs text-emerald-600 dark:text-emerald-400">Tandai soal ini sebagai Higher-Order Thinking</p>
+                    {aiReviewEnabled && (
+                        <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={editQuestionForm.teacher_hots_claim}
+                                    onChange={e => setEditQuestionForm({ ...editQuestionForm, teacher_hots_claim: e.target.checked })}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                            </label>
+                            <div>
+                                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                <p className="text-xs text-emerald-600 dark:text-emerald-400">Tandai soal ini sebagai Higher-Order Thinking</p>
+                            </div>
                         </div>
-                    </div>
+                    )}
                     <div className="flex gap-3 pt-4">
                         <Button variant="secondary" onClick={() => setShowEditQuestionModal(false)} className="flex-1">Batal</Button>
                         <Button onClick={handleSaveEditQuestion} disabled={saving} className="flex-1">
@@ -1733,25 +1744,27 @@ export default function BankSoalPage() {
                                         </div>
                                     )}
                                     {/* HOTS Claim Toggle for Passage Question */}
-                                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl mt-3">
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={q.teacher_hots_claim || false}
-                                                onChange={e => {
-                                                    const newQs = [...editPassageForm.questions]
-                                                    newQs[idx].teacher_hots_claim = e.target.checked
-                                                    setEditPassageForm({ ...editPassageForm, questions: newQs })
-                                                }}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                                        </label>
-                                        <div>
-                                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
-                                            <p className="text-xs text-emerald-600 dark:text-emerald-400">Tandai soal ini sebagai Higher-Order Thinking</p>
+                                    {aiReviewEnabled && (
+                                        <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl mt-3">
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={q.teacher_hots_claim || false}
+                                                    onChange={e => {
+                                                        const newQs = [...editPassageForm.questions]
+                                                        newQs[idx].teacher_hots_claim = e.target.checked
+                                                        setEditPassageForm({ ...editPassageForm, questions: newQs })
+                                                    }}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                            </label>
+                                            <div>
+                                                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                                <p className="text-xs text-emerald-600 dark:text-emerald-400">Tandai soal ini sebagai Higher-Order Thinking</p>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -1823,6 +1836,7 @@ export default function BankSoalPage() {
                             onSaveToBank={handleSaveAIToBank}
                             saving={saving}
                             targetLabel="Bank Soal"
+                            aiReviewEnabled={aiReviewEnabled}
                         />
                     </div>
                 </div>

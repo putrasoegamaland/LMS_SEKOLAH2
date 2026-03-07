@@ -109,6 +109,7 @@ export default function EditExamPage() {
     const [publishing, setPublishing] = useState(false)
     const [showSuccessModal, setShowSuccessModal] = useState(false)
     const [alertInfo, setAlertInfo] = useState<{ type: 'info' | 'warning' | 'error' | 'success', title: string, message: string } | null>(null)
+    const [aiReviewEnabled, setAiReviewEnabled] = useState(true)
 
     // Edit settings state
     const [showEditSettings, setShowEditSettings] = useState(false)
@@ -142,6 +143,12 @@ export default function EditExamPage() {
     useEffect(() => {
         fetchExam()
     }, [fetchExam])
+
+    useEffect(() => {
+        fetch('/api/school-settings').then(r => r.ok ? r.json() : null).then(d => {
+            if (d) setAiReviewEnabled(d.ai_review_enabled !== false)
+        }).catch(() => { })
+    }, [])
 
     const handlePublishClick = () => {
         if (questions.length === 0) {
@@ -207,13 +214,20 @@ export default function EditExamPage() {
         }
         setSavingSettings(true)
         try {
+            // Convert local datetime-local string to UTC for backend
+            let formattedStartTime = null;
+            if (editForm.start_time) {
+                const localDate = new Date(editForm.start_time);
+                formattedStartTime = localDate.toISOString();
+            }
+
             const res = await fetch(`/api/exams/${examId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     title: editForm.title,
                     description: editForm.description,
-                    start_time: new Date(editForm.start_time).toISOString(),
+                    start_time: formattedStartTime,
                     duration_minutes: editForm.duration_minutes,
                     max_violations: editForm.max_violations,
                     is_randomized: editForm.is_randomized
@@ -785,9 +799,9 @@ export default function EditExamPage() {
                                                 </span>
                                             )}
                                             {q.status === 'approved' && <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">✅</span>}
-                                            {q.status === 'admin_review' && <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">⚠️ Review</span>}
+                                            {aiReviewEnabled && q.status === 'admin_review' && <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">⚠️ Review</span>}
                                             {q.status === 'returned' && <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">❌ Returned</span>}
-                                            {q.status === 'ai_reviewing' && <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-pulse">🤖</span>}
+                                            {aiReviewEnabled && q.status === 'ai_reviewing' && <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-pulse">🤖</span>}
                                         </div>
 
                                         {/* Show passage only for standalone (non-grouped) questions */}
@@ -1034,19 +1048,21 @@ export default function EditExamPage() {
                                 )}
 
                                 {/* HOTS Toggle */}
-                                <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
-                                    <input
-                                        type="checkbox"
-                                        id="hots-edit-exam"
-                                        checked={editQuestionForm.teacher_hots_claim || false}
-                                        onChange={e => setEditQuestionForm({ ...editQuestionForm, teacher_hots_claim: e.target.checked })}
-                                        className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500"
-                                    />
-                                    <label htmlFor="hots-edit-exam" className="flex-1 cursor-pointer">
-                                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
-                                        <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Tandai soal ini sebagai Higher Order Thinking Skills</p>
-                                    </label>
-                                </div>
+                                {aiReviewEnabled && (
+                                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl">
+                                        <input
+                                            type="checkbox"
+                                            id="hots-edit-exam"
+                                            checked={editQuestionForm.teacher_hots_claim || false}
+                                            onChange={e => setEditQuestionForm({ ...editQuestionForm, teacher_hots_claim: e.target.checked })}
+                                            className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500"
+                                        />
+                                        <label htmlFor="hots-edit-exam" className="flex-1 cursor-pointer">
+                                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                            <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Tandai soal ini sebagai Higher Order Thinking Skills</p>
+                                        </label>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-secondary/20">
@@ -1255,22 +1271,24 @@ export default function EditExamPage() {
                                                     )}
 
                                                     {/* HOTS Toggle */}
-                                                    <div className="mt-3 flex items-center gap-3 p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-lg">
-                                                        <input
-                                                            type="checkbox"
-                                                            id={`hots-passage-exam-${pqIdx}`}
-                                                            checked={pq.teacher_hots_claim || false}
-                                                            onChange={e => {
-                                                                const updated = [...passageQuestions]
-                                                                updated[pqIdx] = { ...updated[pqIdx], teacher_hots_claim: e.target.checked }
-                                                                setPassageQuestions(updated)
-                                                            }}
-                                                            className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
-                                                        />
-                                                        <label htmlFor={`hots-passage-exam-${pqIdx}`} className="cursor-pointer">
-                                                            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
-                                                        </label>
-                                                    </div>
+                                                    {aiReviewEnabled && (
+                                                        <div className="mt-3 flex items-center gap-3 p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-lg">
+                                                            <input
+                                                                type="checkbox"
+                                                                id={`hots-passage-exam-${pqIdx}`}
+                                                                checked={pq.teacher_hots_claim || false}
+                                                                onChange={e => {
+                                                                    const updated = [...passageQuestions]
+                                                                    updated[pqIdx] = { ...updated[pqIdx], teacher_hots_claim: e.target.checked }
+                                                                    setPassageQuestions(updated)
+                                                                }}
+                                                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                                                            />
+                                                            <label htmlFor={`hots-passage-exam-${pqIdx}`} className="cursor-pointer">
+                                                                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                                            </label>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -1349,19 +1367,21 @@ export default function EditExamPage() {
                                         </div>
                                     </div>
                                     {/* HOTS Toggle */}
-                                    <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                        <input
-                                            type="checkbox"
-                                            id="hots-claim-ulangan"
-                                            checked={manualForm.teacher_hots_claim || false}
-                                            onChange={e => setManualForm({ ...manualForm, teacher_hots_claim: e.target.checked })}
-                                            className="w-5 h-5 accent-emerald-600 rounded"
-                                        />
-                                        <label htmlFor="hots-claim-ulangan" className="flex-1 cursor-pointer">
-                                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
-                                            <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Centang jika soal ini membutuhkan kemampuan berpikir tingkat tinggi (Analisis, Evaluasi, atau Kreasi)</p>
-                                        </label>
-                                    </div>
+                                    {aiReviewEnabled && (
+                                        <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                            <input
+                                                type="checkbox"
+                                                id="hots-claim-ulangan"
+                                                checked={manualForm.teacher_hots_claim || false}
+                                                onChange={e => setManualForm({ ...manualForm, teacher_hots_claim: e.target.checked })}
+                                                className="w-5 h-5 accent-emerald-600 rounded"
+                                            />
+                                            <label htmlFor="hots-claim-ulangan" className="flex-1 cursor-pointer">
+                                                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">🧠 Klaim HOTS</p>
+                                                <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Centang jika soal ini membutuhkan kemampuan berpikir tingkat tinggi (Analisis, Evaluasi, atau Kreasi)</p>
+                                            </label>
+                                        </div>
+                                    )}
                                     <div className="flex gap-3 pt-6 border-t border-secondary/10">
                                         <Button variant="secondary" onClick={() => setMode('list')} className="flex-1">Batal</Button>
                                         <Button onClick={handleAddManualQuestion} disabled={saving || !manualForm.question_text || !manualForm.difficulty || (manualForm.question_type === 'MULTIPLE_CHOICE' && !manualForm.correct_answer)} loading={saving} className="flex-1">{saving ? 'Menyimpan...' : 'Tambah Soal'}</Button>
@@ -1381,6 +1401,7 @@ export default function EditExamPage() {
                 onSaveToBank={handleSaveToBank}
                 saving={saving}
                 targetLabel="Ulangan"
+                aiReviewEnabled={aiReviewEnabled}
             />
 
             {/* Bank Soal Mode */}

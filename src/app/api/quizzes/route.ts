@@ -40,10 +40,29 @@ export async function GET(request: NextRequest) {
                 .single()
 
             if (activeYear) {
-                const { data: taIds } = await supabase
+                // Determine base teaching assignments by academic year
+                let taQuery = supabase
                     .from('teaching_assignments')
-                    .select('id')
+                    .select('id, class_id')
                     .eq('academic_year_id', activeYear.id)
+
+                // STRICT FILTERING FOR SISWA
+                if (user.role === 'SISWA') {
+                    const { data: student } = await supabase
+                        .from('students')
+                        .select('class_id')
+                        .eq('user_id', user.id)
+                        .single()
+
+                    if (student?.class_id) {
+                        taQuery = taQuery.eq('class_id', student.class_id)
+                    } else {
+                        // Student has no valid class -> returns empty list 
+                        return NextResponse.json([])
+                    }
+                }
+
+                const { data: taIds } = await taQuery
 
                 if (taIds && taIds.length > 0) {
                     query = query.in('teaching_assignment_id', taIds.map(t => t.id))

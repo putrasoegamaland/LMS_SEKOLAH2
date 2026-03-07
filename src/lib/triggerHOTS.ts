@@ -9,6 +9,24 @@ import { analyzeQuestion, type HOTSAnalysisInput } from '@/lib/hotsQC'
 import { determineRouting } from '@/lib/routingRules'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 
+/**
+ * Check if AI Review is enabled for a school.
+ * Reads from schools.settings JSONB. Default: true (enabled).
+ */
+export async function isAIReviewEnabled(schoolId: string | null): Promise<boolean> {
+    if (!schoolId) return true // SUPER_ADMIN or no school context → default ON
+    try {
+        const { data } = await supabase
+            .from('schools')
+            .select('settings')
+            .eq('id', schoolId)
+            .single()
+        return data?.settings?.ai_review_enabled !== false // default true
+    } catch {
+        return true // On error, default to enabled
+    }
+}
+
 export interface TriggerHOTSInput {
     questionId: string
     questionSource: 'bank' | 'quiz' | 'exam'

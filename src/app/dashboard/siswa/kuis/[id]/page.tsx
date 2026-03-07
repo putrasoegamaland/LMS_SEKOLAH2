@@ -537,7 +537,7 @@ export default function KerjakanKuisPage() {
                                                                                 {isSelected && <TickSquare set="bold" primaryColor="currentColor" size={16} />}
                                                                             </div>
                                                                             <input type="radio" name={`q-${q.id}`} value={letter} checked={isSelected} onChange={() => { const newAnswers = { ...answers, [q.id]: letter }; setAnswers(newAnswers); saveAnswersToLocal(newAnswers) }} className="hidden" />
-                                                                            <span className="font-medium"><span className="mr-2 font-bold opacity-70">{letter}.</span>{opt}</span>
+                                                                            <span className="font-medium"><span className="mr-2 font-bold opacity-70">{letter}.</span><SmartText text={opt} as="span" /></span>
                                                                         </label>
                                                                     )
                                                                 })}
@@ -593,7 +593,7 @@ export default function KerjakanKuisPage() {
                                                                 {isSelected && <TickSquare set="bold" primaryColor="currentColor" size={16} />}
                                                             </div>
                                                             <input type="radio" name={`q-${q.id}`} value={letter} checked={isSelected} onChange={() => { const newAnswers = { ...answers, [q.id]: letter }; setAnswers(newAnswers); saveAnswersToLocal(newAnswers) }} className="hidden" />
-                                                            <span className="font-medium"><span className="mr-2 font-bold opacity-70">{letter}.</span>{opt}</span>
+                                                            <span className="font-medium"><span className="mr-2 font-bold opacity-70">{letter}.</span><SmartText text={opt} as="span" /></span>
                                                         </label>
                                                     )
                                                 })}

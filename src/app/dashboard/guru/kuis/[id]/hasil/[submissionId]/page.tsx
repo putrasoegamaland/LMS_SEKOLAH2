@@ -228,7 +228,7 @@ export default function GradingPage() {
                                                 }`}>
                                                 {q.question_type === 'MULTIPLE_CHOICE' && q.options
                                                     ? ans?.answer
-                                                        ? `${ans.answer}. ${q.options[ans.answer.charCodeAt(0) - 65] || ''}`
+                                                        ? <><span>{ans.answer}. </span><SmartText text={q.options[ans.answer.charCodeAt(0) - 65] || ''} as="span" /></>
                                                         : '(Tidak menjawab)'
                                                     : ans?.answer || '(Tidak menjawab)'}
                                             </p>
@@ -238,7 +238,7 @@ export default function GradingPage() {
                                             <div>
                                                 <p className="text-xs text-text-secondary uppercase tracking-wider mb-1">Kunci Jawaban</p>
                                                 <p className="text-green-600 dark:text-green-400">
-                                                    {q.correct_answer}. {q.options?.[(q.correct_answer?.charCodeAt(0) || 65) - 65]}
+                                                    <span>{q.correct_answer}. </span><SmartText text={q.options?.[(q.correct_answer?.charCodeAt(0) || 65) - 65] || ''} as="span" />
                                                 </p>
                                             </div>
                                         )}

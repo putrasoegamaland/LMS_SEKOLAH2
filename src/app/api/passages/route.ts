@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
-import { triggerBulkHOTSAnalysis, type TriggerHOTSInput } from '@/lib/triggerHOTS'
+import { triggerBulkHOTSAnalysis, isAIReviewEnabled, type TriggerHOTSInput } from '@/lib/triggerHOTS'
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -156,26 +156,32 @@ export async function POST(request: NextRequest) {
 
         // Trigger HOTS analysis for each saved question (fire-and-forget)
         if (insertedQuestions && insertedQuestions.length > 0) {
-            // Get subject name for rubric matching
-            let subjectName = ''
-            if (subject_id) {
-                const { data: subjectData } = await supabase
-                    .from('subjects').select('name').eq('id', subject_id).single()
-                subjectName = subjectData?.name || ''
-            }
+            const aiEnabled = await isAIReviewEnabled(schoolId)
+            if (aiEnabled) {
+                let subjectName = ''
+                if (subject_id) {
+                    const { data: subjectData } = await supabase
+                        .from('subjects').select('name').eq('id', subject_id).single()
+                    subjectName = subjectData?.name || ''
+                }
 
-            const hotsInputs: TriggerHOTSInput[] = insertedQuestions.map((q: any) => ({
-                questionId: q.id,
-                questionSource: 'bank' as const,
-                questionText: q.question_text,
-                questionType: q.question_type,
-                options: q.options,
-                correctAnswer: q.correct_answer,
-                teacherDifficulty: q.difficulty,
-                teacherHotsClaim: Boolean(q.teacher_hots_claim),
-                subjectName
-            }))
-            triggerBulkHOTSAnalysis(hotsInputs)
+                const hotsInputs: TriggerHOTSInput[] = insertedQuestions.map((q: any) => ({
+                    questionId: q.id,
+                    questionSource: 'bank' as const,
+                    questionText: q.question_text,
+                    questionType: q.question_type,
+                    options: q.options,
+                    correctAnswer: q.correct_answer,
+                    teacherDifficulty: q.difficulty,
+                    teacherHotsClaim: Boolean(q.teacher_hots_claim),
+                    subjectName
+                }))
+                triggerBulkHOTSAnalysis(hotsInputs)
+            } else {
+                // AI Review OFF — direct approve
+                const ids = insertedQuestions.map((q: any) => q.id)
+                await supabase.from('question_bank').update({ status: 'approved' }).in('id', ids)
+            }
         }
 
         // Return created passage with questions
@@ -272,25 +278,32 @@ export async function PUT(request: NextRequest) {
 
             // Trigger HOTS analysis for newly added or updated questions
             if (updatedQuestions && updatedQuestions.length > 0) {
-                let subjectName = ''
-                if (subject_id) {
-                    const { data: subjectData } = await supabase
-                        .from('subjects').select('name').eq('id', subject_id).single()
-                    subjectName = subjectData?.name || ''
-                }
+                const aiEnabled = await isAIReviewEnabled(schoolId)
+                if (aiEnabled) {
+                    let subjectName = ''
+                    if (subject_id) {
+                        const { data: subjectData } = await supabase
+                            .from('subjects').select('name').eq('id', subject_id).single()
+                        subjectName = subjectData?.name || ''
+                    }
 
-                const hotsInputs: TriggerHOTSInput[] = updatedQuestions.map((q: any) => ({
-                    questionId: q.id,
-                    questionSource: 'bank' as const,
-                    questionText: q.question_text,
-                    questionType: q.question_type,
-                    options: q.options,
-                    correctAnswer: q.correct_answer,
-                    teacherDifficulty: q.difficulty,
-                    teacherHotsClaim: Boolean(q.teacher_hots_claim),
-                    subjectName
-                }))
-                triggerBulkHOTSAnalysis(hotsInputs)
+                    const hotsInputs: TriggerHOTSInput[] = updatedQuestions.map((q: any) => ({
+                        questionId: q.id,
+                        questionSource: 'bank' as const,
+                        questionText: q.question_text,
+                        questionType: q.question_type,
+                        options: q.options,
+                        correctAnswer: q.correct_answer,
+                        teacherDifficulty: q.difficulty,
+                        teacherHotsClaim: Boolean(q.teacher_hots_claim),
+                        subjectName
+                    }))
+                    triggerBulkHOTSAnalysis(hotsInputs)
+                } else {
+                    // AI Review OFF — direct approve
+                    const ids = updatedQuestions.map((q: any) => q.id)
+                    await supabase.from('question_bank').update({ status: 'approved' }).in('id', ids)
+                }
             }
         }
 

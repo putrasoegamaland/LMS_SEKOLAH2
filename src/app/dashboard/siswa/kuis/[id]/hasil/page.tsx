@@ -151,7 +151,7 @@ export default function HasilKuisPage() {
                             <p className="text-text-secondary text-xs mb-1">Jawaban Kamu:</p>
                             <p className="text-text-main dark:text-white font-medium">
                                 {q.question_type === 'MULTIPLE_CHOICE' && q.options && userAnswer?.answer
-                                    ? `${userAnswer.answer}. ${q.options[(userAnswer.answer.charCodeAt(0) - 65)] || ''}`
+                                    ? <><span>{userAnswer.answer}. </span><SmartText text={q.options[(userAnswer.answer.charCodeAt(0) - 65)] || ''} as="span" /></>
                                     : userAnswer?.answer || '-'}
                             </p>
                         </div>
@@ -161,7 +161,7 @@ export default function HasilKuisPage() {
                             <div className="pt-2 border-t border-secondary/20">
                                 <p className="text-green-600 dark:text-green-400 text-xs mb-1">Kunci Jawaban:</p>
                                 <p className="text-green-700 dark:text-green-300">
-                                    {q.correct_answer}. {q.options?.[(q.correct_answer?.charCodeAt(0) || 65) - 65]}
+                                    <span>{q.correct_answer}. </span><SmartText text={q.options?.[(q.correct_answer?.charCodeAt(0) || 65) - 65] || ''} as="span" />
                                 </p>
                             </div>
                         )}

@@ -671,7 +671,7 @@ export default function TakeExamPage() {
                                                             return (
                                                                 <button key={optIdx} onClick={() => saveAnswer(q.id, letter)} className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${isSelected ? 'bg-primary/10 border-primary text-text-main dark:text-white' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-600 text-text-secondary dark:text-slate-300 hover:border-gray-400 dark:hover:border-slate-500'}`}>
                                                                     <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg mr-3 font-bold ${isSelected ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-slate-600 text-text-secondary dark:text-slate-300'}`}>{letter}</span>
-                                                                    {opt}
+                                                                    <SmartText text={opt} as="span" />
                                                                 </button>
                                                             )
                                                         })}
@@ -715,7 +715,7 @@ export default function TakeExamPage() {
                                                 return (
                                                     <button key={optIdx} onClick={() => saveAnswer(currentItem.question.id, letter)} className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${isSelected ? 'bg-primary/10 border-primary text-text-main dark:text-white' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-600 text-text-secondary dark:text-slate-300 hover:border-gray-400 dark:hover:border-slate-500'}`}>
                                                         <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg mr-3 font-bold ${isSelected ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-slate-600 text-text-secondary dark:text-slate-300'}`}>{letter}</span>
-                                                        {opt}
+                                                        <SmartText text={opt} as="span" />
                                                     </button>
                                                 )
                                             })}

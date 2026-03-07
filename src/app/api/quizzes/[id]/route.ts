@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 
+import { isAIReviewEnabled } from '@/lib/triggerHOTS'
+
 // GET single quiz with questions
 export async function GET(
     request: NextRequest,
@@ -65,17 +67,30 @@ export async function PUT(
 
         // If trying to publish, check question statuses first
         if (is_active === true) {
+            const aiEnabled = await isAIReviewEnabled(schoolId)
+
             const { data: questions } = await supabase
                 .from('quiz_questions')
-                .select('status')
+                .select('id, status')
                 .eq('quiz_id', id)
 
             if (questions && questions.length > 0) {
-                const allApproved = questions.every(q => q.status === 'approved')
-                if (!allApproved) {
-                    finalIsActive = false // Don't publish yet
-                    isPendingPublish = true
-                    isUnderReview = true
+                if (!aiEnabled) {
+                    // AI Review OFF — auto-approve any non-approved questions
+                    const nonApproved = questions.filter(q => q.status !== 'approved')
+                    if (nonApproved.length > 0) {
+                        await supabase.from('quiz_questions')
+                            .update({ status: 'approved' })
+                            .in('id', nonApproved.map(q => q.id))
+                    }
+                } else {
+                    // AI Review ON — block publish if questions not all approved
+                    const allApproved = questions.every(q => q.status === 'approved')
+                    if (!allApproved) {
+                        finalIsActive = false
+                        isPendingPublish = true
+                        isUnderReview = true
+                    }
                 }
             }
         }

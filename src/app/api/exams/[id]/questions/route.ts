@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
-import { triggerBulkHOTSAnalysis, type TriggerHOTSInput } from '@/lib/triggerHOTS'
+import { triggerBulkHOTSAnalysis, isAIReviewEnabled, type TriggerHOTSInput } from '@/lib/triggerHOTS'
 
 // GET questions for exam
 export async function GET(
@@ -117,28 +117,35 @@ export async function POST(
             const bankIndices = new Set(questions.map((q: any, i: number) => q.bank_status === 'approved' ? i : -1).filter((i: number) => i >= 0))
             const questionsNeedingAnalysis = data.filter((_: any, i: number) => !bankIndices.has(i))
             if (questionsNeedingAnalysis.length > 0) {
-                const { data: exam } = await supabase
-                    .from('exams')
-                    .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
-                    .eq('id', id).single()
-                const ta = exam?.teaching_assignment as any
-                const subjectName = ta?.subject?.name || ''
-                const gradeBand = ta?.class?.school_level || 'SMP'
-                const hotsInputs: TriggerHOTSInput[] = questionsNeedingAnalysis.map((q: any) => ({
-                    questionId: q.id,
-                    questionSource: 'exam' as const,
-                    questionText: q.question_text,
-                    questionType: q.question_type,
-                    options: q.options,
-                    correctAnswer: q.correct_answer,
-                    teacherDifficulty: q.difficulty,
-                    teacherHotsClaim: q.teacher_hots_claim || false,
-                    subjectName,
-                    gradeBand,
-                    examId: id
-                }))
-                console.log(`[HOTS] Triggering analysis for ${hotsInputs.length} exam questions`)
-                triggerBulkHOTSAnalysis(hotsInputs)
+                const aiEnabled = await isAIReviewEnabled(schoolId)
+                if (aiEnabled) {
+                    const { data: exam } = await supabase
+                        .from('exams')
+                        .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
+                        .eq('id', id).single()
+                    const ta = exam?.teaching_assignment as any
+                    const subjectName = ta?.subject?.name || ''
+                    const gradeBand = ta?.class?.school_level || 'SMP'
+                    const hotsInputs: TriggerHOTSInput[] = questionsNeedingAnalysis.map((q: any) => ({
+                        questionId: q.id,
+                        questionSource: 'exam' as const,
+                        questionText: q.question_text,
+                        questionType: q.question_type,
+                        options: q.options,
+                        correctAnswer: q.correct_answer,
+                        teacherDifficulty: q.difficulty,
+                        teacherHotsClaim: q.teacher_hots_claim || false,
+                        subjectName,
+                        gradeBand,
+                        examId: id
+                    }))
+                    console.log(`[HOTS] Triggering analysis for ${hotsInputs.length} exam questions`)
+                    triggerBulkHOTSAnalysis(hotsInputs)
+                } else {
+                    // AI Review OFF — direct approve
+                    const ids = questionsNeedingAnalysis.map((q: any) => q.id)
+                    await supabase.from('exam_questions').update({ status: 'approved' }).in('id', ids)
+                }
             }
         }
 

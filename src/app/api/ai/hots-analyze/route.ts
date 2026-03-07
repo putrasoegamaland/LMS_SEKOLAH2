@@ -3,6 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
 import { analyzeQuestion, type HOTSAnalysisInput } from '@/lib/hotsQC'
 import { determineRouting, type RoutingInput } from '@/lib/routingRules'
+import { isAIReviewEnabled } from '@/lib/triggerHOTS'
 
 /**
  * POST /api/ai/hots-analyze
@@ -56,6 +57,16 @@ export async function POST(request: NextRequest) {
                 { error: 'question_source harus bank, quiz, atau exam' },
                 { status: 400 }
             )
+        }
+
+        // Check if AI review is enabled for this school
+        const aiEnabled = await isAIReviewEnabled(schoolId)
+        if (!aiEnabled) {
+            return NextResponse.json({
+                success: false,
+                error: 'AI Review dinonaktifkan untuk sekolah ini',
+                status: 'disabled'
+            }, { status: 403 })
         }
 
         // 1. Update question status to 'ai_reviewing'

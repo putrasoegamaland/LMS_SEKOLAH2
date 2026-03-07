@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { getSchoolContextOrError, isErrorResponse } from '@/lib/schoolContext'
-import { triggerHOTSAnalysis, triggerBulkHOTSAnalysis, type TriggerHOTSInput } from '@/lib/triggerHOTS'
+import { triggerHOTSAnalysis, triggerBulkHOTSAnalysis, isAIReviewEnabled, type TriggerHOTSInput } from '@/lib/triggerHOTS'
 
 // GET questions for a quiz
 export async function GET(
@@ -106,28 +106,35 @@ export async function POST(
                 const questionsNeedingAnalysis = data.filter((_: any, i: number) => !bankIndices.has(i))
                 console.log(`[HOTS-DEBUG] bankIndices: ${JSON.stringify([...bankIndices])}, needsAnalysis: ${questionsNeedingAnalysis.length}`)
                 if (questionsNeedingAnalysis.length > 0) {
-                    const { data: quiz } = await supabase
-                        .from('quizzes')
-                        .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
-                        .eq('id', id).single()
-                    const ta = quiz?.teaching_assignment as any
-                    const subjectName = ta?.subject?.name || ''
-                    const gradeBand = ta?.class?.school_level || 'SMP'
-                    const hotsInputs: TriggerHOTSInput[] = questionsNeedingAnalysis.map((q: any) => ({
-                        questionId: q.id,
-                        questionSource: 'quiz' as const,
-                        questionText: q.question_text,
-                        questionType: q.question_type,
-                        options: q.options,
-                        correctAnswer: q.correct_answer,
-                        teacherDifficulty: q.difficulty,
-                        teacherHotsClaim: q.teacher_hots_claim || false,
-                        subjectName,
-                        gradeBand,
-                        quizId: id
-                    }))
-                    console.log(`[HOTS] Triggering analysis for ${hotsInputs.length} quiz questions`)
-                    triggerBulkHOTSAnalysis(hotsInputs)
+                    const aiEnabled = await isAIReviewEnabled(schoolId)
+                    if (aiEnabled) {
+                        const { data: quiz } = await supabase
+                            .from('quizzes')
+                            .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
+                            .eq('id', id).single()
+                        const ta = quiz?.teaching_assignment as any
+                        const subjectName = ta?.subject?.name || ''
+                        const gradeBand = ta?.class?.school_level || 'SMP'
+                        const hotsInputs: TriggerHOTSInput[] = questionsNeedingAnalysis.map((q: any) => ({
+                            questionId: q.id,
+                            questionSource: 'quiz' as const,
+                            questionText: q.question_text,
+                            questionType: q.question_type,
+                            options: q.options,
+                            correctAnswer: q.correct_answer,
+                            teacherDifficulty: q.difficulty,
+                            teacherHotsClaim: q.teacher_hots_claim || false,
+                            subjectName,
+                            gradeBand,
+                            quizId: id
+                        }))
+                        console.log(`[HOTS] Triggering analysis for ${hotsInputs.length} quiz questions`)
+                        triggerBulkHOTSAnalysis(hotsInputs)
+                    } else {
+                        // AI Review OFF — direct approve
+                        const ids = questionsNeedingAnalysis.map((q: any) => q.id)
+                        await supabase.from('quiz_questions').update({ status: 'approved' }).in('id', ids)
+                    }
                 }
             }
 
@@ -160,24 +167,30 @@ export async function POST(
 
         // Trigger HOTS analysis for single question (fire-and-forget)
         if (data) {
-            const { data: quiz } = await supabase
-                .from('quizzes')
-                .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
-                .eq('id', id).single()
-            const ta = quiz?.teaching_assignment as any
-            triggerHOTSAnalysis({
-                questionId: data.id,
-                questionSource: 'quiz',
-                questionText: data.question_text,
-                questionType: data.question_type,
-                options: data.options,
-                correctAnswer: data.correct_answer,
-                teacherDifficulty: data.difficulty,
-                teacherHotsClaim: data.teacher_hots_claim || false,
-                subjectName: ta?.subject?.name || '',
-                gradeBand: ta?.class?.school_level || 'SMP',
-                quizId: id
-            }).catch(err => console.error('HOTS trigger error:', err))
+            const aiEnabled = await isAIReviewEnabled(schoolId)
+            if (aiEnabled) {
+                const { data: quiz } = await supabase
+                    .from('quizzes')
+                    .select('teaching_assignment:teaching_assignments(subject:subjects(name), class:classes(school_level))')
+                    .eq('id', id).single()
+                const ta = quiz?.teaching_assignment as any
+                triggerHOTSAnalysis({
+                    questionId: data.id,
+                    questionSource: 'quiz',
+                    questionText: data.question_text,
+                    questionType: data.question_type,
+                    options: data.options,
+                    correctAnswer: data.correct_answer,
+                    teacherDifficulty: data.difficulty,
+                    teacherHotsClaim: data.teacher_hots_claim || false,
+                    subjectName: ta?.subject?.name || '',
+                    gradeBand: ta?.class?.school_level || 'SMP',
+                    quizId: id
+                }).catch(err => console.error('HOTS trigger error:', err))
+            } else {
+                // AI Review OFF — direct approve
+                await supabase.from('quiz_questions').update({ status: 'approved' }).eq('id', data.id)
+            }
         }
 
         return NextResponse.json(data)
