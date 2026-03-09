@@ -50,12 +50,12 @@ export async function PUT(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { username, password, full_name, nis, class_id, gender, angkatan, entry_year, school_level, status, wali_password } = await request.json()
+        const { password, full_name, nis, class_id, gender, angkatan, entry_year, school_level, status, wali_password } = await request.json()
 
         // Get student with current user info (scoped by school)
         let studentQuery = supabase
             .from('students')
-            .select('user_id, parent_user_id')
+            .select('user_id, parent_user_id, nis')
             .eq('id', id)
         if (schoolId) studentQuery = studentQuery.eq('school_id', schoolId)
         const { data: student } = await studentQuery.single()
@@ -72,13 +72,33 @@ export async function PUT(
             .single()
 
         const currentUsername = currentUser?.username || ''
-        const newUsername = username || currentUsername
+
+        // If NIS is being changed, check for username collisions
+        const isNisChanging = nis !== undefined && nis !== student.nis
+        const newUsername = isNisChanging ? nis.trim() : currentUsername
+
+        if (isNisChanging && newUsername) {
+            const { data: existingUser } = await supabase
+                .from('users')
+                .select('id')
+                .eq('username', newUsername)
+                .neq('id', student.user_id) // Exclude current user
+                .single()
+
+            if (existingUser) {
+                return NextResponse.json({ error: 'NIS (Username) sudah digunakan oleh akun lain' }, { status: 400 })
+            }
+        }
+
 
         // Update user
-        const userUpdate: Record<string, string> = {}
-        if (username) userUpdate.username = username
+        const userUpdate: Record<string, string | boolean> = {}
+        if (isNisChanging && newUsername) userUpdate.username = newUsername
         if (full_name) userUpdate.full_name = full_name
-        if (password) userUpdate.password_hash = await hashPassword(password)
+        if (password) {
+            userUpdate.password_hash = await hashPassword(password)
+            userUpdate.must_change_password = true
+        }
 
         if (Object.keys(userUpdate).length > 0) {
             const { error: userError } = await supabase
@@ -91,30 +111,31 @@ export async function PUT(
 
         // Handle .wali user lifecycle
         const studentUpdate: Record<string, string | number | null> = {}
+        const waliUsername = `${newUsername}.wali`
+
+        // Check if current parent_user_id is actually the .wali user
+        let isCurrentWaliUser = false
+        if (student.parent_user_id) {
+            const { data: currentParent } = await supabase
+                .from('users')
+                .select('username')
+                .eq('id', student.parent_user_id)
+                .single()
+
+            if (currentParent?.username?.endsWith('.wali')) {
+                isCurrentWaliUser = true
+            }
+        }
+
 
         if (wali_password) {
-            const waliUsername = `${newUsername}.wali`
-
-            // Check if current parent_user_id is actually the .wali user
-            let isCurrentWaliUser = false
-            if (student.parent_user_id) {
-                const { data: currentParent } = await supabase
-                    .from('users')
-                    .select('username')
-                    .eq('id', student.parent_user_id)
-                    .single()
-
-                if (currentParent?.username?.endsWith('.wali')) {
-                    isCurrentWaliUser = true
-                }
-            }
-
             if (isCurrentWaliUser) {
-                // .wali user exists → update password (and username if student username changed)
-                const waliUpdate: Record<string, string> = {
-                    password_hash: await hashPassword(wali_password)
+                // .wali user exists → update password (and username if student username/NIS changed)
+                const waliUpdate: Record<string, string | boolean> = {
+                    password_hash: await hashPassword(wali_password),
+                    must_change_password: true
                 }
-                if (username && username !== currentUsername) {
+                if (isNisChanging) {
                     waliUpdate.username = waliUsername
                 }
                 if (full_name) {
@@ -160,12 +181,16 @@ export async function PUT(
                     studentUpdate.parent_user_id = waliUser.id
                 }
             }
-        } else if (username && username !== currentUsername && student.parent_user_id) {
-            // Username changed but no wali_password → just rename .wali username
-            await supabase
+        } else if (isNisChanging && student.parent_user_id && isCurrentWaliUser) {
+            // NIS changed but no wali_password updating → rename .wali username if parent exists and is a .wali user
+            const { error: waliRenameError } = await supabase
                 .from('users')
-                .update({ username: `${username}.wali` })
+                .update({ username: waliUsername })
                 .eq('id', student.parent_user_id)
+
+            if (waliRenameError) {
+                console.error('Error renaming wali user:', waliRenameError)
+            }
         }
 
         // Update student fields

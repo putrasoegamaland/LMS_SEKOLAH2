@@ -54,13 +54,18 @@ export async function validateSession(token: string): Promise<AuthUser | null> {
         .from('sessions')
         .select(`
       *,
-      user:users(id, username, full_name, role, school_id, school:schools(id, name))
+      user:users(id, username, full_name, role, school_id, must_change_password, is_locked, school:schools(id, name))
     `)
         .eq('token', token)
         .gt('expires_at', new Date().toISOString())
         .single()
 
     if (error || !session || !session.user) {
+        return null
+    }
+
+    // Immediately invalidate session if the user account is locked
+    if (session.user.is_locked) {
         return null
     }
 
@@ -81,7 +86,9 @@ export async function validateSession(token: string): Promise<AuthUser | null> {
         full_name: session.user.full_name,
         role: session.user.role,
         school_id: session.user.role === 'SUPER_ADMIN' ? null : session.user.school_id,
-        school_name: session.user.school?.name || null
+        school_name: session.user.school?.name || null,
+        must_change_password: session.user.must_change_password,
+        is_locked: session.user.is_locked
     }
 }
 

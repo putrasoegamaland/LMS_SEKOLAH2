@@ -19,6 +19,7 @@ interface DashboardData {
         recentSubmissions: any[]
         recentQuizzes: any[]
         recentExams: any[]
+        totalAssignments: number
     } | null
     announcements: any[]
     message?: string
@@ -145,7 +146,7 @@ export default function WaliDashboardPage() {
                 </Card>
                 <Card className="text-center py-4">
                     <div className="flex justify-center"><Edit set="bold" primaryColor="#ef4444" size={24} /></div>
-                    <div className="text-2xl font-bold text-text-main dark:text-white mt-1">{child.recentSubmissions.length}</div>
+                    <div className="text-2xl font-bold text-text-main dark:text-white mt-1">{child.totalAssignments}</div>
                     <div className="text-[11px] text-text-secondary">Total Tugas</div>
                 </Card>
             </div>

@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic'
 const AIReviewPanel = dynamic(() => import('@/components/AIReviewPanel'), { ssr: false })
 import { ArrowLeft, Filter as Filter2, TickSquare as CheckCircle, Swap as RotateCcw, ArrowDown as ChevronDown, ArrowUp as ChevronUp, Search, User, Document as BookOpen, Discovery as Brain, Graph as BarChart3, Show as Eye, Hide as EyeOff } from 'react-iconly'
 import Link from 'next/link'
+import SmartText from '@/components/SmartText'
 
 interface QueueItem {
     id: string
@@ -481,9 +482,9 @@ export default function ReviewSoalPage() {
                                                         {idx + 1}.
                                                     </span>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm text-text-main dark:text-white line-clamp-2">
-                                                            {item.question_text}
-                                                        </p>
+                                                        <div className="text-sm text-text-main dark:text-white line-clamp-2">
+                                                            <SmartText text={item.question_text} />
+                                                        </div>
                                                         {/* === Baris 1: Data Guru === */}
                                                         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                                             <span className="text-xs text-text-secondary dark:text-zinc-500 font-medium mr-0.5" title="Inputan Guru">👨‍🏫</span>
@@ -548,9 +549,9 @@ export default function ReviewSoalPage() {
                                                     {/* Full Question */}
                                                     <div>
                                                         <h4 className="text-xs font-bold text-text-secondary dark:text-zinc-400 mb-1 uppercase tracking-wide">Soal Lengkap</h4>
-                                                        <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap bg-white dark:bg-zinc-800 p-3 rounded-lg border dark:border-zinc-700">
-                                                            {item.question_text}
-                                                        </p>
+                                                        <div className="text-sm text-text-main dark:text-white whitespace-pre-wrap bg-white dark:bg-zinc-800 p-3 rounded-lg border dark:border-zinc-700">
+                                                            <SmartText text={item.question_text} />
+                                                        </div>
                                                         {item.options && Array.isArray(item.options) && (
                                                             <div className="mt-2 space-y-1 pl-3">
                                                                 {item.options.map((opt: string, i: number) => (
@@ -558,7 +559,7 @@ export default function ReviewSoalPage() {
                                                                         ? 'text-green-600 dark:text-green-400 font-medium'
                                                                         : 'text-text-main dark:text-zinc-300'
                                                                         }`}>
-                                                                        {String.fromCharCode(65 + i)}. {opt}
+                                                                        {String.fromCharCode(65 + i)}. <SmartText text={opt} as="span" />
                                                                         {opt === item.correct_answer && ' ✓'}
                                                                     </p>
                                                                 ))}
@@ -567,7 +568,7 @@ export default function ReviewSoalPage() {
                                                         {item.correct_answer && !item.options && (
                                                             <div className="mt-2 pl-3">
                                                                 <span className="text-xs text-text-secondary dark:text-zinc-400">Jawaban: </span>
-                                                                <span className="text-sm text-green-600 dark:text-green-400">{item.correct_answer}</span>
+                                                                <span className="text-sm text-green-600 dark:text-green-400"><SmartText text={item.correct_answer} as="span" /></span>
                                                             </div>
                                                         )}
                                                     </div>

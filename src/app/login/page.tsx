@@ -61,10 +61,10 @@ export default function LoginPage() {
 
                     {/* Login Form */}
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Username */}
+                        {/* Username / NIS */}
                         <div>
                             <label className="block text-sm font-bold text-slate-700 dark:text-white mb-2 ml-1">
-                                Username
+                                Username / NIS
                             </label>
                             <div className="relative group">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors">
@@ -77,7 +77,7 @@ export default function LoginPage() {
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
-                                    placeholder="Masukkan username Anda"
+                                    placeholder="NIS (siswa) / Username (guru/admin)"
                                     required
                                 />
                             </div>

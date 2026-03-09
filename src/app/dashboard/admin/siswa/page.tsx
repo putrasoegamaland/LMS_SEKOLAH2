@@ -9,6 +9,17 @@ import { Loader2, Upload, FileDown, CheckCircle2, XCircle, Search as SearchIcon 
 import Papa from 'papaparse'
 import { Class, SchoolLevel } from '@/lib/types'
 
+interface FormData {
+    password: string
+    full_name: string
+    nis: string
+    class_id: string
+    gender: string
+    angkatan: string
+    entry_year: string
+    school_level: string
+    wali_password: string
+}
 
 interface Student {
     id: string
@@ -24,25 +35,13 @@ interface Student {
         id: string
         username: string
         full_name: string | null
+        must_change_password?: boolean
+        is_locked?: boolean
     }
     class: { id: string; name: string; grade_level?: number; school_level?: SchoolLevel } | null
 }
 
-interface FormData {
-    username: string
-    password: string
-    full_name: string
-    nis: string
-    class_id: string
-    gender: string
-    angkatan: string
-    entry_year: string
-    school_level: string
-    wali_password: string
-}
-
 const defaultFormData: FormData = {
-    username: '',
     password: '',
     full_name: '',
     nis: '',
@@ -81,12 +80,30 @@ export default function SiswaPage() {
     const [searchQuery, setSearchQuery] = useState('')
     const [filterAngkatan, setFilterAngkatan] = useState('')
     const [filterSchoolLevel, setFilterSchoolLevel] = useState('')
+    const [filterPasswordStatus, setFilterPasswordStatus] = useState('')
+    const [filterLockStatus, setFilterLockStatus] = useState('')
     const [showFilters, setShowFilters] = useState(false)
 
     // Accordion State
     const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set())
 
-
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: React.ReactNode;
+        confirmText: string;
+        cancelText: string;
+        isDanger: boolean;
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        confirmText: 'Ya',
+        cancelText: 'Tidak',
+        isDanger: false,
+        onConfirm: () => { }
+    })
 
     const fetchData = async () => {
         try {
@@ -130,8 +147,16 @@ export default function SiswaPage() {
         if (filterSchoolLevel) {
             filtered = filtered.filter(s => s.school_level === filterSchoolLevel)
         }
+        if (filterPasswordStatus) {
+            const isMustChange = filterPasswordStatus === 'belum_ganti'
+            filtered = filtered.filter(s => s.user.must_change_password === isMustChange)
+        }
+        if (filterLockStatus) {
+            const isLocked = filterLockStatus === 'terkunci'
+            filtered = filtered.filter(s => !!s.user.is_locked === isLocked)
+        }
         setFilteredStudents(filtered)
-    }, [students, searchQuery, filterAngkatan, filterSchoolLevel])
+    }, [students, searchQuery, filterAngkatan, filterSchoolLevel, filterPasswordStatus, filterLockStatus])
 
     // Grouping by class
     const groupedStudents = filteredStudents.reduce((acc, student) => {
@@ -231,16 +256,60 @@ export default function SiswaPage() {
         }
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Yakin ingin menghapus siswa ini?')) return
-        await fetch(`/api/students/${id}`, { method: 'DELETE' })
-        fetchData()
+    const handleDelete = (id: string) => {
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Hapus Siswa',
+            message: 'Yakin ingin menghapus siswa ini? Data tidak dapat dikembalikan.',
+            confirmText: 'Ya, Hapus',
+            cancelText: 'Batal',
+            isDanger: true,
+            onConfirm: async () => {
+                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                await fetch(`/api/students/${id}`, { method: 'DELETE' })
+                fetchData()
+            }
+        });
+    }
+
+    const handleToggleLock = (id: string, currentStatus: boolean | undefined) => {
+        const action = currentStatus ? 'membuka kunci' : 'mengunci'
+
+        setConfirmDialog({
+            isOpen: true,
+            title: currentStatus ? 'Buka Kunci Akses' : 'Teruskan Kunci Akses',
+            message: `Yakin ingin ${action} akun siswa ini beserta akun walinya (jika ada)?`,
+            confirmText: 'Ya, Lanjutkan',
+            cancelText: 'Batal',
+            isDanger: !currentStatus,
+            onConfirm: async () => {
+                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                setSaving(true)
+                try {
+                    const res = await fetch(`/api/students/${id}/lock`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ is_locked: !currentStatus })
+                    })
+
+                    if (!res.ok) {
+                        const data = await res.json()
+                        alert(data.error || `Gagal ${action} akun`)
+                    } else {
+                        fetchData() // Refresh data
+                    }
+                } catch (err) {
+                    alert(`Terjadi kesalahan saat ${action} akun`)
+                } finally {
+                    setSaving(false)
+                }
+            }
+        });
     }
 
     const openEdit = (student: Student) => {
         setEditingStudent(student)
         setFormData({
-            username: student.user.username,
             password: '',
             full_name: student.user.full_name || '',
             nis: student.nis || '',
@@ -265,6 +334,8 @@ export default function SiswaPage() {
     const clearFilters = () => {
         setFilterAngkatan('')
         setFilterSchoolLevel('')
+        setFilterPasswordStatus('')
+        setFilterLockStatus('')
     }
 
     const downloadTemplate = () => {
@@ -412,7 +483,31 @@ export default function SiswaPage() {
                                 <option value="SMA">SMA</option>
                             </select>
                         </div>
-                        {(filterAngkatan || filterSchoolLevel) && (
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-text-main dark:text-white">Status Password:</label>
+                            <select
+                                value={filterPasswordStatus}
+                                onChange={(e) => setFilterPasswordStatus(e.target.value)}
+                                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                                <option value="">Semua</option>
+                                <option value="sudah_ganti">Sudah Ganti</option>
+                                <option value="belum_ganti">Belum Ganti</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-text-main dark:text-white">Status Akun:</label>
+                            <select
+                                value={filterLockStatus}
+                                onChange={(e) => setFilterLockStatus(e.target.value)}
+                                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                                <option value="">Semua</option>
+                                <option value="aktif">Aktif</option>
+                                <option value="terkunci">Terkunci</option>
+                            </select>
+                        </div>
+                        {(filterAngkatan || filterSchoolLevel || filterPasswordStatus || filterLockStatus) && (
                             <button
                                 onClick={clearFilters}
                                 className="text-sm text-primary hover:underline"
@@ -497,19 +592,32 @@ export default function SiswaPage() {
                                                             <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">L/P</th>
                                                             <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">NIS</th>
                                                             <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">Angkatan</th>
-                                                            <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">Username</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">Username Login (NIS)</th>
+                                                            <th className="px-6 py-3 text-left text-xs font-bold text-text-secondary uppercase tracking-wider">Status Password</th>
                                                             <th className="px-6 py-3 text-right text-xs font-bold text-text-secondary uppercase tracking-wider">Aksi</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-secondary/10 dark:divide-white/5 bg-white dark:bg-slate-800/20">
                                                         {group.students.map((student) => (
-                                                            <tr key={student.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                                                            <tr key={student.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors ${student.user.is_locked ? 'opacity-60 bg-red-50/20 dark:bg-red-900/10' : ''}`}>
                                                                 <td className="px-6 py-3">
                                                                     <div className="flex items-center gap-3">
-                                                                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-violet-500 to-fuchsia-500 flex items-center justify-center text-white font-bold shadow-sm text-xs">
+                                                                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-violet-500 to-fuchsia-500 flex items-center justify-center text-white font-bold shadow-sm text-xs relative">
                                                                             {student.user.full_name?.[0] || '?'}
+                                                                            {student.user.is_locked && (
+                                                                                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 flex items-center justify-center">
+                                                                                    <span className="text-[8px]">🔒</span>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
-                                                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{student.user.full_name || '-'}</span>
+                                                                        <div className="flex flex-col">
+                                                                            <span className={`text-sm font-bold ${student.user.is_locked ? 'text-red-700 dark:text-red-400 line-through decoration-red-500/50' : 'text-slate-700 dark:text-slate-200'}`}>
+                                                                                {student.user.full_name || '-'}
+                                                                            </span>
+                                                                            {student.user.is_locked && (
+                                                                                <span className="text-[10px] font-bold text-red-600 dark:text-red-400 mt-0.5">TERKUNCI</span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-6 py-3">
@@ -536,8 +644,29 @@ export default function SiswaPage() {
                                                                     )}
                                                                 </td>
                                                                 <td className="px-6 py-3 text-text-secondary dark:text-zinc-400 font-mono text-xs">{student.user.username}</td>
+                                                                <td className="px-6 py-3">
+                                                                    {student.user.must_change_password ? (
+                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 shadow-sm">
+                                                                            <span className="w-1 h-1 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span>
+                                                                            Belum Diganti
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 shadow-sm">
+                                                                            <span className="w-1 h-1 rounded-full bg-emerald-500 mr-1.5"></span>
+                                                                            Sudah Diganti
+                                                                        </span>
+                                                                    )}
+                                                                </td>
                                                                 <td className="px-6 py-3 text-right">
                                                                     <div className="flex items-center justify-end gap-1.5">
+                                                                        <button
+                                                                            onClick={() => handleToggleLock(student.id, student.user.is_locked)}
+                                                                            className={`p-1.5 rounded-md transition-colors ${student.user.is_locked ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10' : 'text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10'}`}
+                                                                            title={student.user.is_locked ? "Buka Akses Siswa" : "Blokir Akses Siswa"}
+                                                                            disabled={saving}
+                                                                        >
+                                                                            <span className="text-base">{student.user.is_locked ? '🔓' : '🔒'}</span>
+                                                                        </button>
                                                                         <Link href={`/dashboard/admin/siswa/${student.id}/rapor`} className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors" title="Rapor">
                                                                             <Paper set="bold" primaryColor="currentColor" size={16} />
                                                                         </Link>
@@ -596,7 +725,11 @@ export default function SiswaPage() {
                                 onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
                                 className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-slate-400"
                                 placeholder="NIS Siswa"
+                                required
                             />
+                            <p className="text-xs text-text-secondary mt-1">
+                                NIS ini otomatis menjadi username login siswa
+                            </p>
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Jenis Kelamin</label>
@@ -676,19 +809,19 @@ export default function SiswaPage() {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Username</label>
-                        <input
-                            type="text"
-                            value={formData.username}
-                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-slate-400"
-                            placeholder="Username login"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">
-                            Password {editingStudent && <span className="text-text-secondary font-normal text-xs">(Biarkan kosong jika tidak ingin mengubah)</span>}
+                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2 flex items-center gap-2">
+                            <span>Password {editingStudent && <span className="text-text-secondary font-normal text-xs">(Biarkan kosong jika tidak ingin mengubah)</span>}</span>
+                            {editingStudent && (
+                                editingStudent.user.must_change_password ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">
+                                        ⚠️ Siswa belum ganti default password
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50">
+                                        ✅ Sudah diganti
+                                    </span>
+                                )
+                            )}
                         </label>
                         <div className="relative">
                             <input
@@ -696,7 +829,7 @@ export default function SiswaPage() {
                                 value={formData.password}
                                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                 className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-slate-400 pr-12"
-                                placeholder={editingStudent ? "••••••••" : "Password"}
+                                placeholder={editingStudent ? "Ketik untuk reset password..." : "Password Default"}
                                 required={!editingStudent}
                             />
                             <button
@@ -721,7 +854,7 @@ export default function SiswaPage() {
                         </div>
                         {editingStudent && editingStudent.parent_user_id && (
                             <p className="text-xs text-teal-600 dark:text-teal-400 mb-2 bg-teal-100 dark:bg-teal-900/30 px-3 py-1.5 rounded-lg">
-                                ✅ Login wali: <strong>{formData.username}.wali</strong>
+                                ✅ Login wali: <strong>{formData.nis}.wali</strong>
                             </p>
                         )}
                         <label className="block text-xs font-medium text-teal-700 dark:text-teal-300 mb-1">
@@ -734,9 +867,9 @@ export default function SiswaPage() {
                             className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 placeholder-slate-400 text-sm"
                             placeholder={editingStudent ? '••••••••' : 'Password untuk orang tua (opsional)'}
                         />
-                        {formData.username && formData.wali_password && (
+                        {formData.nis && formData.wali_password && (
                             <p className="text-[11px] text-teal-600 dark:text-teal-400 mt-1.5">
-                                Orang tua akan login dengan username: <strong>{formData.username}.wali</strong>
+                                Orang tua akan login dengan username: <strong>{formData.nis}.wali</strong>
                             </p>
                         )}
 
@@ -849,6 +982,32 @@ export default function SiswaPage() {
                         </div>
                     </div>
                 )}
+            </Modal>
+
+            {/* Confirmation Modal */}
+            <Modal
+                open={confirmDialog.isOpen}
+                onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                title={confirmDialog.title}
+            >
+                <div>
+                    <p className="text-slate-700 dark:text-slate-300 font-medium">{confirmDialog.message}</p>
+                    <div className="flex gap-3 pt-4 border-t border-secondary/10 mt-6">
+                        <Button
+                            variant="secondary"
+                            onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                            className="flex-1"
+                        >
+                            {confirmDialog.cancelText}
+                        </Button>
+                        <Button
+                            onClick={confirmDialog.onConfirm}
+                            className={`flex-1 ${confirmDialog.isDanger ? "bg-red-600 hover:bg-red-700 border-none !text-white" : ""}`}
+                        >
+                            {confirmDialog.confirmText}
+                        </Button>
+                    </div>
+                </div>
             </Modal>
         </div>
     )

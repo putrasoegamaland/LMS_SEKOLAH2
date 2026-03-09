@@ -21,6 +21,7 @@ export const siswaNav: NavItem[] = [
     { icon: TimeCircle, label: 'Ulangan', path: '/dashboard/siswa/ulangan' },
     { icon: Game, label: 'Kuis', path: '/dashboard/siswa/kuis' },
     { icon: Graph, label: 'Nilai', path: '/dashboard/siswa/nilai' },
+    { icon: User, label: 'Profil', path: '/dashboard/siswa/profil' },
 ]
 
 export const guruNav: NavItem[] = [

@@ -438,13 +438,26 @@ export default function SiswaDashboard() {
                         Siap untuk belajar hari ini? Berikut ringkasan jadwal dan tugasmu.
                     </p>
                 </div>
-                <div className="bg-white dark:bg-surface-dark px-4 py-2 rounded-2xl shadow-sm border border-black/5 dark:border-white/5 flex items-center gap-3 w-max">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                        <Calendar set="bold" size={20} />
-                    </div>
-                    <div>
-                        <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">{now.toLocaleDateString('id-ID', { weekday: 'long' })}</p>
-                        <p className="font-bold text-text-main dark:text-white">{now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                <div className="flex flex-wrap items-center gap-3">
+                    {student?.class?.name && (
+                        <div className="bg-emerald-50 dark:bg-emerald-900/10 px-4 py-2 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-800/30 flex items-center gap-3 w-max">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                <GraduationCap size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-500 uppercase tracking-wider">Kelas Saat Ini</p>
+                                <p className="font-bold text-text-main dark:text-white">{student.class.name}</p>
+                            </div>
+                        </div>
+                    )}
+                    <div className="bg-white dark:bg-surface-dark px-4 py-2 rounded-2xl shadow-sm border border-black/5 dark:border-white/5 flex items-center gap-3 w-max">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                            <Calendar set="bold" size={20} />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">{now.toLocaleDateString('id-ID', { weekday: 'long' })}</p>
+                            <p className="font-bold text-text-main dark:text-white">{now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                        </div>
                     </div>
                 </div>
             </div>

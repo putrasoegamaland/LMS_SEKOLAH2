@@ -47,6 +47,8 @@ export interface User {
     full_name: string | null
     role: UserRole
     school_id: string
+    must_change_password?: boolean
+    is_locked?: boolean
     created_at: string
     school?: School
 }
@@ -201,6 +203,8 @@ export interface AuthUser {
     role: UserRole
     school_id: string | null  // null for SUPER_ADMIN
     school_name?: string | null
+    must_change_password?: boolean
+    is_locked?: boolean
 }
 
 // Quiz types

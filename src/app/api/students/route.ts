@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
                         school_level,
                         status,
                         gender,
-                        user:users!students_user_id_fkey(id, username, full_name, role),
+                        user:users!students_user_id_fkey(id, username, full_name, role, must_change_password),
                         class:classes(id, name, grade_level, school_level, academic_year_id)
                     ),
                     enrollment_class:classes!student_enrollments_class_id_fkey(id, name, grade_level, school_level, academic_year_id)
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
             .from('students')
             .select(`
         *,
-        user:users!students_user_id_fkey(id, username, full_name, role),
+        user:users!students_user_id_fkey(id, username, full_name, role, must_change_password, is_locked),
         class:classes(id, name, grade_level, school_level)
       `)
             .order('created_at', { ascending: false })
@@ -105,13 +105,18 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { username, password, full_name, nis, class_id, gender, angkatan, entry_year, school_level, wali_password } = await request.json()
+        const { password, full_name, nis, class_id, gender, angkatan, entry_year, school_level, wali_password } = await request.json()
 
-        if (!username || !password) {
-            return NextResponse.json({ error: 'Username dan password harus diisi' }, { status: 400 })
+        if (!nis) {
+            return NextResponse.json({ error: 'NIS wajib diisi dan akan digunakan sebagai username login' }, { status: 400 })
         }
 
-        // Check if username already exists (globally unique)
+        if (!password) {
+            return NextResponse.json({ error: 'Password harus diisi' }, { status: 400 })
+        }
+
+        // Check if username (which is now NIS) already exists (globally unique)
+        const username = nis.trim()
         const { data: existingUser } = await supabase
             .from('users')
             .select('id')
@@ -119,7 +124,7 @@ export async function POST(request: NextRequest) {
             .single()
 
         if (existingUser) {
-            return NextResponse.json({ error: 'Username sudah digunakan' }, { status: 400 })
+            return NextResponse.json({ error: 'NIS (Username) sudah digunakan oleh akun lain' }, { status: 400 })
         }
 
         // Check if .wali username would collide
@@ -132,7 +137,7 @@ export async function POST(request: NextRequest) {
                 .single()
 
             if (existingWali) {
-                return NextResponse.json({ error: `Username ${waliUsername} sudah digunakan` }, { status: 400 })
+                return NextResponse.json({ error: `Username wali ${waliUsername} sudah digunakan` }, { status: 400 })
             }
         }
 
@@ -146,7 +151,8 @@ export async function POST(request: NextRequest) {
                 password_hash,
                 full_name,
                 role: 'SISWA',
-                school_id: schoolId
+                school_id: schoolId,
+                must_change_password: true
             })
             .select()
             .single()
@@ -164,7 +170,8 @@ export async function POST(request: NextRequest) {
                     password_hash: wali_hash,
                     full_name: `Orang Tua - ${full_name || username}`,
                     role: 'WALI',
-                    school_id: schoolId
+                    school_id: schoolId,
+                    must_change_password: true
                 })
                 .select('id')
                 .single()

@@ -54,6 +54,13 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        if (user.is_locked) {
+            return NextResponse.json(
+                { error: 'Akun Anda ditangguhkan sementara. Silakan hubungi administrasi sekolah.' },
+                { status: 403 }
+            )
+        }
+
         const sessionToken = await createSession(user.id)
 
         if (!sessionToken) {
@@ -71,7 +78,8 @@ export async function POST(request: NextRequest) {
                 full_name: user.full_name,
                 role: user.role,
                 school_id: user.role === 'SUPER_ADMIN' ? null : user.school_id,
-                school_name: null // Will be populated by /api/auth/me
+                school_name: null, // Will be populated by /api/auth/me
+                must_change_password: user.must_change_password
             }
         })
 

@@ -168,6 +168,21 @@ export async function GET(request: NextRequest) {
             console.error('Error fetching submissions:', err)
         }
 
+        // Count total assignments for the child's class
+        let totalAssignments = 0
+        try {
+            if (child.class?.id) {
+                const { count } = await supabase
+                    .from('assignments')
+                    .select('id, teaching_assignment:teaching_assignments!inner(class_id)', { count: 'exact', head: true })
+                    .eq('teaching_assignment.class_id', child.class.id)
+
+                totalAssignments = count || 0
+            }
+        } catch (err) {
+            console.error('Error counting assignments:', err)
+        }
+
         return NextResponse.json({
             child: {
                 ...child,
@@ -175,6 +190,7 @@ export async function GET(request: NextRequest) {
                 recentSubmissions: submissions,
                 recentQuizzes: quizzes,
                 recentExams: exams,
+                totalAssignments,
             },
             announcements
         })

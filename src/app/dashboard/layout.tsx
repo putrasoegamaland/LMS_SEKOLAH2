@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
@@ -23,6 +23,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         await logout()
         router.push('/login')
     }
+
+    // Enforce password change
+    useEffect(() => {
+        if (!loading && user?.must_change_password && pathname !== '/dashboard/change-password') {
+            router.replace('/dashboard/change-password')
+        }
+    }, [user, loading, pathname, router])
 
     // Only show loading screen on initial mount, not after login redirect
     if (loading && !user) {
@@ -63,6 +70,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">
                 <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 overflow-y-auto animate-in fade-in duration-500" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     <style>{`main::-webkit-scrollbar { display: none; }`}</style>
+                    {children}
+                </main>
+            </div>
+        )
+    }
+
+    // Hide sidebar and bottom nav on the change password page
+    const isChangePasswordMode = pathname === '/dashboard/change-password'
+
+    if (isChangePasswordMode) {
+        return (
+            <div className="min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">
+                <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 overflow-y-auto animate-in fade-in duration-500">
                     {children}
                 </main>
             </div>

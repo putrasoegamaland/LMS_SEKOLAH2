@@ -128,7 +128,8 @@ export async function POST(request: NextRequest) {
                         password_hash,
                         full_name: String(full_name),
                         role: 'SISWA',
-                        school_id: schoolId
+                        school_id: schoolId,
+                        must_change_password: true
                     })
                     .select()
                     .single()

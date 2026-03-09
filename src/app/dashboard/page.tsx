@@ -10,6 +10,12 @@ export default function DashboardPage() {
 
     useEffect(() => {
         if (!loading && user) {
+            // Enforce password change if required
+            if (user.must_change_password) {
+                router.replace('/dashboard/change-password')
+                return
+            }
+
             // Redirect based on role
             switch (user.role) {
                 case 'SUPER_ADMIN':
