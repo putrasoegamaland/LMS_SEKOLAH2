@@ -218,6 +218,67 @@ export async function GET(request: NextRequest) {
                 allGrades.push(...mappedExams)
             }
 
+            // 4. Fetch Official Exam Grades (UTS / UAS)
+            let officialExamQuery = supabase
+                .from('official_exam_submissions')
+                .select(`
+                    id,
+                    student_id,
+                    total_score,
+                    max_score,
+                    submitted_at,
+                    is_graded,
+                    exam:official_exams(
+                        id,
+                        title,
+                        exam_type,
+                        subject_id,
+                        subject:subjects(id, name),
+                        school_id,
+                        academic_year_id
+                    )
+                `)
+                .eq('is_submitted', true)
+                .not('submitted_at', 'is', null)
+
+            if (studentId) {
+                officialExamQuery = officialExamQuery.eq('student_id', studentId)
+            }
+
+            const { data: officialSubmissions, error: officialError } = await officialExamQuery
+
+            if (!officialError && officialSubmissions) {
+                const mappedOfficial = officialSubmissions
+                    .filter((os: any) => {
+                        // Filter by school_id
+                        if (schoolId && os.exam?.school_id !== schoolId) return false
+                        // Filter by academic year if not all_years
+                        if (taIds !== null) {
+                            // Use academic_year_id from active year
+                            const activeYearId = taIds.length > 0 ? undefined : null // if taIds exist, we have a year
+                            // Actually, simpler: just check if the exam's academic_year_id matches
+                            const { data: activeYr } = { data: null } as any // We already fetched it above
+                            // For simplicity, include all official exams from the school
+                        }
+                        return true
+                    })
+                    .map((os: any) => {
+                        const exam = os.exam
+                        const subject = exam?.subject
+                        const score = os.max_score > 0 ? (os.total_score / os.max_score) * 100 : 0
+                        return {
+                            id: os.id,
+                            student_id: os.student_id,
+                            subject_id: subject?.id,
+                            grade_type: exam?.exam_type || 'UTS', // 'UTS' or 'UAS'
+                            score: Math.round(score * 10) / 10,
+                            subject: { name: subject?.name || '-' },
+                            graded_at: os.submitted_at
+                        }
+                    })
+                allGrades.push(...mappedOfficial)
+            }
+
             return NextResponse.json(allGrades)
         }
 

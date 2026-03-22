@@ -29,6 +29,7 @@ interface RapihAIModalProps {
     saving: boolean
     targetLabel: string // "Kuis" or "Ulangan"
     aiReviewEnabled?: boolean
+    showBankSoal?: boolean
 }
 
 export default function RapihAIModal({
@@ -38,7 +39,8 @@ export default function RapihAIModal({
     onSaveToBank,
     saving,
     targetLabel,
-    aiReviewEnabled = true
+    aiReviewEnabled = true,
+    showBankSoal = true
 }: RapihAIModalProps) {
     const [activeTab, setActiveTab] = useState<RapihTab>('clean')
 
@@ -677,6 +679,7 @@ A. Jakarta  B. Bandung  C. Surabaya  D. Medan"
                             <Button variant="secondary" onClick={() => { setResults([]); setSelected([]); setSavedBank(false) }}>
                                 ← Ulangi
                             </Button>
+                            {showBankSoal && (
                             <Button
                                 variant={savedBank ? 'secondary' : 'secondary'}
                                 onClick={() => handleSaveBank()}
@@ -686,6 +689,7 @@ A. Jakarta  B. Bandung  C. Surabaya  D. Medan"
                             >
                                 {savedBank ? '✅ Tersimpan di Bank Soal' : '💾 Simpan ke Bank Soal'}
                             </Button>
+                            )}
                             <Button
                                 onClick={handleSave}
                                 disabled={saving || results.length === 0 || !allValid}

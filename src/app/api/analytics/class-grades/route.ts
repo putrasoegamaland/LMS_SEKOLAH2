@@ -128,6 +128,24 @@ export async function GET(request: NextRequest) {
                 .eq('is_submitted', true)
             : { data: [] as any[], error: null }
 
+        // Get official exams (UTS/UAS) for this academic year
+        const { data: officialExams } = await supabase
+            .from('official_exams')
+            .select('id, subject_id, target_class_ids')
+            .eq('school_id', schoolId)
+            .eq('academic_year_id', academicYearId)
+
+        const officialExamIds = officialExams?.map(oe => oe.id) || []
+
+        // Get official exam submissions (only submitted ones)
+        const { data: officialExamSubmissions } = officialExamIds.length > 0
+            ? await supabase
+                .from('official_exam_submissions')
+                .select('id, student_id, exam_id, total_score, max_score, is_submitted')
+                .in('exam_id', officialExamIds)
+                .eq('is_submitted', true)
+            : { data: [] as any[] }
+
 
 
         // Build a map: class_id -> subject_id -> student grades
@@ -216,6 +234,27 @@ export async function GET(request: NextRequest) {
             if (!student || student.class_id !== ta.class_id) return
 
             addGrade(ta.class_id, ta.subject_id, es.student_id, examScore)
+        })
+
+        // Process official exam (UTS/UAS) submissions
+        officialExamSubmissions?.forEach(os => {
+            const score = os.max_score > 0
+                ? (os.total_score / os.max_score) * 100
+                : os.total_score
+
+            if (score === null || score === undefined) return
+
+            const officialExam = officialExams?.find(oe => oe.id === os.exam_id)
+            if (!officialExam) return
+
+            const student = students?.find(s => s.id === os.student_id)
+            if (!student) return
+
+            // Only process if student's class is in the exam's target classes
+            if (!officialExam.target_class_ids?.includes(student.class_id)) return
+
+            // Use student's class_id + exam's subject_id to add grade
+            addGrade(student.class_id, officialExam.subject_id, os.student_id, score)
         })
 
         // Build result

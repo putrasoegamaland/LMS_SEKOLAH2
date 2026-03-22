@@ -15,7 +15,7 @@ interface StudentData {
 
 interface DeadlineItem {
     id: string
-    type: 'TUGAS' | 'ULANGAN' | 'KUIS'
+    type: 'TUGAS' | 'ULANGAN' | 'KUIS' | 'UTS' | 'UAS'
     title: string
     subject: string
     deadline: string
@@ -48,7 +48,7 @@ export default function SiswaDashboard() {
 
     // Resume Modal State
     const [resumeItem, setResumeItem] = useState<{
-        type: 'Kuis' | 'Ulangan'
+        type: 'Kuis' | 'Ulangan' | 'UTS/UAS'
         title: string
         link: string
         remainingTime?: string
@@ -100,14 +100,16 @@ export default function SiswaDashboard() {
 
                 if (myStudent?.class?.id) {
                     // Fetch Deadlines & Schedule in parallel
-                    const [assignmentsRes, examsRes, quizzesRes, submissionsRes, examSubmissionsRes, quizSubmissionsRes, scheduleRes] = await Promise.all([
+                    const [assignmentsRes, examsRes, quizzesRes, submissionsRes, examSubmissionsRes, quizSubmissionsRes, scheduleRes, officialExamsRes, officialExamSubsRes] = await Promise.all([
                         fetch('/api/assignments'),
                         fetch('/api/exams'),
                         fetch('/api/quizzes'),
                         fetch(`/api/submissions?student_id=${myStudent.id}`),
                         fetch(`/api/exam-submissions?student_id=${myStudent.id}`),
                         fetch(`/api/quiz-submissions?student_id=${myStudent.id}`),
-                        fetch('/api/schedules/student-schedule')
+                        fetch('/api/schedules/student-schedule'),
+                        fetch('/api/official-exams'),
+                        fetch('/api/official-exam-submissions')
                     ])
 
                     const assignmentsData = await assignmentsRes.json()
@@ -117,6 +119,8 @@ export default function SiswaDashboard() {
                     const examSubmissionsData = await examSubmissionsRes.json()
                     const quizSubmissionsData = await quizSubmissionsRes.json()
                     const scheduleData = await scheduleRes.json()
+                    const officialExamsData = await officialExamsRes.json()
+                    const officialExamSubsData = await officialExamSubsRes.json()
 
                     setTodaySchedule(Array.isArray(scheduleData) ? scheduleData : [])
 
@@ -135,6 +139,8 @@ export default function SiswaDashboard() {
                     const assignmentSubmissions = Array.isArray(submissionsData) ? submissionsData : []
                     const examSubmissions = Array.isArray(examSubmissionsData) ? examSubmissionsData : []
                     const quizSubmissions = Array.isArray(quizSubmissionsData) ? quizSubmissionsData : []
+                    const officialExams = Array.isArray(officialExamsData) ? officialExamsData : []
+                    const officialExamSubs = Array.isArray(officialExamSubsData) ? officialExamSubsData : []
 
                     const nowTime = new Date().getTime()
                     const newDeadlines: DeadlineItem[] = []
@@ -213,6 +219,33 @@ export default function SiswaDashboard() {
                         })
                     })
 
+                    // Process Official Exams (UTS/UAS) — show active & not submitted
+                    officialExams.forEach((oe: any) => {
+                        if (!oe.is_active) return
+                        // Check if already submitted
+                        if (officialExamSubs.some((s: any) => s.exam_id === oe.id && s.is_submitted)) return
+
+                        const startTime = new Date(oe.start_time).getTime()
+                        const endTime = startTime + (oe.duration_minutes * 60 * 1000)
+
+                        // Show if exam hasn't ended yet
+                        if (endTime > nowTime) {
+                            const isStarted = startTime <= nowTime
+                            const countdownTarget = isStarted ? endTime : startTime
+
+                            newDeadlines.push({
+                                id: oe.id,
+                                type: oe.exam_type === 'UAS' ? 'UAS' : 'UTS',
+                                title: oe.title,
+                                subject: oe.subject?.name || 'Mapel',
+                                deadline: new Date(startTime).toISOString(),
+                                link: `/dashboard/siswa/uts-uas/${oe.id}`,
+                                expirationTime: countdownTarget,
+                                startTime
+                            })
+                        }
+                    })
+
                     // Sort: ongoing items first, then by expiration time
                     newDeadlines.sort((a, b) => {
                         const aOngoing = a.startTime <= nowTime
@@ -245,13 +278,15 @@ export default function SiswaDashboard() {
 
                 if (!myStudent) return
 
-                const [quizRes, examRes] = await Promise.all([
+                const [quizRes, examRes, officialExamSubRes] = await Promise.all([
                     fetch(`/api/quiz-submissions?student_id=${myStudent.id}`),
-                    fetch(`/api/exam-submissions?student_id=${myStudent.id}`)
+                    fetch(`/api/exam-submissions?student_id=${myStudent.id}`),
+                    fetch('/api/official-exam-submissions')
                 ])
 
                 const quizzes = await quizRes.json()
                 const exams = await examRes.json()
+                const officialExamSubs = await officialExamSubRes.json()
 
                 let foundResumeItem = null
 
@@ -312,6 +347,35 @@ export default function SiswaDashboard() {
                     }
                 }
 
+                // Check official exam submissions (UTS/UAS)
+                if (Array.isArray(officialExamSubs)) {
+                    for (const oe of officialExamSubs) {
+                        if (!oe.is_submitted && oe.exam?.is_active) {
+                            const startedAt = new Date(oe.started_at).getTime()
+                            const durationMs = (oe.exam.duration_minutes || 0) * 60 * 1000
+                            const now = Date.now()
+                            const isExpired = now > (startedAt + durationMs + 60000)
+
+                            if (isExpired) {
+                                await fetch('/api/official-exam-submissions', {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        submission_id: oe.id,
+                                        submit: true
+                                    })
+                                })
+                            } else if (!foundResumeItem) {
+                                foundResumeItem = {
+                                    type: 'UTS/UAS' as const,
+                                    title: oe.exam?.title || 'Ujian Tanpa Judul',
+                                    link: `/dashboard/siswa/uts-uas/${oe.exam_id}`
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (foundResumeItem) {
                     setResumeItem(foundResumeItem)
                     setShowResumeModal(true)
@@ -348,8 +412,8 @@ export default function SiswaDashboard() {
             if (item.type === 'TUGAS') return '📝 Belum ada deadline'
         }
 
-        // ULANGAN: show start time / sedang berlangsung
-        if (item.type === 'ULANGAN') {
+        // ULANGAN / UTS / UAS: show start time / sedang berlangsung
+        if (item.type === 'ULANGAN' || item.type === 'UTS' || item.type === 'UAS') {
             const startTime = item.startTime
             if (startTime > nowMs) {
                 const diffMs = startTime - nowMs

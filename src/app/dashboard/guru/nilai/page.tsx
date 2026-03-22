@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader, Card, Button, StatsCard, EmptyState } from '@/components/ui'
 import { Chart, User, TickSquare, TimeCircle, Activity, Search, ArrowRight, Document, Discovery, Download, Paper, Edit } from 'react-iconly'
+import { GraduationCap } from 'lucide-react'
 
 interface Student {
     id: string
@@ -57,13 +58,31 @@ interface Exam {
     teaching_assignment: { id: string }
 }
 
+interface OfficialExamForNilai {
+    id: string
+    title: string
+    exam_type: 'UTS' | 'UAS'
+    subject_id: string
+    target_class_ids: string[]
+}
+
+interface OfficialExamSubForNilai {
+    id: string
+    student_id: string
+    is_submitted: boolean
+    total_score: number
+    max_score: number
+    is_graded: boolean
+    exam_id: string
+}
+
 interface TeachingAssignment {
     id: string
     subject: { id: string; name: string }
     class: { id: string; name: string }
 }
 
-type TabType = 'rekap' | 'tugas' | 'kuis' | 'ulangan' | 'export'
+type TabType = 'rekap' | 'tugas' | 'kuis' | 'ulangan' | 'uts-uas' | 'export'
 
 export default function NilaiPage() {
     const { user } = useAuth()
@@ -77,6 +96,8 @@ export default function NilaiPage() {
     const [allSubmissions, setAllSubmissions] = useState<Submission[]>([])
     const [quizSubmissions, setQuizSubmissions] = useState<QuizSubmission[]>([])
     const [examSubmissions, setExamSubmissions] = useState<ExamSubmission[]>([])
+    const [officialExams, setOfficialExams] = useState<OfficialExamForNilai[]>([])
+    const [officialExamSubs, setOfficialExamSubs] = useState<OfficialExamSubForNilai[]>([])
     const [loading, setLoading] = useState(true)
     const [loadingData, setLoadingData] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
@@ -105,6 +126,8 @@ export default function NilaiPage() {
             setAllSubmissions([])
             setQuizSubmissions([])
             setExamSubmissions([])
+            setOfficialExams([])
+            setOfficialExamSubs([])
             return
         }
 
@@ -172,6 +195,36 @@ export default function NilaiPage() {
                 }
                 setExamSubmissions(allExamSubs)
 
+                // Fetch official exams (UTS/UAS) matching this subject + class
+                const officialRes = await fetch('/api/official-exams')
+                const officialData = await officialRes.json()
+                const myOfficialExams = (Array.isArray(officialData) ? officialData : []).filter(
+                    (oe: any) => oe.subject?.id === ta.subject.id && oe.target_class_ids?.includes(ta.class.id)
+                )
+                setOfficialExams(myOfficialExams.map((oe: any) => ({
+                    id: oe.id, title: oe.title, exam_type: oe.exam_type,
+                    subject_id: oe.subject?.id, target_class_ids: oe.target_class_ids
+                })))
+
+                // Fetch official exam submissions
+                const allOfficialSubs: OfficialExamSubForNilai[] = []
+                for (const oe of myOfficialExams) {
+                    const oeSubRes = await fetch(`/api/official-exam-submissions?exam_id=${oe.id}`)
+                    const oeSubData = await oeSubRes.json()
+                    if (Array.isArray(oeSubData)) {
+                        allOfficialSubs.push(...oeSubData
+                            .filter((s: any) => s.is_submitted)
+                            .map((s: any) => ({
+                                id: s.id, student_id: s.student?.id || s.student_id,
+                                is_submitted: true, total_score: s.total_score,
+                                max_score: s.max_score, is_graded: s.is_graded,
+                                exam_id: oe.id
+                            }))
+                        )
+                    }
+                }
+                setOfficialExamSubs(allOfficialSubs)
+
             } catch (error) {
                 console.error('Error:', error)
             } finally {
@@ -201,6 +254,11 @@ export default function NilaiPage() {
             grades.push(Math.round((es.total_score / es.max_score) * 100))
         })
 
+        // Official exam (UTS/UAS) grades
+        officialExamSubs.filter(os => os.student_id === studentId && os.is_graded && os.max_score > 0).forEach(os => {
+            grades.push(Math.round((os.total_score / os.max_score) * 100))
+        })
+
         if (grades.length === 0) return null
         return Math.round(grades.reduce((sum, g) => sum + g, 0) / grades.length)
     }
@@ -211,6 +269,8 @@ export default function NilaiPage() {
         if (!ta) return
 
         const tugasAssignments = assignments.filter(a => a.type === 'TUGAS')
+        const utsExams = officialExams.filter(oe => oe.exam_type === 'UTS')
+        const uasExams = officialExams.filter(oe => oe.exam_type === 'UAS')
 
         let html = `
             <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:x='urn:schemas-microsoft-com:office:excel'>
@@ -235,6 +295,8 @@ export default function NilaiPage() {
                         ${tugasAssignments.map((a, i) => `<th>T${i + 1}</th>`).join('')}
                         ${quizzes.map((q, i) => `<th>K${i + 1}</th>`).join('')}
                         ${exams.map((e, i) => `<th>U${i + 1}</th>`).join('')}
+                        ${utsExams.map((oe, i) => `<th>UTS${utsExams.length > 1 ? i + 1 : ''}</th>`).join('')}
+                        ${uasExams.map((oe, i) => `<th>UAS${uasExams.length > 1 ? i + 1 : ''}</th>`).join('')}
                         <th class="avg">Rata-rata</th>
                     </tr>
                 </thead>
@@ -252,6 +314,14 @@ export default function NilaiPage() {
                 const es = examSubmissions.find(es => es.student?.id === student.id && es.exam.id === e.id)
                 return es ? Math.round((es.total_score / es.max_score) * 100) : '-'
             })
+            const utsGrades = utsExams.map(oe => {
+                const os = officialExamSubs.find(s => s.student_id === student.id && s.exam_id === oe.id)
+                return os?.is_graded && os.max_score > 0 ? Math.round((os.total_score / os.max_score) * 100) : '-'
+            })
+            const uasGrades = uasExams.map(oe => {
+                const os = officialExamSubs.find(s => s.student_id === student.id && s.exam_id === oe.id)
+                return os?.is_graded && os.max_score > 0 ? Math.round((os.total_score / os.max_score) * 100) : '-'
+            })
             const avg = calculateAverage(student.id)
 
             return `
@@ -262,6 +332,8 @@ export default function NilaiPage() {
                             ${tugasGrades.map(g => `<td>${g}</td>`).join('')}
                             ${kuisGrades.map(g => `<td>${g}</td>`).join('')}
                             ${ulanganGrades.map(g => `<td>${g}</td>`).join('')}
+                            ${utsGrades.map(g => `<td>${g}</td>`).join('')}
+                            ${uasGrades.map(g => `<td>${g}</td>`).join('')}
                             <td class="avg">${avg ?? '-'}</td>
                         </tr>
                     `
@@ -285,6 +357,8 @@ export default function NilaiPage() {
 
     const selectedTAData = teachingAssignments.find(t => t.id === selectedTA)
     const tugasAssignments = assignments.filter(a => a.type === 'TUGAS')
+    const utsExams = officialExams.filter(oe => oe.exam_type === 'UTS')
+    const uasExams = officialExams.filter(oe => oe.exam_type === 'UAS')
 
     // Stats
     const totalGraded = allSubmissions.filter(s => s.grade?.length > 0).length + quizSubmissions.filter(q => q.is_graded).length + examSubmissions.length
@@ -425,6 +499,7 @@ export default function NilaiPage() {
                             { id: 'tugas', label: `Tugas (${tugasAssignments.length})`, icon: Edit, color: 'bg-amber-500' },
                             { id: 'kuis', label: `Kuis (${quizzes.length})`, icon: Discovery, color: 'bg-purple-500' },
                             { id: 'ulangan', label: `Ulangan (${exams.length})`, icon: TimeCircle, color: 'bg-red-500' },
+                            { id: 'uts-uas', label: `UTS/UAS (${officialExams.length})`, icon: Document, color: 'bg-indigo-500' },
                             { id: 'export', label: 'Export', icon: Download, color: 'bg-blue-500' }
                         ].map(tab => (
                             <button
@@ -467,6 +542,16 @@ export default function NilaiPage() {
                                                     {exams.map((e, i) => (
                                                         <th key={e.id} className="px-4 py-4 text-center text-text-secondary font-bold min-w-[60px]">
                                                             <span className="px-2 py-1 text-xs rounded-full bg-red-500/10 text-red-600 border border-red-200">U{i + 1}</span>
+                                                        </th>
+                                                    ))}
+                                                    {utsExams.map((oe, i) => (
+                                                        <th key={oe.id} className="px-4 py-4 text-center text-text-secondary font-bold min-w-[60px]">
+                                                            <span className="px-2 py-1 text-xs rounded-full bg-indigo-500/10 text-indigo-600 border border-indigo-200">UTS{utsExams.length > 1 ? i + 1 : ''}</span>
+                                                        </th>
+                                                    ))}
+                                                    {uasExams.map((oe, i) => (
+                                                        <th key={oe.id} className="px-4 py-4 text-center text-text-secondary font-bold min-w-[60px]">
+                                                            <span className="px-2 py-1 text-xs rounded-full bg-purple-500/10 text-purple-600 border border-purple-200">UAS{uasExams.length > 1 ? i + 1 : ''}</span>
                                                         </th>
                                                     ))}
                                                     <th className="px-6 py-4 text-center text-primary font-bold min-w-[80px]">Rata-rata</th>
@@ -520,6 +605,38 @@ export default function NilaiPage() {
                                                                             <span className="text-text-main dark:text-white font-bold">
                                                                                 {Math.round((es.total_score / es.max_score) * 100)}
                                                                             </span>
+                                                                        ) : (
+                                                                            <span className="text-text-secondary/30">-</span>
+                                                                        )}
+                                                                    </td>
+                                                                )
+                                                            })}
+                                                            {utsExams.map(oe => {
+                                                                const os = officialExamSubs.find(s => s.student_id === student.id && s.exam_id === oe.id)
+                                                                return (
+                                                                    <td key={oe.id} className="px-4 py-4 text-center">
+                                                                        {os?.is_graded ? (
+                                                                            <span className="text-text-main dark:text-white font-bold">
+                                                                                {os.max_score > 0 ? Math.round((os.total_score / os.max_score) * 100) : 0}
+                                                                            </span>
+                                                                        ) : os ? (
+                                                                            <span className="text-amber-500 flex justify-center"><TimeCircle set="bold" primaryColor="currentColor" size={16} /></span>
+                                                                        ) : (
+                                                                            <span className="text-text-secondary/30">-</span>
+                                                                        )}
+                                                                    </td>
+                                                                )
+                                                            })}
+                                                            {uasExams.map(oe => {
+                                                                const os = officialExamSubs.find(s => s.student_id === student.id && s.exam_id === oe.id)
+                                                                return (
+                                                                    <td key={oe.id} className="px-4 py-4 text-center">
+                                                                        {os?.is_graded ? (
+                                                                            <span className="text-text-main dark:text-white font-bold">
+                                                                                {os.max_score > 0 ? Math.round((os.total_score / os.max_score) * 100) : 0}
+                                                                            </span>
+                                                                        ) : os ? (
+                                                                            <span className="text-amber-500 flex justify-center"><TimeCircle set="bold" primaryColor="currentColor" size={16} /></span>
                                                                         ) : (
                                                                             <span className="text-text-secondary/30">-</span>
                                                                         )}
@@ -642,6 +759,39 @@ export default function NilaiPage() {
                                 </div>
                             )}
 
+                            {/* Tab: UTS/UAS - Links to hasil pages */}
+                            {activeTab === 'uts-uas' && (
+                                <div className="space-y-4">
+                                    {officialExams.length === 0 ? (
+                                        <EmptyState title="Belum ada UTS/UAS" description="Belum ada ujian UTS atau UAS untuk mata pelajaran dan kelas ini." icon={<div className="text-indigo-200"><GraduationCap className="w-12 h-12" /></div>} />
+                                    ) : (
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            {officialExams.map(oe => {
+                                                const subs = officialExamSubs.filter(s => s.exam_id === oe.id)
+                                                const graded = subs.filter(s => s.is_graded).length
+                                                return (
+                                                    <Card key={oe.id} padding="p-5" className="hover:border-indigo-500/50 transition-colors">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${oe.exam_type === 'UTS' ? 'bg-indigo-500/10 text-indigo-600' : 'bg-purple-500/10 text-purple-600'}`}>
+                                                                <GraduationCap className="w-5 h-5" />
+                                                            </div>
+                                                            <span className={`text-xs px-2 py-1 rounded-full font-bold ${oe.exam_type === 'UTS' ? 'bg-indigo-500/10 text-indigo-600' : 'bg-purple-500/10 text-purple-600'}`}>{oe.exam_type}</span>
+                                                        </div>
+                                                        <h3 className="text-lg font-bold text-text-main dark:text-white mb-1">{oe.title}</h3>
+                                                        <p className="text-sm text-text-secondary mb-4">{subs.length} submission • {graded} dinilai</p>
+                                                        <Link href={`/dashboard/guru/uts-uas/${oe.id}/hasil`} className="w-full block">
+                                                            <Button size="sm" variant="outline" className="w-full">
+                                                                Lihat Hasil →
+                                                            </Button>
+                                                        </Link>
+                                                    </Card>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Tab: Export */}
                             {activeTab === 'export' && (
                                 <Card padding="p-8" className="text-center flex flex-col items-center justify-center min-h-[400px]">
@@ -660,6 +810,8 @@ export default function NilaiPage() {
                                             <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Nilai Tugas (T1, T2, ...)</li>
                                             <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Nilai Kuis (K1, K2, ...)</li>
                                             <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Nilai Ulangan (U1, U2, ...)</li>
+                                            <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Nilai UTS</li>
+                                            <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Nilai UAS</li>
                                             <li className="flex items-center gap-3"><span className="text-success"><TickSquare set="bold" primaryColor="currentColor" size={16} /></span> Rata-rata nilai</li>
                                         </ul>
                                     </div>

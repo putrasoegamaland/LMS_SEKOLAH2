@@ -532,11 +532,22 @@ export default function TakeExamPage() {
                 </div>
             )}
 
-            {/* Fullscreen Prompt */}
+            {/* Fullscreen Enforcer Overlay */}
             {!isFullscreen && (
-                <div className="border-b border-amber-500/30 p-3 text-center bg-amber-500/20">
-                    <button onClick={requestFullscreen} className="text-amber-400 hover:text-amber-300 underline flex items-center justify-center gap-2 mx-auto">
-                        <Scan set="bold" primaryColor="currentColor" size={16} /> Klik untuk mode layar penuh (direkomendasikan)
+                <div className="fixed inset-0 z-[100] bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
+                    <div className="w-24 h-24 bg-red-500/10 text-red-500 dark:text-red-400 rounded-full flex items-center justify-center mb-6 animate-pulse">
+                        <Scan set="bold" primaryColor="currentColor" size={48} />
+                    </div>
+                    <h2 className="text-3xl font-extrabold text-text-main dark:text-white mb-4 tracking-tight">Layar Penuh Diwajibkan</h2>
+                    <p className="text-text-secondary mb-8 max-w-lg text-lg leading-relaxed">
+                        Ulangan ini diatur sedemikian rupa agar Anda mengerjakannya dalam mode layar penuh. Anda tidak dapat melihat soal atau melanjutkan sebelum masuk ke mode layar penuh.
+                    </p>
+                    <button 
+                        onClick={requestFullscreen} 
+                        className="px-8 py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:bg-primary-dark transition-all shadow-xl shadow-primary/30 flex items-center gap-3 hover:-translate-y-1 active:translate-y-0"
+                    >
+                        <Scan set="bold" primaryColor="currentColor" size={24} />
+                        Masuk Layar Penuh Sekarang
                     </button>
                 </div>
             )}

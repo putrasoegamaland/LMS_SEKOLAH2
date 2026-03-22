@@ -181,6 +181,12 @@ export default function AdminDashboard() {
             href: '/dashboard/admin/analitik',
         },
         {
+            title: 'UTS/UAS',
+            description: 'Kelola ujian tengah & akhir semester',
+            icon: Document,
+            href: '/dashboard/admin/uts-uas',
+        },
+        {
             title: 'Review Soal',
             description: 'Review kualitas soal HOTS',
             icon: ShieldDone,
@@ -302,7 +308,8 @@ export default function AdminDashboard() {
                                                     item.href.includes('siswa') ? 'bg-violet-50 dark:bg-violet-900/10 group-hover:bg-violet-500 text-violet-500 dark:text-violet-400 group-hover:text-white' :
                                                         item.href.includes('penugasan') ? 'bg-teal-50 dark:bg-teal-900/10 group-hover:bg-teal-500 text-teal-500 dark:text-teal-400 group-hover:text-white' :
                                                             item.href.includes('rekap-nilai') ? 'bg-green-50 dark:bg-green-900/10 group-hover:bg-green-500 text-green-500 dark:text-green-400 group-hover:text-white' :
-                                                                'bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-600 text-slate-500 dark:text-slate-400 group-hover:text-white'
+                                                                item.href.includes('uts-uas') ? 'bg-purple-50 dark:bg-purple-900/10 group-hover:bg-purple-500 text-purple-500 dark:text-purple-400 group-hover:text-white' :
+                                                                    'bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-600 text-slate-500 dark:text-slate-400 group-hover:text-white'
                                         }`}>
                                         <item.icon
                                             set="bold"

@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { TimeCircle as Clock, Danger, Calendar, Category, CloseSquare, User } from 'react-iconly'
+import { PlayCircle } from 'lucide-react'
 
 interface WarningItem {
     student_id: string
@@ -51,6 +52,7 @@ export default function GuruDashboard() {
     const [loading, setLoading] = useState(true)
     const [activeWarningTab, setActiveWarningTab] = useState<'teaching' | 'homeroom'>('teaching')
     const [warningVisibleCount, setWarningVisibleCount] = useState(5)
+    const [activeOfficialExams, setActiveOfficialExams] = useState<any[]>([])
 
     const handleTabChange = (tab: 'teaching' | 'homeroom') => {
         setActiveWarningTab(tab)
@@ -90,15 +92,27 @@ export default function GuruDashboard() {
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
-                const [warnRes, scheduleRes] = await Promise.all([
+                const [warnRes, scheduleRes, examsRes] = await Promise.all([
                     fetch('/api/dashboard/guru/warnings'),
-                    fetch('/api/schedules/my-schedule?today=true')
+                    fetch('/api/schedules/my-schedule?today=true'),
+                    fetch('/api/official-exams')
                 ])
                 const warnData = await warnRes.json()
                 const scheduleData = await scheduleRes.json()
+                const examsData = await examsRes.json()
 
                 if (!warnData.error) setWarnings(warnData)
                 setTodaySchedule(Array.isArray(scheduleData) ? scheduleData : [])
+                
+                if (Array.isArray(examsData)) {
+                    const nowMs = new Date().getTime()
+                    const active = examsData.filter((exam: any) => {
+                        const startMs = new Date(exam.start_time).getTime()
+                        const endMs = startMs + (exam.duration_minutes * 60 * 1000)
+                        return exam.is_active && nowMs >= startMs && nowMs <= endMs
+                    })
+                    setActiveOfficialExams(active)
+                }
             } catch (error) {
                 console.error('Error:', error)
             } finally {
@@ -182,8 +196,62 @@ export default function GuruDashboard() {
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                {/* Left Column: Schedule (Timeline Style) */}
+                {/* Left Column: Schedule (Timeline Style) & Active Exams */}
                 <div className="xl:col-span-7 space-y-6">
+
+                    {/* Active Official Exams Banner */}
+                    {activeOfficialExams.length > 0 && (
+                        <div className="space-y-4 mb-8">
+                            <div className="flex items-center gap-3 border-b-2 border-red-500/20 pb-4">
+                                <div className="p-2 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl text-white shadow-lg shadow-red-500/20">
+                                    <PlayCircle size={24} strokeWidth={2.5} />
+                                </div>
+                                <h2 className="text-xl font-bold text-text-main dark:text-white tracking-tight flex items-center gap-2">
+                                    Sedang Berlangsung 
+                                    <span className="relative flex h-3 w-3">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                    </span>
+                                </h2>
+                            </div>
+                            
+                            <div className="grid gap-4">
+                                {activeOfficialExams.map(exam => (
+                                    <div key={exam.id} className="relative overflow-hidden group p-6 rounded-2xl bg-gradient-to-br from-red-500/5 to-orange-500/5 border border-red-500/20 shadow-sm transition-all hover:border-red-500/40 hover:shadow-md">
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                                        
+                                        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center relative z-10">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="px-2.5 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold rounded-full">
+                                                        {exam.exam_type}
+                                                    </span>
+                                                    <span className="text-xs font-bold text-text-secondary bg-black/5 dark:bg-white/5 px-2.5 py-1 rounded-full">
+                                                        {exam.duration_minutes} Menit
+                                                    </span>
+                                                </div>
+                                                <h3 className="text-lg font-black text-text-main dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
+                                                    {exam.title}
+                                                </h3>
+                                                <p className="text-sm font-bold text-text-secondary mt-1">{exam.subject?.name}</p>
+                                            </div>
+                                            
+                                            <Link 
+                                                href={`/dashboard/guru/uts-uas/${exam.id}/monitor`}
+                                                className="w-full sm:w-auto px-5 py-2.5 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-bold text-sm rounded-xl transition-colors shadow-lg shadow-red-500/30 flex items-center justify-center gap-2"
+                                            >
+                                                Pantau Live 
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                                </svg>
+                                            </Link>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex items-center gap-3 border-b-2 border-primary/20 pb-4">
                         <div className="p-2 bg-gradient-to-br from-blue-500 to-primary rounded-xl text-white shadow-lg shadow-primary/20">
                             <Clock set="bold" size={24} />

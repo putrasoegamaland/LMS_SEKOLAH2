@@ -29,7 +29,7 @@ export async function isAIReviewEnabled(schoolId: string | null): Promise<boolea
 
 export interface TriggerHOTSInput {
     questionId: string
-    questionSource: 'bank' | 'quiz' | 'exam'
+    questionSource: 'bank' | 'quiz' | 'exam' | 'official_exam'
     questionText: string
     questionType: string
     options?: string[] | null
@@ -40,6 +40,7 @@ export interface TriggerHOTSInput {
     gradeBand?: string
     quizId?: string
     examId?: string
+    officialExamId?: string
 }
 
 /**
@@ -49,7 +50,8 @@ export interface TriggerHOTSInput {
 export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void> {
     const tableName = input.questionSource === 'bank' ? 'question_bank'
         : input.questionSource === 'quiz' ? 'quiz_questions'
-            : 'exam_questions'
+            : input.questionSource === 'official_exam' ? 'official_exam_questions'
+                : 'exam_questions'
 
     try {
         console.log(`[HOTS-DEBUG] triggerHOTSAnalysis called for ${input.questionSource}/${input.questionId}, table=${tableName}`)
@@ -131,7 +133,10 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
             let teacherUserId: string | null = null
 
             // Get teacher user_id from any question source
-            if (input.questionSource === 'bank') {
+            if (input.questionSource === 'official_exam') {
+                // Official exams are admin-created, no teacher to notify
+                teacherUserId = null
+            } else if (input.questionSource === 'bank') {
                 const { data: q } = await supabase
                     .from('question_bank')
                     .select('teacher:teachers(user_id)')
@@ -159,13 +164,13 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
 
             // Notify teacher if question needs admin review
             if (teacherUserId && newStatus === 'admin_review') {
-                const sourceLabel = input.questionSource === 'quiz' ? 'kuis' : input.questionSource === 'exam' ? 'ulangan' : 'bank soal'
+                const sourceLabel = input.questionSource === 'quiz' ? 'kuis' : input.questionSource === 'exam' ? 'ulangan' : input.questionSource === 'official_exam' ? 'UTS/UAS' : 'bank soal'
                 await supabase.from('notifications').insert({
                     user_id: teacherUserId,
                     type: 'HOTS_REVIEW',
                     title: '🤖 Analisis AI selesai — soal perlu review admin',
                     message: `Soal ${sourceLabel} Anda telah dianalisis AI dan diteruskan ke admin untuk review. Alasan: ${routing.reasons?.join(', ') || 'Perlu verifikasi manual'}`,
-                    link: input.questionSource === 'bank' ? '/dashboard/guru/bank-soal' : input.questionSource === 'quiz' ? '/dashboard/guru/kuis' : '/dashboard/guru/ulangan'
+                    link: input.questionSource === 'bank' ? '/dashboard/guru/bank-soal' : input.questionSource === 'quiz' ? '/dashboard/guru/kuis' : input.questionSource === 'official_exam' ? '/dashboard/admin/uts-uas' : '/dashboard/guru/ulangan'
                 })
             }
 
@@ -173,7 +178,15 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
             if (newStatus === 'admin_review') {
                 // Determine school_id from the question's teacher
                 let questionSchoolId: string | null = null
-                if (input.questionSource === 'bank') {
+                if (input.questionSource === 'official_exam') {
+                    // Official exams have school_id directly
+                    const { data: q } = await supabase
+                        .from('official_exam_questions')
+                        .select('exam:official_exams(school_id)')
+                        .eq('id', input.questionId)
+                        .single()
+                    questionSchoolId = (q as any)?.exam?.school_id || null
+                } else if (input.questionSource === 'bank') {
                     const { data: q } = await supabase
                         .from('question_bank')
                         .select('teacher:teachers(school_id)')
@@ -228,10 +241,12 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
         console.log(`HOTS analysis complete for ${input.questionSource}/${input.questionId}: ${newStatus}`)
 
         // If the final status is approved, and it belongs to a quiz/exam, check if we need to auto-publish
-        if (newStatus === 'approved' && (input.questionSource === 'quiz' || input.questionSource === 'exam')) {
-            import('./autoPublish').then(({ checkAndAutoPublish }) => {
-                checkAndAutoPublish(input.questionSource as 'quiz' | 'exam', input.quizId || input.examId || '').catch(console.error)
-            }).catch(console.error)
+        if (newStatus === 'approved' && (input.questionSource === 'quiz' || input.questionSource === 'exam' || input.questionSource === 'official_exam')) {
+            if (input.questionSource !== 'official_exam') {
+                import('./autoPublish').then(({ checkAndAutoPublish }) => {
+                    checkAndAutoPublish(input.questionSource as 'quiz' | 'exam', input.quizId || input.examId || '').catch(console.error)
+                }).catch(console.error)
+            }
         }
 
     } catch (error) {
@@ -247,6 +262,8 @@ export async function triggerHOTSAnalysis(input: TriggerHOTSInput): Promise<void
             import('./autoPublish').then(({ checkAndAutoPublish }) => {
                 checkAndAutoPublish(input.questionSource as 'quiz' | 'exam', input.quizId || input.examId || '').catch(console.error)
             }).catch(console.error)
+        } else if (input.questionSource === 'official_exam') {
+            // Official exams don't auto-publish; admin controls activation manually
         }
     }
 }

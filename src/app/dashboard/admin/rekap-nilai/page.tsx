@@ -40,6 +40,8 @@ interface SubjectGrade {
     tugas: number | null
     kuis: number | null
     ulangan: number | null
+    uts: number | null
+    uas: number | null
     rata_rata: number | null
 }
 
@@ -118,12 +120,16 @@ export default function RekapNilaiPage() {
                     const tugasGrades = subjectGradesList.filter(g => g.grade_type === 'TUGAS').map(g => g.score)
                     const kuisGrades = subjectGradesList.filter(g => g.grade_type === 'KUIS').map(g => g.score)
                     const ulanganGrades = subjectGradesList.filter(g => g.grade_type === 'ULANGAN').map(g => g.score)
+                    const utsGrades = subjectGradesList.filter(g => g.grade_type === 'UTS').map(g => g.score)
+                    const uasGrades = subjectGradesList.filter(g => g.grade_type === 'UAS').map(g => g.score)
 
                     const tugasAvg = tugasGrades.length > 0 ? tugasGrades.reduce((a, b) => a + b, 0) / tugasGrades.length : null
                     const kuisAvg = kuisGrades.length > 0 ? kuisGrades.reduce((a, b) => a + b, 0) / kuisGrades.length : null
                     const ulanganAvg = ulanganGrades.length > 0 ? ulanganGrades.reduce((a, b) => a + b, 0) / ulanganGrades.length : null
+                    const utsAvg = utsGrades.length > 0 ? utsGrades.reduce((a, b) => a + b, 0) / utsGrades.length : null
+                    const uasAvg = uasGrades.length > 0 ? uasGrades.reduce((a, b) => a + b, 0) / uasGrades.length : null
 
-                    const allScores = [tugasAvg, kuisAvg, ulanganAvg].filter(s => s !== null) as number[]
+                    const allScores = [tugasAvg, kuisAvg, ulanganAvg, utsAvg, uasAvg].filter(s => s !== null) as number[]
                     const subjectAvg = allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null
 
                     return {
@@ -132,6 +138,8 @@ export default function RekapNilaiPage() {
                         tugas: tugasAvg,
                         kuis: kuisAvg,
                         ulangan: ulanganAvg,
+                        uts: utsAvg,
+                        uas: uasAvg,
                         rata_rata: subjectAvg
                     }
                 })
@@ -183,6 +191,8 @@ export default function RekapNilaiPage() {
             headers.push(`${s.name} (Tugas)`)
             headers.push(`${s.name} (Kuis)`)
             headers.push(`${s.name} (Ulangan)`)
+            headers.push(`${s.name} (UTS)`)
+            headers.push(`${s.name} (UAS)`)
             headers.push(`${s.name} (Rata-rata)`)
         })
         headers.push('Rata-rata Keseluruhan')
@@ -198,6 +208,8 @@ export default function RekapNilaiPage() {
                 row.push(g.tugas !== null ? Math.round(g.tugas * 10) / 10 : '-')
                 row.push(g.kuis !== null ? Math.round(g.kuis * 10) / 10 : '-')
                 row.push(g.ulangan !== null ? Math.round(g.ulangan * 10) / 10 : '-')
+                row.push(g.uts !== null ? Math.round(g.uts * 10) / 10 : '-')
+                row.push(g.uas !== null ? Math.round(g.uas * 10) / 10 : '-')
                 row.push(g.rata_rata !== null ? Math.round(g.rata_rata * 10) / 10 : '-')
             })
 
