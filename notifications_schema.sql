@@ -18,10 +18,15 @@ CREATE TABLE IF NOT EXISTS notifications (
     CONSTRAINT valid_type CHECK (type IN (
         'TUGAS_BARU',
         'KUIS_BARU', 
+        'ULANGAN_BARU',
         'NILAI_KELUAR',
         'SUBMISSION_BARU',
         'DEADLINE_REMINDER',
-        'PENGUMUMAN'
+        'PENGUMUMAN',
+        'HOTS_REVIEW',
+        'SYSTEM',
+        'UJIAN_RESMI',
+        'EXAM_REMINDER'
     ))
 );
 
