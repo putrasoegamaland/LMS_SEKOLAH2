@@ -123,12 +123,11 @@ export async function GET(request: NextRequest) {
                         for (const exam of officialExams) {
                             if (!exam.target_class_ids?.includes(student.class_id)) continue
 
-                            // Check if reminder already sent
+                            // Check if ANY notification for this exam was already sent recently (any type)
                             const { data: existing } = await supabase
                                 .from('notifications')
                                 .select('id')
                                 .eq('user_id', user.id)
-                                .eq('type', 'EXAM_REMINDER')
                                 .ilike('title', `%${exam.title}%`)
                                 .gt('created_at', twentyFourHoursAgo.toISOString())
                                 .limit(1)
@@ -173,13 +172,12 @@ export async function GET(request: NextRequest) {
                         for (const exam of scheduledExams) {
                             if (!exam.target_class_ids?.includes(student.class_id)) continue
 
-                            // Check if a 'UJIAN_RESMI' notification already exists for this exam
+                            // Check if ANY notification for this exam already exists (any type)
                             const { data: existingInit } = await supabase
                                 .from('notifications')
                                 .select('id')
                                 .eq('user_id', user.id)
-                                .eq('type', 'UJIAN_RESMI')
-                                .ilike('title', `%Dijadwalkan: ${exam.title}`)
+                                .ilike('title', `%${exam.title}%`)
                                 .limit(1)
 
                             if (!existingInit || existingInit.length === 0) {

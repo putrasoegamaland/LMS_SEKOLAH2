@@ -112,15 +112,28 @@ export async function PUT(
                         const startDate = new Date(data.start_time).toLocaleString('id-ID')
                         const examLabel = data.exam_type === 'UTS' ? 'UTS' : 'UAS'
 
-                        await supabase.from('notifications').insert(
-                            enrollments.map((e: any) => ({
-                                user_id: e.student.user_id,
-                                type: 'UJIAN_RESMI',
-                                title: `🔔 ${examLabel} Sekarang Aktif: ${data.title}`,
-                                message: `${subjectName} — Silakan kerjakan pada: ${startDate}`,
-                                link: '/dashboard/siswa/uts-uas'
-                            }))
-                        )
+                        // Dedup: find students who already have a notification for this exam
+                        const userIds = enrollments.map((e: any) => e.student.user_id).filter(Boolean)
+                        const { data: existingNotifs } = await supabase
+                            .from('notifications')
+                            .select('user_id')
+                            .in('user_id', userIds)
+                            .ilike('title', `%${data.title}%`)
+
+                        const alreadyNotified = new Set((existingNotifs || []).map((n: any) => n.user_id))
+                        const toNotify = userIds.filter((uid: string) => !alreadyNotified.has(uid))
+
+                        if (toNotify.length > 0) {
+                            await supabase.from('notifications').insert(
+                                toNotify.map((uid: string) => ({
+                                    user_id: uid,
+                                    type: 'UJIAN_RESMI',
+                                    title: `🔔 ${examLabel} Sekarang Aktif: ${data.title}`,
+                                    message: `${subjectName} — Silakan kerjakan pada: ${startDate}`,
+                                    link: '/dashboard/siswa/uts-uas'
+                                }))
+                            )
+                        }
                     }
                 }
             } catch (notifError) {

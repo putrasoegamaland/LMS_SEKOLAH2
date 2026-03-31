@@ -55,6 +55,15 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
     const [showAddDropdown, setShowAddDropdown] = useState(false)
     const [showPreview, setShowPreview] = useState(false)
 
+    // Toast & confirm dialog (replacing browser alerts)
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null)
+    const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
+
+    const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+        setToast({ message, type })
+        setTimeout(() => setToast(null), 3000)
+    }
+
     // Manual form
     const [manualForm, setManualForm] = useState<Question>({
         id: '', question_text: '', question_type: 'MULTIPLE_CHOICE',
@@ -225,7 +234,7 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
     const handleToggleActive = async () => {
         if (!exam) return
         const newActive = !exam.is_active
-        if (newActive && questions.length === 0) { alert('Tambahkan soal dulu!'); return }
+        if (newActive && questions.length === 0) { showToast('Tambahkan soal dulu!', 'warning'); return }
         setSaving(true)
         try {
             const res = await fetch(`/api/official-exams/${examId}`, {
@@ -281,26 +290,38 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
     }
 
     // Delete question
-    const handleDeleteQuestion = async (questionId: string) => {
-        if (!confirm('Hapus soal ini?')) return
-        await fetch(`/api/official-exams/${examId}/questions`, {
-            method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question_id: questionId })
+    const handleDeleteQuestion = (questionId: string) => {
+        setConfirmDialog({
+            title: 'Hapus Soal',
+            message: 'Yakin ingin menghapus soal ini?',
+            onConfirm: async () => {
+                await fetch(`/api/official-exams/${examId}/questions`, {
+                    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question_id: questionId })
+                })
+                fetchQuestions()
+                setConfirmDialog(null)
+            }
         })
-        fetchQuestions()
     }
 
     // Bulk delete
     const handleBulkDelete = async () => {
         if (selectedQuestionIds.size === 0) return
-        if (!confirm(`Hapus ${selectedQuestionIds.size} soal?`)) return
-        for (const qId of selectedQuestionIds) {
-            await fetch(`/api/official-exams/${examId}/questions`, {
-                method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question_id: qId })
-            })
-        }
-        setSelectedQuestionIds(new Set()); setIsBulkSelectMode(false); fetchQuestions()
+        setConfirmDialog({
+            title: 'Hapus Soal',
+            message: `Yakin ingin menghapus ${selectedQuestionIds.size} soal?`,
+            onConfirm: async () => {
+                for (const qId of selectedQuestionIds) {
+                    await fetch(`/api/official-exams/${examId}/questions`, {
+                        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question_id: qId })
+                    })
+                }
+                setSelectedQuestionIds(new Set()); setIsBulkSelectMode(false); fetchQuestions()
+                setConfirmDialog(null)
+            }
+        })
     }
 
     // Edit question
@@ -375,7 +396,7 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
             if (res.ok) {
                 const updated = await res.json()
                 setExam(prev => prev ? { ...prev, ...updated } : null)
-                alert('Pengaturan berhasil disimpan!')
+                showToast('Pengaturan berhasil disimpan!', 'success')
             }
         } finally { setSettingsSaving(false) }
     }
@@ -759,7 +780,7 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
                                         </div>
                                     ) : (
                                         <div className="relative">
-                                            <input type="file" accept="audio/*" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; if (file.size > 25*1024*1024) { alert('Maks 25MB'); return }; setUploadingAudio(true); try { const fd = new FormData(); fd.append('file', file); const res = await fetch('/api/audio/upload', { method: 'POST', body: fd }); if (!res.ok) throw new Error('Upload gagal'); const { url } = await res.json(); setPassageAudioUrl(url) } catch(err: any) { alert(err.message) } finally { setUploadingAudio(false); e.target.value = '' } }} className="hidden" id="uts-passage-audio" disabled={uploadingAudio} />
+                                            <input type="file" accept="audio/*" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; if (file.size > 25*1024*1024) { showToast('Maks 25MB', 'error'); return }; setUploadingAudio(true); try { const fd = new FormData(); fd.append('file', file); const res = await fetch('/api/audio/upload', { method: 'POST', body: fd }); if (!res.ok) throw new Error('Upload gagal'); const { url } = await res.json(); setPassageAudioUrl(url) } catch(err: any) { showToast(err.message, 'error') } finally { setUploadingAudio(false); e.target.value = '' } }} className="hidden" id="uts-passage-audio" disabled={uploadingAudio} />
                                             <label htmlFor="uts-passage-audio" className={`flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-xl text-sm font-medium transition-colors cursor-pointer ${uploadingAudio ? 'opacity-50 cursor-wait' : 'text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20'}`}>
                                                 {uploadingAudio ? <><Loader2 className="w-4 h-4 animate-spin" /> Mengupload...</> : <>🎵 Upload Audio (maks 25MB)</>}
                                             </label>
@@ -1011,6 +1032,38 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
                 questions={questions}
                 type="ulangan"
             />
+
+            {/* Toast Notification */}
+            {toast && (
+                <div className={`fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-xl shadow-2xl text-white font-medium text-sm flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-300 ${
+                    toast.type === 'success' ? 'bg-green-500' : toast.type === 'error' ? 'bg-red-500' : 'bg-amber-500'
+                }`}>
+                    <span>{toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : '⚠️'}</span>
+                    {toast.message}
+                    <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100">✕</button>
+                </div>
+            )}
+
+            {/* Confirm Dialog */}
+            {confirmDialog && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="w-16 h-16 mx-auto bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mb-4">
+                            <Trash2 className="w-7 h-7" />
+                        </div>
+                        <h3 className="text-lg font-bold text-text-main dark:text-white mb-2">{confirmDialog.title}</h3>
+                        <p className="text-text-secondary mb-6">{confirmDialog.message}</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setConfirmDialog(null)} className="flex-1 py-3 bg-gray-200 dark:bg-slate-700 text-text-main dark:text-white rounded-xl font-bold hover:bg-gray-300 transition-colors">
+                                Batal
+                            </button>
+                            <button onClick={confirmDialog.onConfirm} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors">
+                                Hapus
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
