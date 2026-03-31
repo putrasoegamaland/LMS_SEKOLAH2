@@ -224,6 +224,45 @@ export async function POST(request: NextRequest) {
             console.error('Error sending scheduled exam notifications:', notifError)
         }
 
+        // Notify relevant teachers about the scheduled exam
+        try {
+            if (data && target_class_ids?.length > 0) {
+                const { data: assignments } = await supabase
+                    .from('teaching_assignments')
+                    .select('teacher:teachers(user_id)')
+                    .eq('subject_id', subject_id)
+                    .in('class_id', target_class_ids)
+                    .eq('academic_year_id', yearId)
+
+                if (assignments && assignments.length > 0) {
+                    const teacherUserIds = [...new Set(
+                        assignments.map((a: any) => {
+                            const t = Array.isArray(a.teacher) ? a.teacher[0] : a.teacher
+                            return t?.user_id
+                        }).filter(Boolean)
+                    )]
+
+                    if (teacherUserIds.length > 0) {
+                        const subjectName = (data as any).subject?.name || ''
+                        const startDate = new Date(data.start_time).toLocaleString('id-ID')
+                        const examLabel = data.exam_type === 'UTS' ? 'UTS' : 'UAS'
+
+                        await supabase.from('notifications').insert(
+                            teacherUserIds.map(uid => ({
+                                user_id: uid,
+                                type: 'UJIAN_RESMI',
+                                title: `📋 ${examLabel} Dijadwalkan: ${data.title}`,
+                                message: `${subjectName} — Admin menjadwalkan ujian kelas Anda pada: ${startDate}`,
+                                link: '/dashboard/guru/uts-uas'
+                            }))
+                        )
+                    }
+                }
+            }
+        } catch (teacherNotifError) {
+            console.error('Error sending teacher exam notification:', teacherNotifError)
+        }
+
         return NextResponse.json(data)
     } catch (error) {
         console.error('Error creating official exam:', error)

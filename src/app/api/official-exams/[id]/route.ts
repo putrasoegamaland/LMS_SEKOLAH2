@@ -136,6 +136,53 @@ export async function PUT(
                         }
                     }
                 }
+
+                // Also notify teachers when exam goes active
+                const { data: teacherAssignments } = await supabase
+                    .from('teaching_assignments')
+                    .select('teacher:teachers(user_id)')
+                    .eq('subject_id', data.subject_id)
+                    .in('class_id', data.target_class_ids)
+                    .eq('academic_year_id', activeYear?.id || '')
+
+                if (teacherAssignments && teacherAssignments.length > 0) {
+                    const teacherUserIds = [...new Set(
+                        teacherAssignments.map((a: any) => {
+                            const t = Array.isArray(a.teacher) ? a.teacher[0] : a.teacher
+                            return t?.user_id
+                        }).filter(Boolean)
+                    )]
+
+                    // Dedup: skip teachers already notified for this exact event type
+                    const { data: existingTeacherNotifs } = await supabase
+                        .from('notifications')
+                        .select('user_id')
+                        .in('user_id', teacherUserIds)
+                        .ilike('title', `%Dimulai: ${data.title}%`)
+                        .eq('type', 'UJIAN_RESMI')
+
+                    const alreadyNotifiedTeachers = new Set(
+                        (existingTeacherNotifs || []).map((n: any) => n.user_id)
+                    )
+                    const teachersToNotify = teacherUserIds.filter(
+                        uid => !alreadyNotifiedTeachers.has(uid)
+                    )
+
+                    if (teachersToNotify.length > 0) {
+                        const subjectName = (data as any).subject?.name || ''
+                        const examLabel = data.exam_type === 'UTS' ? 'UTS' : 'UAS'
+
+                        await supabase.from('notifications').insert(
+                            teachersToNotify.map(uid => ({
+                                user_id: uid,
+                                type: 'UJIAN_RESMI',
+                                title: `🔔 ${examLabel} Dimulai: ${data.title}`,
+                                message: `${subjectName} — Siswa diijinkan mulai mengerjakan ujian.`,
+                                link: '/dashboard/guru/uts-uas'
+                            }))
+                        )
+                    }
+                }
             } catch (notifError) {
                 console.error('Error sending official exam notifications:', notifError)
             }

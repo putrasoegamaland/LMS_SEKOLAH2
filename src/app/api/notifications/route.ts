@@ -199,6 +199,79 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        // Teacher UTS/UAS Reminders
+        if (user.role === 'GURU') {
+            try {
+                const { data: teacher } = await supabase
+                    .from('teachers')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .single()
+
+                if (teacher) {
+                    const { data: activeYear } = await supabase
+                        .from('academic_years')
+                        .select('id')
+                        .eq('is_active', true)
+                        .eq('school_id', schoolId)
+                        .single()
+
+                    if (activeYear) {
+                        const { data: assignments } = await supabase
+                            .from('teaching_assignments')
+                            .select('subject_id, class_id')
+                            .eq('teacher_id', teacher.id)
+                            .eq('academic_year_id', activeYear.id)
+
+                        if (assignments && assignments.length > 0) {
+                            const now = new Date()
+                            const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+                            const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+                            const subjectIds = [...new Set(assignments.map(a => a.subject_id))]
+                            const classIds = [...new Set(assignments.map(a => a.class_id))]
+
+                            const { data: upcomingExams } = await supabase
+                                .from('official_exams')
+                                .select('id, title, exam_type, start_time, target_class_ids, subject_id, subject:subjects(name)')
+                                .eq('school_id', schoolId)
+                                .eq('is_active', true)
+                                .in('subject_id', subjectIds)
+                                .gt('start_time', now.toISOString())
+                                .lte('start_time', in24h.toISOString())
+
+                            if (upcomingExams) {
+                                for (const exam of upcomingExams) {
+                                    if (!exam.target_class_ids?.some((cid: string) => classIds.includes(cid))) continue
+
+                                    const { data: existing } = await supabase
+                                        .from('notifications')
+                                        .select('id')
+                                        .eq('user_id', user.id)
+                                        .ilike('title', `%${exam.title}%`)
+                                        .gt('created_at', twentyFourHoursAgo.toISOString())
+                                        .limit(1)
+
+                                    if (!existing || existing.length === 0) {
+                                        const label = exam.exam_type === 'UTS' ? 'UTS' : 'UAS'
+                                        const startStr = new Date(exam.start_time).toLocaleString('id-ID')
+                                        await supabase.from('notifications').insert({
+                                            user_id: user.id,
+                                            type: 'EXAM_REMINDER',
+                                            title: `⏰ ${label} Segera: ${exam.title}`,
+                                            message: `${(exam as any).subject?.name || ''} — Mulai: ${startStr}`,
+                                            link: '/dashboard/guru/uts-uas'
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (teacherReminderError) {
+                console.error('Teacher exam reminder error:', teacherReminderError)
+            }
+        }
+
         let query = supabase
             .from('notifications')
             .select('*')
