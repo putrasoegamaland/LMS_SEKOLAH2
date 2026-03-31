@@ -438,7 +438,7 @@ export default function TakeOfficialExamPage() {
             </div>
 
             {/* Main */}
-            <div className="flex-1 flex max-w-4xl mx-auto w-full">
+            <div className="flex-1 flex max-w-4xl mx-auto w-full overflow-hidden">
                 {/* Nav sidebar */}
                 <div className="w-20 bg-surface-light dark:bg-surface-dark border-r border-gray-200 dark:border-gray-700 p-3 overflow-y-auto">
                     <p className="text-xs text-text-secondary mb-3 text-center">Navigasi</p>
@@ -457,70 +457,74 @@ export default function TakeOfficialExamPage() {
                 </div>
 
                 {/* Question */}
-                <div className="flex-1 p-6">
-                    <div className="bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-xl p-6 min-h-[400px]">
-                        <div className="flex items-center gap-3 mb-4">
-                            <span className="w-10 h-10 rounded-full bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">{currentIndex + 1}</span>
-                            <span className={`px-2 py-0.5 text-xs rounded ${currentQuestion.question_type === 'MULTIPLE_CHOICE' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-600'}`}>
-                                {currentQuestion.question_type === 'MULTIPLE_CHOICE' ? 'Pilihan Ganda' : 'Essay'}
-                            </span>
-                            <span className="text-xs text-text-secondary">({currentQuestion.points} poin)</span>
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="flex-1 overflow-y-auto p-6">
+                        <div className="bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <span className="w-10 h-10 rounded-full bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">{currentIndex + 1}</span>
+                                <span className={`px-2 py-0.5 text-xs rounded ${currentQuestion.question_type === 'MULTIPLE_CHOICE' ? 'bg-blue-500/20 text-blue-500' : 'bg-amber-500/20 text-amber-600'}`}>
+                                    {currentQuestion.question_type === 'MULTIPLE_CHOICE' ? 'Pilihan Ganda' : 'Essay'}
+                                </span>
+                                <span className="text-xs text-text-secondary">({currentQuestion.points} poin)</span>
+                            </div>
+
+                            {currentQuestion.passage_text && (
+                                <div className="mb-6 p-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-xl">
+                                    <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-2">📖 Bacaan:</p>
+                                    <SmartText text={currentQuestion.passage_text} className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed" />
+                                </div>
+                            )}
+
+                            <SmartText text={currentQuestion.question_text} className="text-text-main dark:text-white text-lg mb-4" />
+
+                            {currentQuestion.image_url && (
+                                <div className="mb-4">
+                                    <img src={currentQuestion.image_url} alt="Gambar soal" className="max-h-64 rounded-lg border border-gray-200 dark:border-gray-600 mx-auto" />
+                                </div>
+                            )}
+
+                            {currentQuestion.question_type === 'MULTIPLE_CHOICE' && currentQuestion.options && (
+                                <div className="space-y-3">
+                                    {currentQuestion.options.map((opt, optIdx) => {
+                                        const letter = String.fromCharCode(65 + optIdx)
+                                        const isSelected = answers[currentQuestion.id] === letter
+                                        return (
+                                            <button key={optIdx} onClick={() => saveAnswer(currentQuestion.id, letter)}
+                                                className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${isSelected ? 'bg-indigo-500/10 border-indigo-500 text-text-main dark:text-white' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-600 text-text-secondary hover:border-gray-400'}`}>
+                                                <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg mr-3 font-bold ${isSelected ? 'bg-indigo-500 text-white' : 'bg-gray-200 dark:bg-slate-600 text-text-secondary'}`}>{letter}</span>
+                                                <SmartText text={opt} as="span" />
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            )}
+
+                            {currentQuestion.question_type === 'ESSAY' && (
+                                <textarea value={answers[currentQuestion.id] || ''} onChange={(e) => saveAnswer(currentQuestion.id, e.target.value)}
+                                    className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" rows={6} placeholder="Tulis jawaban Anda di sini..." />
+                            )}
                         </div>
-
-                        {currentQuestion.passage_text && (
-                            <div className="mb-6 p-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-xl">
-                                <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-2">📖 Bacaan:</p>
-                                <SmartText text={currentQuestion.passage_text} className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed" />
-                            </div>
-                        )}
-
-                        <SmartText text={currentQuestion.question_text} className="text-text-main dark:text-white text-lg mb-4" />
-
-                        {currentQuestion.image_url && (
-                            <div className="mb-4">
-                                <img src={currentQuestion.image_url} alt="Gambar soal" className="max-h-64 rounded-lg border border-gray-200 dark:border-gray-600 mx-auto" />
-                            </div>
-                        )}
-
-                        {currentQuestion.question_type === 'MULTIPLE_CHOICE' && currentQuestion.options && (
-                            <div className="space-y-3">
-                                {currentQuestion.options.map((opt, optIdx) => {
-                                    const letter = String.fromCharCode(65 + optIdx)
-                                    const isSelected = answers[currentQuestion.id] === letter
-                                    return (
-                                        <button key={optIdx} onClick={() => saveAnswer(currentQuestion.id, letter)}
-                                            className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${isSelected ? 'bg-indigo-500/10 border-indigo-500 text-text-main dark:text-white' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-600 text-text-secondary hover:border-gray-400'}`}>
-                                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg mr-3 font-bold ${isSelected ? 'bg-indigo-500 text-white' : 'bg-gray-200 dark:bg-slate-600 text-text-secondary'}`}>{letter}</span>
-                                            <SmartText text={opt} as="span" />
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        )}
-
-                        {currentQuestion.question_type === 'ESSAY' && (
-                            <textarea value={answers[currentQuestion.id] || ''} onChange={(e) => saveAnswer(currentQuestion.id, e.target.value)}
-                                className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" rows={6} placeholder="Tulis jawaban Anda di sini..." />
-                        )}
                     </div>
 
-                    {/* Nav buttons */}
-                    <div className="flex items-center justify-between mt-6">
-                        <button onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))} disabled={currentIndex === 0}
-                            className="px-6 py-3 bg-gray-200 dark:bg-slate-700 text-text-main dark:text-white rounded-xl hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                            ← Sebelumnya
-                        </button>
-                        {currentIndex >= questions.length - 1 ? (
-                            <button onClick={() => setShowConfirmSubmit(true)}
-                                className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity">
-                                <span className="flex items-center gap-2"><TickSquare set="bold" primaryColor="currentColor" size={20} /> Kumpulkan Ujian</span>
+                    {/* Nav buttons — sticky at bottom */}
+                    <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-surface-dark px-6 py-4">
+                        <div className="flex items-center justify-between">
+                            <button onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))} disabled={currentIndex === 0}
+                                className="px-6 py-3 bg-gray-200 dark:bg-slate-700 text-text-main dark:text-white rounded-xl hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                ← Sebelumnya
                             </button>
-                        ) : (
-                            <button onClick={() => setCurrentIndex(prev => prev + 1)}
-                                className="px-6 py-3 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 transition-colors">
-                                Selanjutnya →
-                            </button>
-                        )}
+                            {currentIndex >= questions.length - 1 ? (
+                                <button onClick={() => setShowConfirmSubmit(true)}
+                                    className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity">
+                                    <span className="flex items-center gap-2"><TickSquare set="bold" primaryColor="currentColor" size={20} /> Kumpulkan Ujian</span>
+                                </button>
+                            ) : (
+                                <button onClick={() => setCurrentIndex(prev => prev + 1)}
+                                    className="px-6 py-3 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 transition-colors">
+                                    Selanjutnya →
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
