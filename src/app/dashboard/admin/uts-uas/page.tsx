@@ -474,6 +474,21 @@ export default function AdminUtsUasPage() {
                         <label htmlFor="randomize_official" className="text-sm font-medium text-text-main dark:text-white cursor-pointer select-none">Acak urutan soal per siswa</label>
                     </div>
 
+                    {/* Max Violations */}
+                    <div>
+                        <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Maksimal Pelanggaran</label>
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="number"
+                                value={form.max_violations}
+                                onChange={(e) => setForm({ ...form, max_violations: parseInt(e.target.value) || 3 })}
+                                className="w-24 px-4 py-3 bg-secondary/5 border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary text-center font-bold"
+                                min={1} max={10}
+                            />
+                            <p className="text-xs text-text-secondary">Ujian otomatis dikumpulkan jika siswa melebihi batas pelanggaran (pindah tab, dll)</p>
+                        </div>
+                    </div>
+
                     <div className="flex gap-3 pt-4 border-t border-secondary/10 mt-2">
                         <Button variant="secondary" onClick={() => setShowCreate(false)} className="flex-1">Batal</Button>
                         <Button

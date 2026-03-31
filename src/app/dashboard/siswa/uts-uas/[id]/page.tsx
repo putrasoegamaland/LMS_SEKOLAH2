@@ -55,6 +55,7 @@ export default function TakeOfficialExamPage() {
     const [forceSubmitted, setForceSubmitted] = useState(false)
     const [alertMessage, setAlertMessage] = useState<string | null>(null)
     const [isOffline, setIsOffline] = useState(false)
+    const [pendingViolation, setPendingViolation] = useState(false)
 
     const containerRef = useRef<HTMLDivElement>(null)
     const hasStarted = useRef(false)
@@ -241,7 +242,18 @@ export default function TakeOfficialExamPage() {
     useEffect(() => {
         if (!submission || submission.is_submitted) return
 
-        const handleVisibility = async () => { if (document.hidden) await logViolation('TAB_SWITCH') }
+        const handleVisibility = async () => {
+            if (document.hidden) {
+                // Student left the tab — log violation in background
+                setPendingViolation(true)
+                await logViolation('TAB_SWITCH')
+            } else if (pendingViolation) {
+                // Student came BACK — show the red warning now
+                setPendingViolation(false)
+                setShowViolationWarning(true)
+                setTimeout(() => setShowViolationWarning(false), 4000)
+            }
+        }
         const handleBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = 'Anda sedang dalam ujian!' }
         const handleContextMenu = (e: MouseEvent) => e.preventDefault()
         const handleCopy = (e: ClipboardEvent) => e.preventDefault()
@@ -263,7 +275,7 @@ export default function TakeOfficialExamPage() {
             document.removeEventListener('copy', handleCopy)
             document.removeEventListener('keydown', handleKeyDown)
         }
-    }, [submission])
+    }, [submission, pendingViolation])
 
     const logViolation = async (type: string) => {
         if (!submission || submission.is_submitted || forceSubmitted) return
@@ -276,13 +288,13 @@ export default function TakeOfficialExamPage() {
             const data = await res.json()
             if (data.force_submitted) {
                 setForceSubmitted(true)
+                setPendingViolation(false)
                 setAlertMessage('Ujian otomatis dikumpulkan karena pelanggaran melebihi batas!')
                 setTimeout(() => router.push('/dashboard/siswa/ulangan'), 3000)
                 return
             }
             setViolationCount(data.violation_count)
-            setShowViolationWarning(true)
-            setTimeout(() => setShowViolationWarning(false), 3000)
+            // Don't show warning here — it will show when student returns to tab
         } catch { }
     }
 
