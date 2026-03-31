@@ -54,6 +54,7 @@ export default function TakeOfficialExamPage() {
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [forceSubmitted, setForceSubmitted] = useState(false)
     const [alertMessage, setAlertMessage] = useState<string | null>(null)
+    const [isOffline, setIsOffline] = useState(false)
 
     const containerRef = useRef<HTMLDivElement>(null)
     const hasStarted = useRef(false)
@@ -61,6 +62,19 @@ export default function TakeOfficialExamPage() {
     const answersRef = useRef(answers)
 
     useEffect(() => { answersRef.current = answers }, [answers])
+
+    // Reactive offline state
+    useEffect(() => {
+        setIsOffline(!navigator.onLine)
+        const goOffline = () => setIsOffline(true)
+        const goOnline = () => setIsOffline(false)
+        window.addEventListener('offline', goOffline)
+        window.addEventListener('online', goOnline)
+        return () => {
+            window.removeEventListener('offline', goOffline)
+            window.removeEventListener('online', goOnline)
+        }
+    }, [])
 
     // LocalStorage helpers
     const saveLocal = (a: { [key: string]: string }) => {
@@ -165,11 +179,31 @@ export default function TakeOfficialExamPage() {
             if (Object.keys(localAnswers).length > 0 && submissionRef.current) {
                 try {
                     const answersArray = Object.entries(localAnswers).map(([question_id, answer]) => ({ question_id, answer }))
+
+                    // Check if exam time is expired
+                    const currentExam = exam
+                    const currentSub = submissionRef.current
+                    let isTimeUp = false
+                    if (currentExam && currentSub) {
+                        const durationMs = currentExam.duration_minutes * 60 * 1000
+                        const elapsed = Date.now() - new Date(currentSub.started_at).getTime()
+                        isTimeUp = durationMs > 0 && elapsed >= durationMs
+                    }
+
                     await fetch('/api/official-exam-submissions', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ submission_id: submissionRef.current.id, answers: answersArray })
+                        body: JSON.stringify({
+                            submission_id: submissionRef.current.id,
+                            answers: answersArray,
+                            ...(isTimeUp && { submit: true })
+                        })
                     })
+
+                    if (isTimeUp) {
+                        clearLocal()
+                        router.replace('/dashboard/siswa/ulangan')
+                    }
                 } catch (e) { console.error('Error syncing:', e) }
             }
         }
@@ -369,7 +403,7 @@ export default function TakeOfficialExamPage() {
             )}
 
             {/* Offline Banner */}
-            {!navigator.onLine && (
+            {isOffline && (
                 <div className="bg-red-500 text-white text-xs font-bold text-center py-1.5 animate-pulse w-full">
                     ⚠️ Koneksi terputus — jawaban disimpan lokal & akan otomatis dikirim saat online
                 </div>

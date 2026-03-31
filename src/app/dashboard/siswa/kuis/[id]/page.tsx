@@ -49,6 +49,7 @@ export default function KerjakanKuisPage() {
     const [showTimeoutModal, setShowTimeoutModal] = useState(false)
     const [showOfflineTimeoutModal, setShowOfflineTimeoutModal] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [isOffline, setIsOffline] = useState(false)
 
     // Resume State
     const [showResumeModal, setShowResumeModal] = useState(false)
@@ -64,6 +65,24 @@ export default function KerjakanKuisPage() {
     useEffect(() => {
         answersRef.current = answers
     }, [answers])
+
+    const quizRef = useRef(quiz)
+    const startTimeRef = useRef(startTime)
+    useEffect(() => { quizRef.current = quiz }, [quiz])
+    useEffect(() => { startTimeRef.current = startTime }, [startTime])
+
+    // Reactive offline state
+    useEffect(() => {
+        setIsOffline(!navigator.onLine)
+        const goOffline = () => setIsOffline(true)
+        const goOnline = () => setIsOffline(false)
+        window.addEventListener('offline', goOffline)
+        window.addEventListener('online', goOnline)
+        return () => {
+            window.removeEventListener('offline', goOffline)
+            window.removeEventListener('online', goOnline)
+        }
+    }, [])
 
     // LocalStorage helpers
     const saveAnswersToLocal = (answers: Record<string, string>) => {
@@ -115,7 +134,9 @@ export default function KerjakanKuisPage() {
 
     const syncLocalToServer = async () => {
         const localAnswers = loadAnswersFromLocal()
-        if (Object.keys(localAnswers).length === 0 || !startTime) return
+        const currentStartTime = startTimeRef.current
+        const currentQuiz = quizRef.current
+        if (Object.keys(localAnswers).length === 0 || !currentStartTime) return
 
         try {
             const formattedAnswers = Object.entries(localAnswers).map(([qId, val]) => ({
@@ -124,8 +145,8 @@ export default function KerjakanKuisPage() {
             }))
 
             // Check if time is already up
-            const durationMs = quiz ? quiz.duration_minutes * 60 * 1000 : 0
-            const elapsed = Date.now() - new Date(startTime).getTime()
+            const durationMs = currentQuiz ? currentQuiz.duration_minutes * 60 * 1000 : 0
+            const elapsed = Date.now() - new Date(currentStartTime).getTime()
             const isTimeUp = durationMs > 0 && elapsed >= durationMs
 
             await fetch('/api/quiz-submissions', {
@@ -134,7 +155,7 @@ export default function KerjakanKuisPage() {
                 body: JSON.stringify({
                     quiz_id: quizId,
                     answers: formattedAnswers,
-                    started_at: startTime,
+                    started_at: currentStartTime,
                     submit: isTimeUp
                 })
             })
@@ -451,7 +472,7 @@ export default function KerjakanKuisPage() {
     return (
         <div className="space-y-6 pb-20">
             {/* Header Sticky */}
-            {!navigator.onLine && (
+            {isOffline && (
                 <div className="bg-red-500 text-white text-xs font-bold text-center py-1.5 animate-pulse w-full">
                     ⚠️ Koneksi terputus — jawaban disimpan lokal & akan otomatis dikirim saat online
                 </div>
