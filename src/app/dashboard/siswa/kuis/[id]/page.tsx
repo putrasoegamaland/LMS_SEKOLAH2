@@ -600,7 +600,7 @@ export default function KerjakanKuisPage() {
                                     {q.passage_text && !q.passage_audio_url && (
                                         <div className="mb-4 p-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-xl">
                                             <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-2">📖 Bacaan:</p>
-                                            <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed">{q.passage_text}</p>
+                                            <SmartText text={q.passage_text} className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed" />
                                         </div>
                                     )}
                                     <div className="flex items-start gap-4 mb-4">

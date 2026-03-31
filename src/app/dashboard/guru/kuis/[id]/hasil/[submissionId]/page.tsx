@@ -211,7 +211,7 @@ export default function GradingPage() {
                                             {q.passage_text && (
                                                 <>
                                                     <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1">📖 Bacaan:</p>
-                                                    <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed break-all" style={{ overflowWrap: 'anywhere' }}>{q.passage_text}</p>
+                                                    <SmartText text={q.passage_text} className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed break-all" />
                                                 </>
                                             )}
                                         </div>

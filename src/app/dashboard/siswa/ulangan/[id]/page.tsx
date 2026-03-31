@@ -752,7 +752,7 @@ export default function TakeExamPage() {
                                     {currentItem.question.passage_text && !currentItem.question.passage_audio_url && (
                                         <div className="mb-6 p-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-xl">
                                             <p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-2">📖 Bacaan:</p>
-                                            <p className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed">{currentItem.question.passage_text}</p>
+                                            <SmartText text={currentItem.question.passage_text} className="text-sm text-text-main dark:text-white whitespace-pre-wrap leading-relaxed" />
                                         </div>
                                     )}
                                     {currentItem.question.image_url && (
