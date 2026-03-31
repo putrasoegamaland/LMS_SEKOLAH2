@@ -14,6 +14,7 @@ interface WarningItem {
     subject_name: string
     avg_score: number
     score_count: number
+    teaching_assignment_id?: string
 }
 
 interface MyClassItem {
@@ -140,7 +141,7 @@ export default function GuruDashboard() {
     const activeWarnings = activeWarningTab === 'teaching' ? teachingWarnings : homeroomWarnings
 
     // Render a single warning card (reused across both tabs)
-    const renderWarningCard = (warning: WarningItem, idx: number) => (
+    const renderWarningCard = (warning: WarningItem, idx: number, tab: 'teaching' | 'homeroom') => (
         <div key={`${warning.student_id}-${warning.subject_name}-${idx}`} className="group flex items-center gap-4 p-4 rounded-2xl bg-white/70 dark:bg-surface-dark/70 backdrop-blur-xl border border-red-100 dark:border-red-900/30 shadow-sm hover:shadow-md hover:border-red-300 dark:hover:border-red-700 transition-all">
             {/* Score Indicator */}
             <div className="relative w-14 h-14 flex items-center justify-center flex-shrink-0">
@@ -166,7 +167,7 @@ export default function GuruDashboard() {
             </div>
 
             {/* Action button */}
-            <Link href={`/dashboard/guru/wali-kelas/${warning.student_id}`} className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white transition-colors">
+            <Link href={tab === 'homeroom' ? `/dashboard/guru/wali-kelas/${warning.student_id}` : `/dashboard/guru/nilai${warning.teaching_assignment_id ? `?ta=${warning.teaching_assignment_id}` : ''}`} className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white transition-colors">
                 <svg className="w-5 h-5 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
             </Link>
         </div>
@@ -418,7 +419,7 @@ export default function GuruDashboard() {
                         </div>
                     ) : (
                         <div className="grid gap-3">
-                            {activeWarnings.slice(0, warningVisibleCount).map((warning, idx) => renderWarningCard(warning, idx))}
+                            {activeWarnings.slice(0, warningVisibleCount).map((warning, idx) => renderWarningCard(warning, idx, activeWarningTab))}
                             {activeWarnings.length > warningVisibleCount && (
                                 <button
                                     onClick={() => setWarningVisibleCount(prev => prev + 5)}

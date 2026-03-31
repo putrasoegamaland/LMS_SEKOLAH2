@@ -318,11 +318,6 @@ export default function TakeExamPage() {
             return e.returnValue
         }
 
-        const handleBlur = async () => {
-            // Window lost focus
-            await logViolation('WINDOW_BLUR')
-        }
-
         // Prevent right-click
         const handleContextMenu = (e: MouseEvent) => {
             e.preventDefault()
@@ -350,7 +345,6 @@ export default function TakeExamPage() {
 
         document.addEventListener('visibilitychange', handleVisibilityChange)
         window.addEventListener('beforeunload', handleBeforeUnload)
-        window.addEventListener('blur', handleBlur)
         document.addEventListener('contextmenu', handleContextMenu)
         document.addEventListener('copy', handleCopy)
         document.addEventListener('paste', handlePaste)
@@ -359,7 +353,6 @@ export default function TakeExamPage() {
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange)
             window.removeEventListener('beforeunload', handleBeforeUnload)
-            window.removeEventListener('blur', handleBlur)
             document.removeEventListener('contextmenu', handleContextMenu)
             document.removeEventListener('copy', handleCopy)
             document.removeEventListener('paste', handlePaste)

@@ -56,14 +56,31 @@ interface ExamSubmission {
     }
 }
 
+interface OfficialExamSubmission {
+    id: string
+    exam_id: string
+    is_submitted: boolean
+    submitted_at: string
+    total_score: number
+    max_score: number
+    violation_count: number
+    exam: {
+        id: string
+        title: string
+        exam_type: 'UTS' | 'UAS'
+        subject: { name: string }
+    }
+}
+
 interface SubjectGrades {
     subjectName: string
     kuis: QuizSubmission[]
     tugas: AssignmentSubmission[]
     ulangan: (AssignmentSubmission | ExamSubmission)[]
+    utsUas: OfficialExamSubmission[]
 }
 
-type TabType = 'kuis' | 'tugas' | 'ulangan'
+type TabType = 'kuis' | 'tugas' | 'ulangan' | 'utsUas'
 
 export default function SiswaNilaiPage() {
     const { user } = useAuth()
@@ -88,40 +105,44 @@ export default function SiswaNilaiPage() {
                 }
 
                 // Fetch all data sources in parallel
-                const [submissionsRes, quizSubsRes, examSubsRes] = await Promise.all([
+                const [submissionsRes, quizSubsRes, examSubsRes, officialSubsRes] = await Promise.all([
                     fetch(`/api/submissions?student_id=${myStudent.id}`),
                     fetch(`/api/quiz-submissions?student_id=${myStudent.id}`),
-                    fetch(`/api/exam-submissions?student_id=${myStudent.id}`)
+                    fetch(`/api/exam-submissions?student_id=${myStudent.id}`),
+                    fetch(`/api/official-exam-submissions?student_id=${myStudent.id}`)
                 ])
 
-                const [submissions, quizSubmissions, examSubmissions]: [AssignmentSubmission[], QuizSubmission[], ExamSubmission[]] = await Promise.all([
+                const [submissions, quizSubmissions, examSubmissions, officialSubmissions]: [AssignmentSubmission[], QuizSubmission[], ExamSubmission[], OfficialExamSubmission[]] = await Promise.all([
                     submissionsRes.json(),
                     quizSubsRes.json(),
-                    examSubsRes.json()
+                    examSubsRes.json(),
+                    officialSubsRes.json()
                 ])
 
                 // Group by Subject
                 const subjectsMap: Record<string, SubjectGrades> = {}
 
+                const getOrInitSubject = (name: string) => {
+                    if (!subjectsMap[name]) {
+                        subjectsMap[name] = { subjectName: name, kuis: [], tugas: [], ulangan: [], utsUas: [] }
+                    }
+                    return subjectsMap[name]
+                }
+
                 // Process Quiz Submissions
                 quizSubmissions.forEach((qs) => {
                     const subjectName = qs.quiz?.teaching_assignment?.subject?.name || 'Lainnya'
-                    if (!subjectsMap[subjectName]) {
-                        subjectsMap[subjectName] = { subjectName, kuis: [], tugas: [], ulangan: [] }
-                    }
-                    subjectsMap[subjectName].kuis.push(qs)
+                    getOrInitSubject(subjectName).kuis.push(qs)
                 })
 
                 // Process Assignment Submissions
                 submissions.forEach((sub) => {
                     const subjectName = sub.assignment?.teaching_assignment?.subject?.name || 'Lainnya'
-                    if (!subjectsMap[subjectName]) {
-                        subjectsMap[subjectName] = { subjectName, kuis: [], tugas: [], ulangan: [] }
-                    }
+                    const subject = getOrInitSubject(subjectName)
                     if (sub.assignment.type === 'TUGAS') {
-                        subjectsMap[subjectName].tugas.push(sub)
+                        subject.tugas.push(sub)
                     } else if (sub.assignment.type === 'ULANGAN') {
-                        subjectsMap[subjectName].ulangan.push(sub)
+                        subject.ulangan.push(sub)
                     }
                 })
 
@@ -129,10 +150,15 @@ export default function SiswaNilaiPage() {
                 if (Array.isArray(examSubmissions)) {
                     examSubmissions.filter(es => es.is_submitted).forEach((es) => {
                         const subjectName = es.exam?.teaching_assignment?.subject?.name || 'Lainnya'
-                        if (!subjectsMap[subjectName]) {
-                            subjectsMap[subjectName] = { subjectName, kuis: [], tugas: [], ulangan: [] }
-                        }
-                        subjectsMap[subjectName].ulangan.push(es)
+                        getOrInitSubject(subjectName).ulangan.push(es)
+                    })
+                }
+
+                // Process Official Exam (UTS/UAS) Submissions
+                if (Array.isArray(officialSubmissions)) {
+                    officialSubmissions.filter(es => es.is_submitted).forEach((es) => {
+                        const subjectName = es.exam?.subject?.name || 'Lainnya'
+                        getOrInitSubject(subjectName).utsUas.push(es)
                     })
                 }
 
@@ -187,7 +213,7 @@ export default function SiswaNilaiPage() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {groupedGrades.map((subject) => {
-                            const totalItems = (subject.kuis?.length ?? 0) + (subject.tugas?.length ?? 0) + (subject.ulangan?.length ?? 0)
+                            const totalItems = (subject.kuis?.length ?? 0) + (subject.tugas?.length ?? 0) + (subject.ulangan?.length ?? 0) + (subject.utsUas?.length ?? 0)
                             return (
                                 <button
                                     key={subject.subjectName}
@@ -209,6 +235,7 @@ export default function SiswaNilaiPage() {
                                         <span className="px-2 py-1 bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 rounded-md font-medium">Kuis: {subject.kuis?.length ?? 0}</span>
                                         <span className="px-2 py-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-md font-medium">Tugas: {subject.tugas?.length ?? 0}</span>
                                         <span className="px-2 py-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-md font-medium">Ulangan: {subject.ulangan?.length ?? 0}</span>
+                                        <span className="px-2 py-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-md font-medium">UTS/UAS: {subject.utsUas?.length ?? 0}</span>
                                     </div>
                                 </button>
                             )
@@ -224,6 +251,7 @@ export default function SiswaNilaiPage() {
         { key: 'kuis', label: 'Kuis', icon: Game, color: 'purple' },
         { key: 'tugas', label: 'Tugas', icon: Edit, color: 'amber' },
         { key: 'ulangan', label: 'Ulangan', icon: TimeCircle, color: 'red' },
+        { key: 'utsUas', label: 'UTS/UAS', icon: Document, color: 'indigo' },
     ]
 
     const renderQuizList = () => (
@@ -348,6 +376,34 @@ export default function SiswaNilaiPage() {
         )
     )
 
+    const renderUtsUasList = (items: OfficialExamSubmission[]) => (
+        items.length === 0 ? (
+            <div className="text-center text-text-secondary dark:text-zinc-500 py-12 bg-white dark:bg-surface-dark rounded-xl border border-secondary/20 border-dashed flex flex-col items-center gap-4">
+                <div className="text-secondary flex"><Document set="bold" primaryColor="currentColor" size="xlarge" /></div>
+                Belum ada nilai UTS/UAS.
+            </div>
+        ) : (
+            <div className="space-y-3">
+                {items.map((item) => (
+                    <div key={item.id} className="bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                                <p className="text-text-main dark:text-white font-bold">{item.exam?.title}</p>
+                                <span className={`px-2 py-0.5 text-xs rounded-md font-bold ${item.exam?.exam_type === 'UTS' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'}`}>
+                                    {item.exam?.exam_type}
+                                </span>
+                            </div>
+                            <p className="text-xs text-text-secondary dark:text-zinc-400">{new Date(item.submitted_at).toLocaleDateString('id-ID')}</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full font-bold text-sm ${getScoreColor(item.total_score, item.max_score)}`}>
+                            {item.total_score ?? 0}/{item.max_score ?? 0}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        )
+    )
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -381,7 +437,7 @@ export default function SiswaNilaiPage() {
                             {tab.label}
                             <span className={`text-xs px-1.5 py-0.5 rounded-full ml-1 ${activeTab === tab.key ? `bg-${tab.color}-100 dark:bg-${tab.color}-900/40` : 'bg-secondary/10'
                                 }`}>
-                                {tab.key === 'kuis' ? (selectedSubject.kuis?.length ?? 0) : tab.key === 'tugas' ? (selectedSubject.tugas?.length ?? 0) : (selectedSubject.ulangan?.length ?? 0)}
+                                {tab.key === 'kuis' ? (selectedSubject.kuis?.length ?? 0) : tab.key === 'tugas' ? (selectedSubject.tugas?.length ?? 0) : tab.key === 'ulangan' ? (selectedSubject.ulangan?.length ?? 0) : (selectedSubject.utsUas?.length ?? 0)}
                             </span>
                         </button>
                     )
@@ -393,6 +449,7 @@ export default function SiswaNilaiPage() {
                 {activeTab === 'kuis' && renderQuizList()}
                 {activeTab === 'tugas' && renderAssignmentList(selectedSubject.tugas)}
                 {activeTab === 'ulangan' && renderUlanganList(selectedSubject.ulangan)}
+                {activeTab === 'utsUas' && renderUtsUasList(selectedSubject.utsUas)}
             </div>
         </div>
     )

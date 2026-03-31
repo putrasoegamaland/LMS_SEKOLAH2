@@ -13,6 +13,7 @@ interface ExamQuestion {
     options: string[] | null
     points: number
     passage_text?: string | null
+    image_url?: string | null
 }
 
 interface OfficialExam {
@@ -31,6 +32,7 @@ interface Submission {
     started_at: string
     is_submitted: boolean
     violation_count: number
+    question_order: string[]
 }
 
 export default function TakeOfficialExamPage() {
@@ -51,6 +53,7 @@ export default function TakeOfficialExamPage() {
     const [showViolationWarning, setShowViolationWarning] = useState(false)
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [forceSubmitted, setForceSubmitted] = useState(false)
+    const [alertMessage, setAlertMessage] = useState<string | null>(null)
 
     const containerRef = useRef<HTMLDivElement>(null)
     const hasStarted = useRef(false)
@@ -96,8 +99,8 @@ export default function TakeOfficialExamPage() {
             const subData = await subRes.json()
 
             if (subData.error) {
-                alert(subData.error)
-                router.push('/dashboard/siswa/ulangan')
+                setAlertMessage(subData.error)
+                setTimeout(() => router.push('/dashboard/siswa/ulangan'), 2000)
                 return
             }
 
@@ -105,7 +108,14 @@ export default function TakeOfficialExamPage() {
             setViolationCount(subData.violation_count || 0)
 
             const questionArr = Array.isArray(questionsData) ? questionsData : []
-            setQuestions(questionArr)
+            if (subData.question_order && subData.question_order.length > 0) {
+                const orderedQuestions = subData.question_order
+                    .map((qId: string) => questionArr.find((q: ExamQuestion) => q.id === qId))
+                    .filter(Boolean)
+                setQuestions(orderedQuestions)
+            } else {
+                setQuestions(questionArr)
+            }
 
             // Load local answers
             const localAnswers = loadLocal()
@@ -137,8 +147,8 @@ export default function TakeOfficialExamPage() {
             setLoading(false)
         } catch (error) {
             console.error('Error starting exam:', error)
-            alert('Gagal memulai ujian')
-            router.push('/dashboard/siswa/ulangan')
+            setAlertMessage('Gagal memulai ujian')
+            setTimeout(() => router.push('/dashboard/siswa/ulangan'), 2000)
             setLoading(false)
         }
     }, [examId, router])
@@ -170,7 +180,6 @@ export default function TakeOfficialExamPage() {
 
         const handleVisibility = async () => { if (document.hidden) await logViolation('TAB_SWITCH') }
         const handleBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = 'Anda sedang dalam ujian!' }
-        const handleBlur = async () => { await logViolation('WINDOW_BLUR') }
         const handleContextMenu = (e: MouseEvent) => e.preventDefault()
         const handleCopy = (e: ClipboardEvent) => e.preventDefault()
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -180,7 +189,6 @@ export default function TakeOfficialExamPage() {
 
         document.addEventListener('visibilitychange', handleVisibility)
         window.addEventListener('beforeunload', handleBeforeUnload)
-        window.addEventListener('blur', handleBlur)
         document.addEventListener('contextmenu', handleContextMenu)
         document.addEventListener('copy', handleCopy)
         document.addEventListener('keydown', handleKeyDown)
@@ -188,7 +196,6 @@ export default function TakeOfficialExamPage() {
         return () => {
             document.removeEventListener('visibilitychange', handleVisibility)
             window.removeEventListener('beforeunload', handleBeforeUnload)
-            window.removeEventListener('blur', handleBlur)
             document.removeEventListener('contextmenu', handleContextMenu)
             document.removeEventListener('copy', handleCopy)
             document.removeEventListener('keydown', handleKeyDown)
@@ -206,8 +213,8 @@ export default function TakeOfficialExamPage() {
             const data = await res.json()
             if (data.force_submitted) {
                 setForceSubmitted(true)
-                alert('Ujian otomatis dikumpulkan karena pelanggaran melebihi batas!')
-                router.push('/dashboard/siswa/ulangan')
+                setAlertMessage('Ujian otomatis dikumpulkan karena pelanggaran melebihi batas!')
+                setTimeout(() => router.push('/dashboard/siswa/ulangan'), 3000)
                 return
             }
             setViolationCount(data.violation_count)
@@ -399,6 +406,12 @@ export default function TakeOfficialExamPage() {
 
                         <SmartText text={currentQuestion.question_text} className="text-text-main dark:text-white text-lg mb-4" />
 
+                        {currentQuestion.image_url && (
+                            <div className="mb-4">
+                                <img src={currentQuestion.image_url} alt="Gambar soal" className="max-h-64 rounded-lg border border-gray-200 dark:border-gray-600 mx-auto" />
+                            </div>
+                        )}
+
                         {currentQuestion.question_type === 'MULTIPLE_CHOICE' && currentQuestion.options && (
                             <div className="space-y-3">
                                 {currentQuestion.options.map((opt, optIdx) => {
@@ -468,6 +481,25 @@ export default function TakeOfficialExamPage() {
                                 {submitting ? 'Mengumpulkan...' : 'Ya, Kumpulkan'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Alert Modal */}
+            {alertMessage && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="w-16 h-16 mx-auto bg-amber-100 dark:bg-amber-900/30 text-amber-500 rounded-full flex items-center justify-center mb-4">
+                            <Danger set="bold" size={32} />
+                        </div>
+                        <h3 className="text-lg font-bold text-text-main dark:text-white mb-2">Pemberitahuan</h3>
+                        <p className="text-text-secondary mb-6">{alertMessage}</p>
+                        <button
+                            onClick={() => setAlertMessage(null)}
+                            className="w-full py-3 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold transition-colors"
+                        >
+                            Tutup
+                        </button>
                     </div>
                 </div>
             )}

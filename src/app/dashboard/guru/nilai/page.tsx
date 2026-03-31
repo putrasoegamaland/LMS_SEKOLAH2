@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader, Card, Button, StatsCard, EmptyState } from '@/components/ui'
 import { Chart, User, TickSquare, TimeCircle, Activity, Search, ArrowRight, Document, Discovery, Download, Paper, Edit } from 'react-iconly'
@@ -86,6 +87,7 @@ type TabType = 'rekap' | 'tugas' | 'kuis' | 'ulangan' | 'uts-uas' | 'export'
 
 export default function NilaiPage() {
     const { user } = useAuth()
+    const searchParams = useSearchParams()
     const [activeTab, setActiveTab] = useState<TabType>('rekap')
     const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([])
     const [selectedTA, setSelectedTA] = useState<string>('')
@@ -116,6 +118,18 @@ export default function NilaiPage() {
         }
         if (user) fetchInitial()
     }, [user])
+
+    // Auto-select teaching assignment from query param (deep-link from dashboard warnings)
+    useEffect(() => {
+        const taParam = searchParams.get('ta')
+        if (taParam && teachingAssignments.length > 0 && !selectedTA) {
+            const match = teachingAssignments.find(t => t.id === taParam)
+            if (match) {
+                setSelectedTA(match.id)
+                setActiveTab('rekap')
+            }
+        }
+    }, [searchParams, teachingAssignments])
 
     useEffect(() => {
         if (!selectedTA) {

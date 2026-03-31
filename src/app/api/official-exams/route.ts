@@ -71,8 +71,13 @@ export async function GET(request: NextRequest) {
             } else {
                 result = []
             }
-            // Only show active exams to students
-            result = result.filter((exam: any) => exam.is_active)
+            // Show active exams AND upcoming scheduled exams to students
+            result = result.filter((exam: any) => {
+                if (exam.is_active) return true
+                // Also show upcoming exams (not yet active, but scheduled in the future)
+                const endTime = new Date(new Date(exam.start_time).getTime() + exam.duration_minutes * 60 * 1000)
+                return endTime > new Date()
+            })
         } else if (user.role === 'GURU') {
             // Get teacher's teaching assignments (subject_id + class_id combos)
             const { data: teacher } = await supabase
@@ -189,6 +194,35 @@ export async function POST(request: NextRequest) {
             .single()
 
         if (error) throw error
+
+        // Kirim notifikasi ke siswa bahwa UTS/UAS dijadwalkan (meskipun belum aktif)
+        try {
+            if (data && target_class_ids?.length > 0) {
+                const { data: enrollments } = await supabase
+                    .from('student_enrollments')
+                    .select('student:students(user_id)')
+                    .eq('academic_year_id', yearId)
+                    .in('class_id', target_class_ids)
+
+                if (enrollments && enrollments.length > 0) {
+                    const subjectName = (data as any).subject?.name || ''
+                    const startDate = new Date(data.start_time).toLocaleString('id-ID')
+                    const examLabel = data.exam_type === 'UTS' ? 'UTS' : 'UAS'
+
+                    await supabase.from('notifications').insert(
+                        enrollments.map((e: any) => ({
+                            user_id: e.student.user_id,
+                            type: 'UJIAN_RESMI',
+                            title: `📅 ${examLabel} Dijadwalkan: ${data.title}`,
+                            message: `${subjectName} — Dimulai pada: ${startDate}`,
+                            link: '/dashboard/siswa/uts-uas'
+                        }))
+                    )
+                }
+            }
+        } catch (notifError) {
+            console.error('Error sending scheduled exam notifications:', notifError)
+        }
 
         return NextResponse.json(data)
     } catch (error) {

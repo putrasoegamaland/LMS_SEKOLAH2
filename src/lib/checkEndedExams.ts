@@ -92,6 +92,14 @@ export async function checkEndedOfficialExams(schoolId: string): Promise<void> {
             )
 
             console.log(`[NOTIF] Sent exam-ended notifications for ${exam.title} to ${teacherUserIds.length} teachers`)
+
+            // Auto-deactivate the exam
+            await supabase
+                .from('official_exams')
+                .update({ is_active: false })
+                .eq('id', exam.id)
+            
+            console.log(`[EXAM] Deactivated ended official exam: ${exam.title}`)
         }
     } catch (error) {
         console.error('Error in checkEndedOfficialExams:', error)

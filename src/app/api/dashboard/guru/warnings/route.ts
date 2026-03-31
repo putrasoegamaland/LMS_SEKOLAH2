@@ -196,7 +196,8 @@ export async function GET(request: NextRequest) {
                             class_name: unwrap(ta.class)?.name || 'Tanpa Kelas',
                             subject_name: unwrap(ta.subject)?.name || 'Tanpa Mapel',
                             avg_score: Math.round(avg),
-                            score_count: scores.length
+                            score_count: scores.length,
+                            teaching_assignment_id: ta.id
                         })
                     }
                 }

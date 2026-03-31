@@ -219,9 +219,8 @@ export default function SiswaDashboard() {
                         })
                     })
 
-                    // Process Official Exams (UTS/UAS) — show active & not submitted
+                    // Process Official Exams (UTS/UAS) — show active AND upcoming scheduled exams
                     officialExams.forEach((oe: any) => {
-                        if (!oe.is_active) return
                         // Check if already submitted
                         if (officialExamSubs.some((s: any) => s.exam_id === oe.id && s.is_submitted)) return
 
@@ -230,7 +229,7 @@ export default function SiswaDashboard() {
 
                         // Show if exam hasn't ended yet
                         if (endTime > nowTime) {
-                            const isStarted = startTime <= nowTime
+                            const isStarted = oe.is_active && startTime <= nowTime
                             const countdownTarget = isStarted ? endTime : startTime
 
                             newDeadlines.push({

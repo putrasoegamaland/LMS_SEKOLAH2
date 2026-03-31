@@ -116,9 +116,9 @@ export async function PUT(
                             enrollments.map((e: any) => ({
                                 user_id: e.student.user_id,
                                 type: 'UJIAN_RESMI',
-                                title: `${examLabel} Baru: ${data.title}`,
-                                message: `${subjectName} — Mulai: ${startDate}`,
-                                link: '/dashboard/siswa/ulangan'
+                                title: `🔔 ${examLabel} Sekarang Aktif: ${data.title}`,
+                                message: `${subjectName} — Silakan kerjakan pada: ${startDate}`,
+                                link: '/dashboard/siswa/uts-uas'
                             }))
                         )
                     }

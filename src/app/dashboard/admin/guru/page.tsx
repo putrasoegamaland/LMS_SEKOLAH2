@@ -5,6 +5,7 @@ import { Modal, Button, EmptyState, PageHeader } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { UserCheck, UserPlus, Upload, FileDown, CheckCircle2, XCircle } from 'lucide-react'
 import Papa from 'papaparse'
+import { parseSpreadsheet } from '@/lib/parseSpreadsheet'
 
 interface Teacher {
     id: string
@@ -119,64 +120,56 @@ export default function GuruPage() {
         document.body.removeChild(link)
     }
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file) return
 
         setBulkSaving(true)
         setBulkResults(null)
 
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            complete: async (results) => {
-                try {
-                    // Map headers to payload format
-                    const payload = results.data.map((row: any) => ({
-                        full_name: row['Nama Lengkap'] || row['nama lengkap'] || '',
-                        gender: row['L/P']?.toUpperCase() === 'L' || row['L/P']?.toUpperCase() === 'P' ? row['L/P'].toUpperCase() : null,
-                        nip: row['NIP'] || row['nip'] || '',
-                        username: row['Username'] || row['username'] || '',
-                        password: row['Password'] || row['password'] || ''
-                    }))
+        try {
+            const parsedData = await parseSpreadsheet(file)
+            
+            // Map headers to payload format
+            const payload = parsedData.map((row: any) => ({
+                full_name: row['Nama Lengkap'] || row['nama lengkap'] || '',
+                gender: row['L/P']?.toUpperCase() === 'L' || row['L/P']?.toUpperCase() === 'P' ? row['L/P'].toUpperCase() : null,
+                nip: row['NIP'] || row['nip'] || '',
+                username: row['Username'] || row['username'] || '',
+                password: row['Password'] || row['password'] || ''
+            }))
 
-                    const res = await fetch('/api/teachers/bulk', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    })
+            const res = await fetch('/api/teachers/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
 
-                    const data = await res.json()
+            const responseData = await res.json()
 
-                    if (!res.ok) throw new Error(data.error || 'Server error')
+            if (!res.ok) throw new Error(responseData.error || 'Server error')
 
-                    let successCount = 0
-                    let failedCount = 0
-                    const errors: any[] = []
+            let successCount = 0
+            let failedCount = 0
+            const errors: any[] = []
 
-                    data.results.forEach((r: any) => {
-                        if (r.success) successCount++
-                        else {
-                            failedCount++
-                            errors.push({ name: r.item.full_name || r.item.username, error: r.error })
-                        }
-                    })
-
-                    setBulkResults({ success: successCount, failed: failedCount, errors })
-                    fetchTeachers()
-                } catch (err: any) {
-                    console.error(err)
-                    setError(err.message || 'Gagal memproses file')
-                } finally {
-                    setBulkSaving(false)
-                    if (fileInputRef.current) fileInputRef.current.value = ''
+            responseData.results.forEach((r: any) => {
+                if (r.success) successCount++
+                else {
+                    failedCount++
+                    errors.push({ name: r.item.full_name || r.item.username, error: r.error })
                 }
-            },
-            error: (err) => {
-                setError('Format file tidak valid')
-                setBulkSaving(false)
-            }
-        })
+            })
+
+            setBulkResults({ success: successCount, failed: failedCount, errors })
+            fetchTeachers()
+        } catch (err: any) {
+            console.error(err)
+            setError(err.message || 'Gagal memproses file')
+        } finally {
+            setBulkSaving(false)
+            if (fileInputRef.current) fileInputRef.current.value = ''
+        }
     }
 
     return (
@@ -386,7 +379,7 @@ export default function GuruPage() {
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl text-sm">
                             <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2">Petunjuk Upload</h4>
                             <ul className="list-disc pl-5 space-y-1 text-blue-700 dark:text-blue-400">
-                                <li>File harus berupa format <b>.csv</b></li>
+                                <li>File harus berupa format <b>.csv</b>, <b>.xlsx</b>, atau <b>.xls</b></li>
                                 <li>Pastikan menggunakan template yang telah disediakan</li>
                                 <li>Kolom <b>Nama Lengkap</b>, <b>Username</b>, dan <b>Password</b> wajib diisi</li>
                             </ul>
@@ -404,13 +397,13 @@ export default function GuruPage() {
                                     <p className="mb-2 text-sm text-text-secondary">
                                         <span className="font-bold text-primary">Klik untuk upload</span> atau drag and drop
                                     </p>
-                                    <p className="text-xs text-text-secondary/70">CSV (Max. 5MB)</p>
+                                    <p className="text-xs text-text-secondary/70">Excel atau CSV (Max. 5MB)</p>
                                 </div>
                                 <input
                                     ref={fileInputRef}
                                     type="file"
                                     className="hidden"
-                                    accept=".csv"
+                                    accept=".csv,.xlsx,.xls"
                                     onChange={handleFileUpload}
                                     disabled={bulkSaving}
                                 />

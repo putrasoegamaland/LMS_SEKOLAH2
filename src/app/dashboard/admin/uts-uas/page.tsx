@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Modal, PageHeader, Button, EmptyState } from '@/components/ui'
 import Card from '@/components/ui/Card'
 import { Plus, ChevronDown } from 'react-iconly'
-import { Loader2, FileText, Clock, Users, CheckCircle, Edit3, Trash2, GraduationCap, BookOpen } from 'lucide-react'
+import { Loader2, FileText, Clock, Users, CheckCircle, Edit3, Trash2, GraduationCap, BookOpen, BarChart3 } from 'lucide-react'
 
 interface OfficialExam {
     id: string
@@ -173,10 +173,11 @@ export default function AdminUtsUasPage() {
         const startTime = new Date(exam.start_time)
         const endTime = new Date(startTime.getTime() + exam.duration_minutes * 60000)
 
+        if (now > endTime) return { label: 'Selesai', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' }
         if (!exam.is_active) return { label: 'Draft', color: 'bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-500/20 dark:text-amber-400' }
         if (now < startTime) return { label: 'Terjadwal', color: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-500/20 dark:text-blue-400' }
         if (now >= startTime && now <= endTime) return { label: 'Berlangsung', color: 'bg-green-500/10 text-green-600 border-green-200 dark:border-green-500/20 dark:text-green-400' }
-        return { label: 'Selesai', color: 'bg-secondary/10 text-text-secondary border-secondary/20' }
+        return { label: 'Selesai', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' }
     }
 
     const formatDateTime = (dateString: string) => {
@@ -314,6 +315,13 @@ export default function AdminUtsUasPage() {
                                     </div>
 
                                     <div className="flex gap-2 mt-auto pt-3">
+                                        {status.label === 'Selesai' && (
+                                            <Link href={`/dashboard/admin/uts-uas/${exam.id}#hasil`} className="flex-1">
+                                                <Button variant="outline" size="sm" className="w-full justify-center text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900/50 dark:hover:bg-emerald-900/20">
+                                                    <BarChart3 className="w-4 h-4 mr-1" /> Hasil
+                                                </Button>
+                                            </Link>
+                                        )}
                                         <Link href={`/dashboard/admin/uts-uas/${exam.id}`} className="flex-1">
                                             <Button variant="outline" size="sm" className="w-full justify-center border-primary/20 text-primary hover:bg-primary/5">
                                                 <Edit3 className="w-4 h-4 mr-1" /> Detail

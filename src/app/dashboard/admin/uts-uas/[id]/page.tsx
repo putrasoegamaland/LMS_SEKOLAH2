@@ -10,8 +10,10 @@ import { Edit, Discovery, Folder, Plus, Delete, Document } from 'react-iconly'
 import {
     Loader2, ArrowLeft, Trash2, Save, Eye, EyeOff,
     Settings, FileText, BarChart3, Sparkles,
-    ChevronUp, ChevronDown as ChevronDownIcon, CheckCircle,
+    ChevronUp, ChevronDown as ChevronDownIcon, CheckCircle, Download
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import QuestionImageUpload from '@/components/QuestionImageUpload'
 
 const MathTextarea = dynamic(() => import('@/components/MathTextarea'), {
     ssr: false,
@@ -164,6 +166,61 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
         if (activeTab === 'hasil') fetchResults()
     }, [activeTab, resultsClassFilter])
 
+    const handleDownloadExcel = () => {
+        if (!exam || submissions.length === 0) return
+
+        const formattedData = submissions.map((sub: any, index: number) => {
+            const maxScore = sub.max_score || 1
+            const percentage = Math.round((sub.total_score / maxScore) * 100)
+            
+            let status = 'Mengerjakan'
+            if (sub.is_submitted) {
+                status = sub.is_graded ? 'Selesai' : 'Perlu Koreksi'
+            }
+
+            return {
+                'No': index + 1,
+                'Nama Siswa': sub.student?.user?.full_name || '-',
+                'NIS': sub.student?.nis || '-',
+                'Kelas': allClasses.find(c => c.id === sub.student?.class_id)?.name || '-',
+                'Skor': sub.total_score || 0,
+                'Max Skor': sub.max_score || 0,
+                'Persentase': `${percentage}%`,
+                'Pelanggaran': sub.violation_count || 0,
+                'Status': status,
+                'Waktu Submit': sub.submitted_at ? new Date(sub.submitted_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
+            }
+        })
+
+        const ws = XLSX.utils.json_to_sheet(formattedData)
+        
+        // Auto-width columns
+        const colWidths = [
+            { wch: 5 },  // No
+            { wch: 30 }, // Nama
+            { wch: 15 }, // NIS
+            { wch: 15 }, // Kelas
+            { wch: 10 }, // Skor
+            { wch: 10 }, // Max
+            { wch: 15 }, // Persentase
+            { wch: 15 }, // Pelanggaran
+            { wch: 15 }, // Status
+            { wch: 20 }, // Waktu
+        ]
+        ws['!cols'] = colWidths
+
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws, "Hasil_Ujian")
+
+        const filterClassName = resultsClassFilter 
+            ? allClasses.find(c => c.id === resultsClassFilter)?.name?.replace(/ /g, '_') || 'Filter'
+            : 'Semua_Kelas'
+
+        const fileName = `Hasil_${exam.exam_type}_${exam.title.replace(/ /g, '_')}_${filterClassName}.xlsx`
+        
+        XLSX.writeFile(wb, fileName)
+    }
+
     // Publish / Unpublish
     const handleToggleActive = async () => {
         if (!exam) return
@@ -256,7 +313,8 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
                 body: JSON.stringify({
                     question_id: editingQuestionId, question_text: editQuestionForm.question_text,
                     options: editQuestionForm.options, correct_answer: editQuestionForm.correct_answer,
-                    teacher_hots_claim: editQuestionForm.teacher_hots_claim || false
+                    teacher_hots_claim: editQuestionForm.teacher_hots_claim || false,
+                    image_url: editQuestionForm.image_url || null
                 })
             })
             setEditingQuestionId(null); setEditQuestionForm(null); fetchQuestions()
@@ -467,6 +525,11 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
                                             </div>
                                             {q.passage_text && (<div className="mb-3 p-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg overflow-hidden"><p className="text-xs text-teal-600 dark:text-teal-400 font-bold mb-1">📖 Bacaan:</p><p className="text-sm text-text-main dark:text-white whitespace-pre-wrap line-clamp-3">{q.passage_text}</p></div>)}
                                             <SmartText text={q.question_text} className="prose dark:prose-invert max-w-none text-text-main dark:text-white mb-4" />
+                                            {q.image_url && (
+                                                <div className="mb-4">
+                                                    <img src={q.image_url} alt="Gambar soal" className="max-h-60 rounded-xl border border-secondary/20" />
+                                                </div>
+                                            )}
                                             {q.question_type === 'MULTIPLE_CHOICE' && q.options && (
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                                                     {q.options.map((opt: string, optIdx: number) => (
@@ -483,6 +546,21 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
                                                 <input type="number" value={q.points} onChange={(e) => { const v = parseInt(e.target.value) || 1; setQuestions(questions.map((qq, i) => i === idx ? { ...qq, points: v } : qq)) }} onBlur={async (e) => { if (q.id) { await fetch(`/api/official-exams/${examId}/questions`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: q.id, points: parseInt(e.target.value) || 1 }) }) } }} className="w-16 px-2 py-1.5 bg-secondary/5 border border-secondary/20 rounded-lg text-text-main dark:text-white text-center font-bold focus:outline-none focus:ring-2 focus:ring-primary" min={1} max={100} disabled={exam?.is_active} />
                                                 <span className="text-[10px] uppercase font-bold text-text-secondary mt-1">Poin</span>
                                             </div>
+                                            <div className="w-full h-px bg-secondary/10 my-1"></div>
+                                            <QuestionImageUpload
+                                                imageUrl={q.image_url}
+                                                onImageChange={async (url) => {
+                                                    if (q.id) {
+                                                        await fetch(`/api/official-exams/${examId}/questions`, {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ question_id: q.id, image_url: url })
+                                                        })
+                                                        fetchQuestions()
+                                                    }
+                                                }}
+                                                disabled={exam?.is_active}
+                                            />
                                             <button onClick={() => { setEditingQuestionId(q.id); setEditQuestionForm(q) }} className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors" disabled={exam?.is_active} title="Edit soal">
                                                 <Edit set="bold" primaryColor="currentColor" size={20} />
                                             </button>
@@ -563,19 +641,26 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
             {/* ===== TAB: HASIL ===== */}
             {activeTab === 'hasil' && (
                 <div className="space-y-4">
-                    {/* Class filter */}
-                    <div className="flex gap-3 items-center">
-                        <select
-                            value={resultsClassFilter}
-                            onChange={(e) => setResultsClassFilter(e.target.value)}
-                            className="px-4 py-2 bg-white dark:bg-surface-dark border border-secondary/20 rounded-xl text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                        >
-                            <option value="">Semua Kelas</option>
-                            {(exam.target_classes || []).map(c => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                        </select>
-                        <span className="text-sm text-text-secondary">{submissions.length} submission</span>
+                    {/* Class/Action Bar */}
+                    <div className="flex justify-between items-center bg-white dark:bg-surface-dark border border-secondary/20 p-3 rounded-xl shadow-sm">
+                        <div className="flex gap-3 items-center">
+                            <select
+                                value={resultsClassFilter}
+                                onChange={(e) => setResultsClassFilter(e.target.value)}
+                                className="px-4 py-2 bg-secondary/5 border border-secondary/20 rounded-lg text-text-main dark:text-white focus:outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
+                            >
+                                <option value="">Semua Kelas</option>
+                                {(exam.target_classes || []).map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                            <span className="text-sm font-medium text-text-secondary border-l border-secondary/20 pl-3">{submissions.length} submission</span>
+                        </div>
+                        {submissions.length > 0 && (
+                            <Button onClick={handleDownloadExcel} className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm" icon={<Download className="w-4 h-4 ml-1" />}>
+                                Download Excel
+                            </Button>
+                        )}
                     </div>
 
                     {resultsLoading ? (
@@ -866,6 +951,21 @@ export default function AdminUtsUasDetailPage({ params }: { params: Promise<{ id
                         <div>
                             <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Pertanyaan</label>
                             <MathTextarea value={editQuestionForm.question_text} onChange={(val: string) => setEditQuestionForm({ ...editQuestionForm, question_text: val })} placeholder="Tulis pertanyaan..." rows={3} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-text-main dark:text-white mb-2">Gambar Soal (Opsional)</label>
+                            <div className="flex items-start gap-4">
+                                <QuestionImageUpload
+                                    imageUrl={editQuestionForm.image_url}
+                                    onImageChange={(url) => setEditQuestionForm({ ...editQuestionForm, image_url: url })}
+                                    disabled={false}
+                                />
+                                {editQuestionForm.image_url && (
+                                    <div className="flex-1 bg-secondary/5 rounded-xl border border-secondary/20 p-2 text-center">
+                                        <img src={editQuestionForm.image_url} className="max-h-40 mx-auto rounded-lg" alt="Preview" />
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         {editQuestionForm.question_type === 'MULTIPLE_CHOICE' && editQuestionForm.options && (
                             <>

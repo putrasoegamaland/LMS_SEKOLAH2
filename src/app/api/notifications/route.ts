@@ -95,6 +95,110 @@ export async function GET(request: NextRequest) {
                 console.error('Deadline reminder error:', deadlineError)
                 // Don't block the main notification fetch
             }
+
+            // Fix #6: UTS/UAS Reminder — check for exams starting within 24 hours
+            try {
+                // We re-fetch student class if not available in this scope, but we do have it from above (nested try)
+                // To be safe and isolated:
+                const { data: student } = await supabase
+                    .from('students')
+                    .select('class_id')
+                    .eq('user_id', user.id)
+                    .single()
+
+                if (student) {
+                    const now = new Date()
+                    const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+                    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
+                    const { data: officialExams } = await supabase
+                        .from('official_exams')
+                        .select('id, title, exam_type, start_time, target_class_ids, subject:subjects(name)')
+                        .eq('school_id', schoolId)
+                        .eq('is_active', true) // Only remind if it's already an active (approved) exam
+                        .gt('start_time', now.toISOString())
+                        .lte('start_time', in24h.toISOString())
+
+                    if (officialExams && officialExams.length > 0) {
+                        for (const exam of officialExams) {
+                            if (!exam.target_class_ids?.includes(student.class_id)) continue
+
+                            // Check if reminder already sent
+                            const { data: existing } = await supabase
+                                .from('notifications')
+                                .select('id')
+                                .eq('user_id', user.id)
+                                .eq('type', 'EXAM_REMINDER')
+                                .ilike('title', `%${exam.title}%`)
+                                .gt('created_at', twentyFourHoursAgo.toISOString())
+                                .limit(1)
+
+                            if (!existing || existing.length === 0) {
+                                const label = exam.exam_type === 'UTS' ? 'UTS' : 'UAS'
+                                const startStr = new Date(exam.start_time).toLocaleString('id-ID')
+                                await supabase.from('notifications').insert({
+                                    user_id: user.id,
+                                    type: 'EXAM_REMINDER',
+                                    title: `⏰ ${label} Segera: ${exam.title}`,
+                                    message: `${(exam as any).subject?.name || ''} — Mulai: ${startStr}`,
+                                    link: '/dashboard/siswa/uts-uas'
+                                })
+                            }
+                        }
+                    }
+                }
+            } catch (examReminderError) {
+                console.error('UTS/UAS reminder error:', examReminderError)
+            }
+
+            // Fix #7: Proactive Initial Notification for Scheduled Exams
+            // Ensures students who didn't get the POST /api/official-exams push notification (e.g. exams made before the update, or missed)
+            // will still see "UTS/UAS Dijadwalkan" when they log in to their dashboard.
+            try {
+                const { data: student } = await supabase
+                    .from('students')
+                    .select('class_id')
+                    .eq('user_id', user.id)
+                    .single()
+
+                if (student) {
+                    const now = new Date()
+                    const { data: scheduledExams } = await supabase
+                        .from('official_exams')
+                        .select('id, title, exam_type, start_time, target_class_ids, subject:subjects(name)')
+                        .eq('school_id', schoolId)
+                        .gt('start_time', now.toISOString())
+
+                    if (scheduledExams && scheduledExams.length > 0) {
+                        for (const exam of scheduledExams) {
+                            if (!exam.target_class_ids?.includes(student.class_id)) continue
+
+                            // Check if a 'UJIAN_RESMI' notification already exists for this exam
+                            const { data: existingInit } = await supabase
+                                .from('notifications')
+                                .select('id')
+                                .eq('user_id', user.id)
+                                .eq('type', 'UJIAN_RESMI')
+                                .ilike('title', `%Dijadwalkan: ${exam.title}`)
+                                .limit(1)
+
+                            if (!existingInit || existingInit.length === 0) {
+                                const label = exam.exam_type === 'UTS' ? 'UTS' : 'UAS'
+                                const startStr = new Date(exam.start_time).toLocaleString('id-ID')
+                                await supabase.from('notifications').insert({
+                                    user_id: user.id,
+                                    type: 'UJIAN_RESMI',
+                                    title: `📅 ${label} Dijadwalkan: ${exam.title}`,
+                                    message: `${(exam as any).subject?.name || ''} — Dimulai pada: ${startStr}`,
+                                    link: '/dashboard/siswa/uts-uas'
+                                })
+                            }
+                        }
+                    }
+                }
+            } catch (initReminderError) {
+                console.error('Proactive scheduled exam notification error:', initReminderError)
+            }
         }
 
         let query = supabase

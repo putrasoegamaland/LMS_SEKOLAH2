@@ -89,11 +89,91 @@ export async function PUT(
             .select()
             .single()
 
-        if (error) throw error
+        if (error) {
+            // Handle duplicate key constraint (e.g. code already used by another school)
+            if (error.code === '23505') {
+                const field = error.details?.includes('(code)') ? 'Kode sekolah' : 'Data'
+                return NextResponse.json({ error: `${field} sudah digunakan oleh sekolah lain` }, { status: 409 })
+            }
+            throw error
+        }
 
         return NextResponse.json(data)
     } catch (error) {
         console.error('Error updating school:', error)
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    }
+}
+
+/**
+ * DELETE /api/schools/[id]
+ * Delete a school and ALL its related data (SUPER_ADMIN only)
+ * Requires { confirm_name: "Exact School Name" } in body for safety
+ */
+export async function DELETE(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params
+        const ctx = await getSchoolContextOrError(request)
+        if (isErrorResponse(ctx)) return ctx
+        const { user } = ctx
+
+        if (user.role !== 'SUPER_ADMIN') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+
+        const body = await request.json()
+        const { confirm_name } = body
+
+        if (!confirm_name) {
+            return NextResponse.json({ error: 'Confirmation name is required' }, { status: 400 })
+        }
+
+        // 1. Verify exact school name
+        const { data: school, error: fetchError } = await supabase
+            .from('schools')
+            .select('name')
+            .eq('id', id)
+            .single()
+
+        if (fetchError || !school) {
+            return NextResponse.json({ error: 'School not found' }, { status: 404 })
+        }
+
+        if (school.name !== confirm_name) {
+            return NextResponse.json({ error: 'School name does not match' }, { status: 400 })
+        }
+
+        // 2. Perform Cascading Deletes
+        // Delete academic years (cascades to classes, teaching_assignments, assignments, exams, submissions, etc.)
+        await supabase.from('academic_years').delete().eq('school_id', id)
+        
+        // Delete other root tables with school_id FK
+        await supabase.from('subjects').delete().eq('school_id', id)
+        await supabase.from('announcements').delete().eq('school_id', id)
+        await supabase.from('question_passages').delete().eq('school_id', id)
+
+        // Delete students and teachers explicitly
+        await supabase.from('students').delete().eq('school_id', id)
+        await supabase.from('teachers').delete().eq('school_id', id)
+
+        // Delete ALL users belonging to this school (solves users_school_id_fkey constraint)
+        // This includes ADMINs, GURUs, and SISWAs
+        await supabase.from('users').delete().eq('school_id', id)
+
+        // 3. Delete the school itself
+        const { error: deleteError } = await supabase
+            .from('schools')
+            .delete()
+            .eq('id', id)
+
+        if (deleteError) throw deleteError
+
+        return NextResponse.json({ success: true, deleted: school.name })
+    } catch (error) {
+        console.error('Error deleting school:', error)
         return NextResponse.json({ error: 'Server error' }, { status: 500 })
     }
 }

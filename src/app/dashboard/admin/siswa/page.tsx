@@ -7,6 +7,7 @@ import { User as Users, AddUser as UserPlus, Edit as Pencil, Delete as Trash2, S
 import Link from 'next/link'
 import { Loader2, Upload, FileDown, CheckCircle2, XCircle, Search as SearchIcon } from 'lucide-react'
 import Papa from 'papaparse'
+import { parseSpreadsheet } from '@/lib/parseSpreadsheet'
 import { Class, SchoolLevel } from '@/lib/types'
 
 interface FormData {
@@ -354,65 +355,57 @@ export default function SiswaPage() {
         document.body.removeChild(link)
     }
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file) return
 
         setBulkSaving(true)
         setBulkResults(null)
 
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            complete: async (results) => {
-                try {
-                    const payload = results.data.map((row: any) => ({
-                        full_name: row['Nama Lengkap'] || row['nama lengkap'] || '',
-                        gender: row['L/P']?.toUpperCase() === 'L' || row['L/P']?.toUpperCase() === 'P' ? row['L/P'].toUpperCase() : null,
-                        nis: row['NIS'] || row['nis'] || row['NISN'] || row['nisn'] || '',
-                        angkatan: row['Angkatan'] || row['angkatan'] || '',
-                        kelas: row['Kelas'] || row['kelas'] || '',
-                        username: row['Username'] || row['username'] || '',  // optional, NIS used if empty
-                        password: row['Password'] || row['password'] || ''
-                    }))
+        try {
+            const parsedData = await parseSpreadsheet(file)
+            
+            const payload = parsedData.map((row: any) => ({
+                full_name: row['Nama Lengkap'] || row['nama lengkap'] || '',
+                gender: row['L/P']?.toUpperCase() === 'L' || row['L/P']?.toUpperCase() === 'P' ? row['L/P'].toUpperCase() : null,
+                nis: row['NIS'] || row['nis'] || row['NISN'] || row['nisn'] || '',
+                angkatan: row['Angkatan'] || row['angkatan'] || '',
+                kelas: row['Kelas'] || row['kelas'] || '',
+                username: row['Username'] || row['username'] || '',  // optional, NIS used if empty
+                password: row['Password'] || row['password'] || ''
+            }))
 
-                    const res = await fetch('/api/students/bulk', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    })
+            const res = await fetch('/api/students/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
 
-                    const data = await res.json()
+            const responseData = await res.json()
 
-                    if (!res.ok) throw new Error(data.error || 'Server error')
+            if (!res.ok) throw new Error(responseData.error || 'Server error')
 
-                    let successCount = 0
-                    let failedCount = 0
-                    const errors: any[] = []
+            let successCount = 0
+            let failedCount = 0
+            const errors: any[] = []
 
-                    data.results.forEach((r: any) => {
-                        if (r.success) successCount++
-                        else {
-                            failedCount++
-                            errors.push({ name: r.item.full_name || r.item.nis || r.item.username, error: r.error })
-                        }
-                    })
-
-                    setBulkResults({ success: successCount, failed: failedCount, errors })
-                    fetchData()
-                } catch (err: any) {
-                    console.error(err)
-                    setError(err.message || 'Gagal memproses file')
-                } finally {
-                    setBulkSaving(false)
-                    if (fileInputRef.current) fileInputRef.current.value = ''
+            responseData.results.forEach((r: any) => {
+                if (r.success) successCount++
+                else {
+                    failedCount++
+                    errors.push({ name: r.item.full_name || r.item.nis || r.item.username, error: r.error })
                 }
-            },
-            error: (err) => {
-                setError('Format file tidak valid')
-                setBulkSaving(false)
-            }
-        })
+            })
+
+            setBulkResults({ success: successCount, failed: failedCount, errors })
+            fetchData()
+        } catch (err: any) {
+            console.error(err)
+            setError(err.message || 'Gagal memproses file')
+        } finally {
+            setBulkSaving(false)
+            if (fileInputRef.current) fileInputRef.current.value = ''
+        }
     }
 
     // Get unique angkatan values from students
@@ -897,7 +890,7 @@ export default function SiswaPage() {
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl text-sm">
                             <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2">Petunjuk Upload</h4>
                             <ul className="list-disc pl-5 space-y-1 text-blue-700 dark:text-blue-400">
-                                <li>File harus berupa format <b>.csv</b></li>
+                                <li>File harus berupa format <b>.csv</b>, <b>.xlsx</b>, atau <b>.xls</b></li>
                                 <li>Pastikan menggunakan template yang telah disediakan</li>
                                 <li>Nama Kelas harus <b>sama persis</b> dengan nama kelas di sistem (tidak case-sensitive)</li>
                                 <li>Kolom <b>Nama Lengkap</b>, <b>NIS</b>, dan <b>Password</b> wajib diisi</li>
@@ -917,13 +910,13 @@ export default function SiswaPage() {
                                     <p className="mb-2 text-sm text-text-secondary">
                                         <span className="font-bold text-primary">Klik untuk upload</span> atau drag and drop
                                     </p>
-                                    <p className="text-xs text-text-secondary/70">CSV (Max. 5MB)</p>
+                                    <p className="text-xs text-text-secondary/70">Excel atau CSV (Max. 5MB)</p>
                                 </div>
                                 <input
                                     ref={fileInputRef}
                                     type="file"
                                     className="hidden"
-                                    accept=".csv"
+                                    accept=".csv,.xlsx,.xls"
                                     onChange={handleFileUpload}
                                     disabled={bulkSaving}
                                 />
