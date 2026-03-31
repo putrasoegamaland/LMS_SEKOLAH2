@@ -346,6 +346,9 @@ export default function MateriPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+
+        // Close modal immediately so user can see the progress
+        setShowModal(false)
         setSaving(true)
         setUploadProgress(0)
 
@@ -381,7 +384,6 @@ export default function MateriPage() {
             }
 
             setToast({ message: 'Materi berhasil disimpan!', type: 'success' })
-            setShowModal(false)
             setFormData({
                 teaching_assignment_id: '',
                 title: '',
@@ -907,6 +909,13 @@ export default function MateriPage() {
                             />
                         </div>
                     </div>
+                </div>
+            )}
+
+            {saving && uploadProgress === 0 && (
+                <div className="fixed bottom-6 right-6 bg-white dark:bg-surface-dark px-6 py-4 rounded-2xl shadow-2xl border border-secondary/20 z-50 flex items-center gap-3 w-80 animate-in slide-in-from-bottom duration-300">
+                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <span className="font-bold text-sm text-text-main dark:text-white">Menyimpan materi...</span>
                 </div>
             )}
 
